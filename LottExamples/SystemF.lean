@@ -4,7 +4,7 @@ namespace LottExamples.SystemF
 
 open Lean
 
-metavar TypeVar, a
+metavar TypeVar, a, b
 metavar TermVar, x, y
 
 nonterminal Type', A, B :=
@@ -47,6 +47,23 @@ nonterminal Environment, G :=
   | G ", " x " : " A : termVarExt
   | G ", " a         : typeVarExt
 
+judgement_syntax a " ∈ " G : TypeVarInEnvironment
+
+judgement TypeVarInEnvironment :=
+
+──────── head
+a ∈ G, a
+
+a ∈ G
+──────────── termVarExt
+a ∈ G, x : A
+
+a ∈ G
+──────── typeVarExt
+a ∈ G, b
+
+example : ¬[[a ∈ ε]] := by intro h; cases h
+
 judgement_syntax x " : " A " ∈ " G : TermVarInEnvironment
 
 judgement TermVarInEnvironment :=
@@ -64,6 +81,23 @@ x : A ∈ G, a
 
 example : ¬[[x : A ∈ ε]] := by intro h; cases h
 
+judgement_syntax G " |- " A : TypeWellFormedness
+
+judgement TypeWellFormedness :=
+
+a ∈ G
+────── var
+G |- a
+
+G |- A
+G |- B
+────────── arr
+G |- A → B
+
+G, a |- A
+─────────── forall'
+G |- ∀ a. A
+
 judgement_syntax G " |- " E " : " A : Typing
 
 judgement Typing :=
@@ -72,11 +106,11 @@ x : A ∈ G
 ────────── var
 G |- x : A
 
+G |- A
 G, x : A |- E : B
 ─────────────────────── lam
 G |- λ x : A. E : A → B
 
-x : A ∈ G
 G |- E : A → B
 G |- F : A
 ────────────── app
@@ -87,6 +121,7 @@ G, a |- E : A
 G |- Λ a. E : ∀ a. A
 
 G |- E : ∀ a. A
+G |- B
 ────────────────────── typeApp
 G |- E [B] : A [a ↦ B]
 
