@@ -13,6 +13,10 @@ declare_syntax_cat Lott.Trailing
 -- TODO: Figure out how to be able to use underscore for separator.
 syntax "▁" sepBy1(ident, "▁") : Lott.Trailing
 
+/- Metavariable syntax. -/
+
+syntax "metavar " ident,+ : command
+
 /- Non-terminal syntax. -/
 
 declare_syntax_cat Lott.DSL.DesugarConfig
