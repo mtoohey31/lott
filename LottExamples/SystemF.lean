@@ -69,25 +69,25 @@ judgement_syntax G " |- " E " : " A : Typing
 judgement Typing :=
 
 x : A ∈ G
-────────── Var
+────────── var
 G |- x : A
 
 G, x : A |- E : B
-─────────────────────── Lam
+─────────────────────── lam
 G |- λ x : A. E : A → B
 
 x : A ∈ G
 G |- E : A → B
 G |- F : A
-────────────── App
+────────────── app
 G |- E F : B
 
 G, a |- E : A
-──────────────────── TypeGen
+──────────────────── typeGen
 G |- Λ a. E : ∀ a. A
 
 G |- E : ∀ a. A
-────────────────────── TypeApp
+────────────────────── typeApp
 G |- E [B] : A [a ↦ B]
 
 -- TODO: Define operational semantics.
