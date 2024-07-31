@@ -25,7 +25,7 @@ def elabVariable (stx : Syntax) (expectedType : Name) : TermElabM Expr := do
     | _ => throwUnsupportedSyntax
 
   let type ← elabType <| mkIdent expectedType
-  elabTerm (mkIdentFrom stx name) type
+  elabTerm (mkIdentFrom stx <| .str .anonymous <| name.toStringWithSep "_" false) type
 
 /- Term embedding syntax. -/
 
@@ -91,10 +91,11 @@ elab_rules : command | `(metavar $names,*) => do
   -- Declare type and aliases.
   -- TODO: Is there any way we can make these have an opaque type which reveals nothing other than
   -- that they have a decidable equality relation?
-  elabCommand <| ← `(structure $canon where _id : Nat deriving BEq)
+  elabCommand <| ← `(def $canon := Nat)
   for name in names do
     setEnv <| lottSymbolAliasExt.addEntry (← getEnv)
       { canon := canonQualified, alias := ns ++ name.getId }
+  elabCommand <| ← `(instance (x y : $canon) : Decidable (x = y) := Nat.decEq x y)
 
   -- Declare syntax category. For metavariables we just declare the alias name parsers directly in
   -- the syntax category. This differs from variable parsers for non-terminals, for which we declare
@@ -107,8 +108,8 @@ elab_rules : command | `(metavar $names,*) => do
   -- Declare parsers in category.
   let attrIdent := mkIdent attrName
   for alias in aliases do
-    let .str .anonymous nameStr := alias.getId | throwUnsupportedSyntax
-    let parserIdent := mkIdentFrom alias <| canon.getId ++ alias.getId.appendAfter "_parser"
+    let aliasName@(.str .anonymous nameStr) := alias.getId | throwUnsupportedSyntax
+    let parserIdent := mkIdentFrom alias <| canon.getId ++ aliasName.appendAfter "_parser"
     elabCommand <| ←
       `(@[$attrIdent:ident] def $parserIdent : ParserDescr :=
           ParserDescr.node $(quote catName) $(quote leadPrec) <|
@@ -146,9 +147,21 @@ def elabTerm (catName : Name) : LottElab := fun stx => do
     match lottElabAttribute.getEntries (← getEnv) catName with
     | [] =>
       throwError "term elaboration function for '{catName}' has not been implemented{indentD stx}"
+    | elabFns => elabTermWithFns stx elabFns
+where
+  elabTermWithFns stx
+    | [] => unreachable!
     | [elabFn] => elabFn.value stx
-    | _ =>
-      throwError "multiple elaboration functions for '{catName}' have been implemented{indentD stx}"
+    | elabFn :: elabFns => do
+      try
+        elabFn.value stx
+      catch ex => match ex with
+        | .internal id _ =>
+          if id == unsupportedSyntaxExceptionId then
+            elabTermWithFns stx elabFns
+          else
+            throw ex
+        | _ => throw ex
 
 @[term_elab lott_symbol_embed]
 private
@@ -310,6 +323,77 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 elab_rules : command
   | `($nt:Lott.DSL.NonTerminal) => elabNonTerminals #[nt]
   | `(mutual $[$nts:Lott.DSL.NonTerminal]* end) => elabNonTerminals nts
+
+/- Subrule syntax. -/
+
+elab_rules : command | `(subrule $names,* of $parent := $prods,*) => do
+  let names := names.getElems.toList
+  let canon :: aliases := names | throwUnsupportedSyntax
+  let canonName := canon.getId
+  let ns ← getCurrNamespace
+  let canonQualified := ns ++ canonName
+
+  -- Declare syntax category.
+  let catName := symbolPrefix ++ ns ++ canonName
+  let attrName := catName.appendAfter "_parser"
+  setEnv <| ← Parser.registerParserCategory (← getEnv) attrName catName .symbol
+
+  for name in names do
+    setEnv <| lottSymbolAliasExt.addEntry (← getEnv)
+      { canon := canonQualified, alias := ns ++ name.getId }
+
+  -- Declare parsers in category.
+  let attrIdent := mkIdent attrName
+  for alias in aliases do
+    let aliasName@(.str .anonymous nameStr) := alias.getId | throwUnsupportedSyntax
+    let parserIdent := mkIdentFrom alias <| canonName ++ aliasName.appendAfter "_parser"
+    elabCommand <| ←
+      `(@[$attrIdent:ident] def $parserIdent : ParserDescr :=
+          ParserDescr.node $(quote catName) $(quote leadPrec) <|
+            ParserDescr.nonReservedSymbol $(quote nameStr) true)
+
+  let trailingParserIdent := mkIdentFrom canon <| canonName.appendAfter "_trailing_parser"
+  elabCommand <| ←
+    `(@[$attrIdent:ident] def $trailingParserIdent : TrailingParserDescr :=
+        ParserDescr.trailingNode $(quote catName) $(quote leadPrec) 0 <|
+          ParserDescr.cat `Lott.Trailing 0)
+
+  -- TODO: Support parsing of the subset of the syntax instead of just variables.
+
+  let parentName ← resolveSymbol parent
+  let parentCatName := symbolPrefix ++ parentName
+  let parentAttrIdent := mkIdent <| parentCatName.appendAfter "_parser"
+  let parentParserIdent := mkIdentFrom canon <| parentName ++ canonName.appendAfter "_parser"
+  elabCommand <| ←
+    `(@[$parentAttrIdent:ident] def $parentParserIdent : ParserDescr :=
+        ParserDescr.node $(quote parentCatName) $(quote leadPrec) <|
+          ParserDescr.cat $(quote catName) 0)
+
+  -- Declare type.
+  let matchAlts ← prods.getElems.mapM fun prod =>
+    `(matchAltExpr| | $(mkIdentFrom prod <| (parentName ++ prod.getId)) .. => True)
+  elabCommand <| ←
+    `(def $canon := { x : $parent // match x with $matchAlts:matchAlt* | _ => False })
+
+  -- Define elaboration.
+  let catIdent := mkIdentFrom canon catName
+  let termElabName := mkIdentFrom canon <| canon.getId.appendAfter "TermElab"
+  elabCommand <| ←
+    `(@[lott_elab $catIdent] def $termElabName : Lott.DSL.LottElab
+        | stx@(Lean.Syntax.node _ $(quote catName) #[Lean.Syntax.atom _ _])
+        | stx@(Lean.Syntax.node _ $(quote catName) #[Lean.Syntax.node _ $(quote catName) #[Lean.Syntax.atom _ _], _]) =>
+          Lott.DSL.elabVariable stx $(quote canonQualified)
+        | _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
+
+  -- Define parent elaboration.
+  let parentCatIdent := mkIdent parentCatName
+  let parentTermElabName := mkIdent <| parentName.appendAfter "TermElab"
+  elabCommand <| ←
+    `(@[lott_elab $parentCatIdent] def $parentTermElabName : Lott.DSL.LottElab
+        | Lean.Syntax.node _ $(quote parentCatName) #[stx@(Lean.Syntax.node _ $(quote catName) _)] => do
+          let e ← Lott.DSL.elabVariable stx $(quote canonQualified)
+          return Lean.Expr.proj `Subtype 0 e
+        | _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
 /- Judgement syntax. -/
 

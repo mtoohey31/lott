@@ -34,6 +34,10 @@ syntax "nonterminal " ident,+ " := " Lott.DSL.Production* : Lott.DSL.NonTerminal
 
 syntax Lott.DSL.NonTerminal : command
 
+/- Subrule syntax. -/
+
+syntax "subrule " ident,+ " of " ident " := " ident,+ : command
+
 /- Judgement syntax. -/
 
 declare_syntax_cat Lott.Judgement
