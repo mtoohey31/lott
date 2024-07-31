@@ -325,7 +325,8 @@ elab_rules : command | `(judgement_syntax $ps* : $name) => do
           return Lean.mkAppN e #[$exprArgs,*]
         | _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
-  setEnv (lottJudgementSyntaxExt.addEntry (← getEnv) { name := ns ++ name.getId, ps := ps })
+  setEnv <| lottJudgementSyntaxExt.modifyState (← getEnv)
+    fun ({ byName }) => { byName := byName.insert (ns ++ name.getId) ps }
 
 private
 def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
@@ -336,7 +337,7 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
 
     let state := lottJudgementSyntaxExt.getState (← getEnv)
     let catName := ns ++ name.getId
-    let .some { ps, .. } := state.byName.find? catName
+    let .some ps := state.byName.find? catName
       | throwError s!"judgement_syntax for {name} not provided before use in judgement"
 
     let type ← ps.reverse.foldlM (init := ← `(term| Prop)) fun

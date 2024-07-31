@@ -16,7 +16,8 @@ structure LottSymbolAliasState where
 
 instance : Inhabited LottSymbolAliasState where default := { byAlias := default }
 
-initialize lottSymbolAliasExt : PersistentEnvExtension LottSymbolAlias LottSymbolAlias LottSymbolAliasState ← registerPersistentEnvExtension {
+initialize lottSymbolAliasExt : PersistentEnvExtension LottSymbolAlias LottSymbolAlias LottSymbolAliasState ←
+  registerPersistentEnvExtension {
   mkInitial := return { byAlias := mkNameMap LottSymbolAlias },
   addImportedFn := fun symss => return {
     byAlias :=
@@ -27,26 +28,12 @@ initialize lottSymbolAliasExt : PersistentEnvExtension LottSymbolAlias LottSymbo
     fun s => s.byAlias.fold (cmp := Name.quickCmp) (init := #[]) fun acc _ a => acc.push a,
 }
 
-structure LottJudgementSyntax where
-  name : Name
-  ps : TSyntaxArray [`Lean.Parser.Syntax.atom, `ident]
-
-instance : Inhabited LottJudgementSyntax where default := { name := default, ps := default }
-
 structure LottJudgementSyntaxState where
-  byName : NameMap LottJudgementSyntax
+  byName : NameMap <| TSyntaxArray [`Lean.Parser.Syntax.atom, `ident]
 
 instance : Inhabited LottJudgementSyntaxState where default := { byName := default }
 
-initialize lottJudgementSyntaxExt : PersistentEnvExtension LottJudgementSyntax LottJudgementSyntax LottJudgementSyntaxState ← registerPersistentEnvExtension {
-  mkInitial := return { byName := mkNameMap LottJudgementSyntax },
-  addImportedFn := fun symss => return {
-    byName :=
-      symss.flatten.foldl (init := mkNameMap LottJudgementSyntax) fun acc a => acc.insert a.name a
-  },
-  addEntryFn := fun s a => { s with byName := s.byName.insert a.name a },
-  exportEntriesFn :=
-    fun s => s.byName.fold (cmp := Name.quickCmp) (init := #[]) fun acc _ a => acc.push a,
-}
+initialize lottJudgementSyntaxExt : EnvExtension LottJudgementSyntaxState ←
+  registerEnvExtension <| pure { byName := mkNameMap _ }
 
 end Lott.DSL
