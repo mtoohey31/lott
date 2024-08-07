@@ -19,6 +19,7 @@ syntax "metavar " ident,+ : command
 
 /- Non-terminal syntax. -/
 
+declare_syntax_cat Lott.Symbol
 declare_syntax_cat Lott.DSL.DesugarConfig
 declare_syntax_cat Lott.DSL.ElabConfig
 declare_syntax_cat Lott.DSL.Production
@@ -98,6 +99,8 @@ private
 def lottSymbolParser := incQuotDepth (parserOfStack 1)
 
 syntax (name := lott_symbol_embed) "[[" ident "|" lottSymbolParser "]]" : term
+
+syntax "[[" Lott.Symbol "]]" : term
 
 syntax "[[" Lott.Judgement "]]" : term
 

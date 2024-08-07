@@ -20,8 +20,7 @@ def Type'.subst (A : Type') (a : TypeVar) (B : Type') : Type' := match A with
   | .forall' a' A' => .forall' a' <| if a' = a then A' else A'.subst a B
 
 theorem Type'.forall_subst_eq_subst_forall (aneb : a ≠ b)
-  : [[LottExamples.SystemF.Type'| ∀ a. (A [b ↦ B])]] =
-    [[LottExamples.SystemF.Type'| (∀ a. A) [b ↦ B] ]] := by rw [Type'.subst, if_neg aneb]
+  : [[∀ a. (A [b ↦ B])]] = [[(∀ a. A) [b ↦ B] ]] := by rw [Type'.subst, if_neg aneb]
 
 theorem Type'.subst_subst : [[LottExamples.SystemF.Type'| A▁target [a ↦ A] [a ↦ B] ]] =
     [[LottExamples.SystemF.Type'| A▁target [a ↦ A [a ↦ B] ] ]] := by
@@ -41,8 +40,8 @@ theorem Type'.subst_subst : [[LottExamples.SystemF.Type'| A▁target [a ↦ A] [
     · case isTrue a'eqa => rfl
     · case isFalse a'nea => rw [Type'.subst_subst]
 
-theorem Type'.subst_shadowed_forall (B : Type') : [[LottExamples.SystemF.Type'| ∀ a. A]] =
-    [[LottExamples.SystemF.Type'| (∀ a. A) [a ↦ B] ]] := by rw [Type'.subst, if_pos rfl]
+theorem Type'.subst_shadowed_forall (B : Type') : [[∀ a. A]] = [[(∀ a. A) [a ↦ B] ]] := by
+  rw [Type'.subst, if_pos rfl]
 
 nonterminal Term, E, F :=
   | x                     : var

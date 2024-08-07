@@ -169,7 +169,9 @@ def symbolEmbedElab : TermElab := fun stx _ => do
   let stx := stx[3]!
   elabTerm stx.getKind stx
 
-elab_rules : term | `([[$stx:Lott.Judgement]]) => elabTerm stx.raw.getKind stx
+elab_rules : term
+  | `([[$stx:Lott.Symbol]]) => elabTerm stx.raw.getKind stx
+  | `([[$stx:Lott.Judgement]]) => elabTerm stx.raw.getKind stx
 
 /- Non-terminal syntax. -/
 
@@ -229,10 +231,10 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       let parserIdent := mkIdentFrom prodIdent <| canonName ++ prodIdent.getId |>.appendAfter "_parser"
 
       elabCommand <| ← if let some lhsPrec := lhsPrec? then
-        `(@[$attrIdent:ident] def $parserIdent : TrailingParserDescr :=
+        `(@[Lott.Symbol_parser, $attrIdent:ident] def $parserIdent : TrailingParserDescr :=
             ParserDescr.trailingNode $(quote catName) $(quote leadPrec) $(quote lhsPrec) $val)
       else
-        `(@[$attrIdent:ident] def $parserIdent : ParserDescr :=
+        `(@[Lott.Symbol_parser, $attrIdent:ident] def $parserIdent : ParserDescr :=
             ParserDescr.node $(quote catName) $(quote leadPrec) $val)
 
     -- Define variable parsers and trailing parser (in variable category), plus variable category
@@ -469,8 +471,8 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
       let expectedKind := judgementPrefix ++ catName
       if conclusionKind != expectedKind then
         throwErrorAt conclusion "found conclusion judgement syntax kind{indentD conclusionKind}\nexpected to find kind{indentD expectedKind}\nall conclusions of inference rules in a judgement declaration must be the judgement which is being defined"
-      let ctorType ← jms.foldrM (init := ← `(term| [[$conclusion]]))
-        fun «judgement» acc => `([[$«judgement»]] → $acc)
+      let ctorType ← jms.foldrM (init := ← `(term| [[$conclusion:Lott.Judgement]]))
+        fun «judgement» acc => `([[$«judgement»:Lott.Judgement]] → $acc)
       `(ctor| | $ruleIdent:ident : $ctorType)
     `(inductive $name : $type where $ctors*)
   elabCommand <| ← `(mutual $inductives* end)
