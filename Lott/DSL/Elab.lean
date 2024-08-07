@@ -14,19 +14,6 @@ open Lean.Parser.Command
 open Lean.Parser.Syntax
 open Lean.Parser.Term
 
-/- Common trailing syntax. -/
-
-def elabVariable (stx : Syntax) (expectedType : Name) : TermElabM Expr := do
-  let name ← match stx with
-    | .node _ _ #[.atom _ valStr] => pure <| .str .anonymous valStr
-    | .node _ _ #[.node _ _ #[.atom _ valStr], trailing] => do
-      let `(Lott.Trailing| ▁ $components▁*) := trailing | throwUnsupportedSyntax
-      pure <| components.getElems.foldl (· ++ ·.getId) <| .str .anonymous valStr
-    | _ => throwUnsupportedSyntax
-
-  let type ← elabType <| mkIdent expectedType
-  elabTerm (mkIdentFrom stx <| .str .anonymous <| name.toStringWithSep "_" false) type
-
 /- Term embedding syntax. -/
 
 abbrev LottElab := Syntax → TermElabM Expr
@@ -111,24 +98,18 @@ elab_rules : command | `(metavar $names,*) => do
     let aliasName@(.str .anonymous nameStr) := alias.getId | throwUnsupportedSyntax
     let parserIdent := mkIdentFrom alias <| canon.getId ++ aliasName.appendAfter "_parser"
     elabCommand <| ←
-      `(@[$attrIdent:ident] def $parserIdent : ParserDescr :=
-          ParserDescr.node $(quote catName) $(quote leadPrec) <|
-            ParserDescr.nonReservedSymbol $(quote nameStr) true)
-
-  let trailingParserIdent := mkIdentFrom canon <| canon.getId.appendAfter "_trailing_parser"
-  elabCommand <| ← 
-    `(@[$attrIdent:ident] def $trailingParserIdent : TrailingParserDescr :=
-        ParserDescr.trailingNode $(quote catName) $(quote leadPrec) 0 <|
-          ParserDescr.cat `Lott.Trailing 0)
+      `(@[$attrIdent:ident] def $parserIdent : Parser :=
+          leadingNode $(quote catName) Parser.maxPrec <|
+            Lott.DSL.identPrefix $(quote nameStr))
 
   -- Define elaboration.
   let catIdent := mkIdentFrom canon catName
   let termElabName := mkIdentFrom canon <| canon.getId.appendAfter "TermElab"
   elabCommand <| ←
     `(@[lott_elab $catIdent] def $termElabName : Lott.DSL.LottElab
-        | stx@(Lean.Syntax.node _ $(quote catName) #[Lean.Syntax.atom _ _])
-        | stx@(Lean.Syntax.node _ $(quote catName) #[Lean.Syntax.node _ $(quote catName) #[Lean.Syntax.atom _ _], _]) =>
-          Lott.DSL.elabVariable stx $(quote canonQualified)
+        | Lean.Syntax.node _ $(quote catName) #[ident@(Lean.Syntax.ident ..)] => do
+          let type ← Lean.Elab.Term.elabType <| mkIdent $(quote canonQualified)
+          Lean.Elab.Term.elabTerm ident type
         | _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
 /- Term embedding syntax. -/
@@ -237,23 +218,16 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         `(@[Lott.Symbol_parser, $attrIdent:ident] def $parserIdent : ParserDescr :=
             ParserDescr.node $(quote catName) $(quote leadPrec) $val)
 
-    -- Define variable parsers and trailing parser (in variable category), plus variable category
-    -- parser in symbol category.
+    -- Define variable parsers, plus variable category parser in symbol category.
     let varCatName := varCatOfName canon
     let varAttrIdent := mkIdent <| varAttrOfName canon
     for alias in aliases do
       let aliasName@(.str .anonymous nameStr) := alias.getId | throwUnsupportedSyntax
       let parserIdent := mkIdentFrom alias <| canonName ++ aliasName.appendAfter "_parser"
       elabCommand <| ←
-        `(@[$varAttrIdent:ident] def $parserIdent : ParserDescr :=
-            ParserDescr.node $(quote varCatName) $(quote leadPrec) <|
-              ParserDescr.nonReservedSymbol $(quote nameStr) true)
-
-    let trailingParserIdent := mkIdentFrom canon <| canonName.appendAfter "_trailing_parser"
-    elabCommand <| ← 
-      `(@[$varAttrIdent:ident] def $trailingParserIdent : TrailingParserDescr :=
-          ParserDescr.trailingNode $(quote varCatName) $(quote leadPrec) 0 <|
-            ParserDescr.cat `Lott.Trailing 0)
+        `(@[$varAttrIdent:ident] def $parserIdent : Parser :=
+            leadingNode $(quote varCatName) Parser.maxPrec <|
+              Lott.DSL.identPrefix $(quote nameStr))
 
     let varParserIdent := mkIdentFrom canon <| canonName.appendAfter "_variable_parser"
     elabCommand <| ←
@@ -308,18 +282,13 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
           $seqItems*
           $rest:term)
 
-    let varMatchAlts ← names.mapM fun name => do
-      let name := name.getId
-      let .str .anonymous nameStr := name | throwUnsupportedSyntax
-      `(matchAltExpr|
-        | Lean.Syntax.node _ $(quote catName) #[stx@(Lean.Syntax.node _ $(quote varCatName) #[Lean.Syntax.atom _ $(quote nameStr)])]
-        | Lean.Syntax.node _ $(quote catName) #[stx@(Lean.Syntax.node _ $(quote varCatName) #[Lean.Syntax.node _ $(quote varCatName) #[Lean.Syntax.atom _ $(quote nameStr)], _])] =>
-          Lott.DSL.elabVariable stx $(quote <| ns ++ canonName))
     let termElabIdent := mkIdentFrom canon <| canonName.appendAfter "TermElab"
     elabCommand <| ←
       `(@[lott_elab $catIdent] def $termElabIdent : Lott.DSL.LottElab
           $prodMatchAlts:matchAlt*
-          $varMatchAlts:matchAlt*
+          | Lean.Syntax.node _ $(quote catName) #[Lean.Syntax.node _ $(quote varCatName) #[ident@(Lean.Syntax.ident ..)] ] => do
+            let type ← Lean.Elab.Term.elabType <| mkIdent $(quote <| ns ++ canonName)
+            Lean.Elab.Term.elabTerm ident type
           | _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
 elab_rules : command
@@ -350,15 +319,9 @@ elab_rules : command | `(subrule $names,* of $parent := $prods,*) => do
     let aliasName@(.str .anonymous nameStr) := alias.getId | throwUnsupportedSyntax
     let parserIdent := mkIdentFrom alias <| canonName ++ aliasName.appendAfter "_parser"
     elabCommand <| ←
-      `(@[$attrIdent:ident] def $parserIdent : ParserDescr :=
-          ParserDescr.node $(quote catName) $(quote leadPrec) <|
-            ParserDescr.nonReservedSymbol $(quote nameStr) true)
-
-  let trailingParserIdent := mkIdentFrom canon <| canonName.appendAfter "_trailing_parser"
-  elabCommand <| ←
-    `(@[$attrIdent:ident] def $trailingParserIdent : TrailingParserDescr :=
-        ParserDescr.trailingNode $(quote catName) $(quote leadPrec) 0 <|
-          ParserDescr.cat `Lott.Trailing 0)
+      `(@[$attrIdent:ident] def $parserIdent : Parser :=
+          leadingNode $(quote catName) Parser.maxPrec <|
+            Lott.DSL.identPrefix $(quote nameStr))
 
   -- TODO: Support parsing of the subset of the syntax instead of just variables.
 
@@ -382,9 +345,9 @@ elab_rules : command | `(subrule $names,* of $parent := $prods,*) => do
   let termElabName := mkIdentFrom canon <| canon.getId.appendAfter "TermElab"
   elabCommand <| ←
     `(@[lott_elab $catIdent] def $termElabName : Lott.DSL.LottElab
-        | stx@(Lean.Syntax.node _ $(quote catName) #[Lean.Syntax.atom _ _])
-        | stx@(Lean.Syntax.node _ $(quote catName) #[Lean.Syntax.node _ $(quote catName) #[Lean.Syntax.atom _ _], _]) =>
-          Lott.DSL.elabVariable stx $(quote canonQualified)
+        | Lean.Syntax.node _ $(quote catName) #[ident@(Lean.Syntax.ident ..)] => do
+          let type ← Lean.Elab.Term.elabType <| mkIdent $(quote canonQualified)
+          Lean.Elab.Term.elabTerm ident type
         | _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
   -- Define parent elaboration.
@@ -392,8 +355,9 @@ elab_rules : command | `(subrule $names,* of $parent := $prods,*) => do
   let parentTermElabName := mkIdent <| parentName.appendAfter "TermElab"
   elabCommand <| ←
     `(@[lott_elab $parentCatIdent] def $parentTermElabName : Lott.DSL.LottElab
-        | Lean.Syntax.node _ $(quote parentCatName) #[stx@(Lean.Syntax.node _ $(quote catName) _)] => do
-          let e ← Lott.DSL.elabVariable stx $(quote canonQualified)
+        | Lean.Syntax.node _ $(quote parentCatName) #[Lean.Syntax.node _ $(quote catName) #[ident@(Lean.Syntax.ident ..)] ] => do
+          let type ← Lean.Elab.Term.elabType <| mkIdent $(quote canonQualified)
+          let e ← Lean.Elab.Term.elabTerm ident type
           return Lean.Expr.proj `Subtype 0 e
         | _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 

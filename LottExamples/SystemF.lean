@@ -22,8 +22,8 @@ def Type'.subst (A : Type') (a : TypeVar) (B : Type') : Type' := match A with
 theorem Type'.forall_subst_eq_subst_forall (aneb : a ≠ b)
   : [[∀ a. (A [b ↦ B])]] = [[(∀ a. A) [b ↦ B] ]] := by rw [Type'.subst, if_neg aneb]
 
-theorem Type'.subst_subst : [[LottExamples.SystemF.Type'| A▁target [a ↦ A] [a ↦ B] ]] =
-    [[LottExamples.SystemF.Type'| A▁target [a ↦ A [a ↦ B] ] ]] := by
+theorem Type'.subst_subst : [[LottExamples.SystemF.Type'| A_target [a ↦ A] [a ↦ B] ]] =
+    [[LottExamples.SystemF.Type'| A_target [a ↦ A [a ↦ B] ] ]] := by
   match A_target with
   | .var a' =>
     rw [Type'.subst, Type'.subst]
@@ -67,11 +67,11 @@ def Term.tySubst (E : Term) (a : TypeVar) (A : Type') : Term := match E with
   | .typeGen a' E' => .typeGen a' <| if a' = a then E' else E'.tySubst a A
   | .typeApp E' A' => .typeApp (E'.tySubst a A) (A'.subst a A)
 
-nonterminal Environment, G, GG, GGG :=
+nonterminal Environment, G, D :=
   | "ε"                 : empty
   | G ", " x " : " A    : termVarExt
   | G ", " a            : typeVarExt
-  | G ", " GG           : append (elab := return mkAppN (.const `LottExamples.SystemF.Environment.append []) #[G, GG])
+  | G ", " D            : append (elab := return mkAppN (.const `LottExamples.SystemF.Environment.append []) #[G, D])
   | "(" G ")"           : paren (desugar := return G)
   | G "[" a " ↦ " A "]" : subst (elab := return mkAppN (.const `LottExamples.SystemF.Environment.subst []) #[G, a, A])
 
@@ -125,9 +125,9 @@ a ∈ G
 a ∈ G, x : A
 
 a ∈ G
-a ≠ a▁other
+a ≠ a_other
 ────────────── typeVarExt
-a ∈ G, a▁other
+a ∈ G, a_other
 
 judgement_syntax a " ∉ " G : TypeVarNotInEnvironment
 
@@ -284,9 +284,9 @@ judgement TermVarInEnvironment :=
 x : A ∈ G, x : A
 
 x : A ∈ G
-x ≠ x▁other
+x ≠ x_other
 ────────────────────── termVarExt
-x : A ∈ G, x▁other : B
+x : A ∈ G, x_other : B
 
 x : A ∈ G
 ──────────── typeVarExt
@@ -379,8 +379,8 @@ theorem TermVarInEnvironment.append_inr : [[x : A ∈ GG]] → [[x : A ∈ G, GG
   | .termVarExt xAinGG' xnex' => xAinGG'.append_inr |>.termVarExt xnex'
   | .typeVarExt xAinGG' => xAinGG'.append_inr |>.typeVarExt
 
-theorem TermVarInEnvironment.TermVar_swap (xtinGxyGG : [[x▁target : A▁target ∈ G, x : A, y : B, GG]])
-  (xney : x ≠ y) : [[x▁target : A▁target ∈ G, y : B, x : A, GG]] := by
+theorem TermVarInEnvironment.TermVar_swap (xtinGxyGG : [[x_target : A_target ∈ G, x : A, y : B, GG]])
+  (xney : x ≠ y) : [[x_target : A_target ∈ G, y : B, x : A, GG]] := by
   match xtinGxyGG.append_elim with
   | .inl ⟨xtinGxy, xtninGG⟩ =>
     apply TermVarInEnvironment.append_inl _ xtninGG
@@ -422,7 +422,7 @@ theorem TermVarInEnvironment.subst (xAinG : [[x : A ∈ G]]) (aninG : [[a ∉ G]
     exact aninG.TypeVar_drop
 
 set_option linter.unusedVariables false in
-theorem TermVarInEnvironment.unsubst (xAsinGs : [[x : A▁target ∈ G [a ↦ B] ]]) (aninG : [[a ∉ G]])
+theorem TermVarInEnvironment.unsubst (xAsinGs : [[x : A_target ∈ G [a ↦ B] ]]) (aninG : [[a ∉ G]])
   : ∃ A, [[x : A ∈ G]] ∧ A_target = [[LottExamples.SystemF.Type'| A [a ↦ B] ]] := by
   rw [Environment.subst] at xAsinGs
   induction G
@@ -534,8 +534,8 @@ theorem TypeWellFormedness.TermVar_intro : [[G, GG ⊢ B]] → [[G, x : A, GG �
   | .arr A'wf B'wf => .arr A'wf.TermVar_intro B'wf.TermVar_intro
   | .forall' A'wf => .forall' <| A'wf.TermVar_intro (GG := .typeVarExt GG _)
 
-theorem TypeWellFormedness.TermVar_swap (Bwf : [[G, y : A▁other, x : A, GG ⊢ B]])
-  : [[G, x : A, y : A▁other, GG ⊢ B]] := Bwf.TermVar_drop.TermVar_drop.TermVar_intro.TermVar_intro
+theorem TypeWellFormedness.TermVar_swap (Bwf : [[G, y : A_other, x : A, GG ⊢ B]])
+  : [[G, x : A, y : A_other, GG ⊢ B]] := Bwf.TermVar_drop.TermVar_drop.TermVar_intro.TermVar_intro
 
 theorem TypeWellFormedness.append_inr : [[G ⊢ A]] → [[GG, G ⊢ A]]
   | .var ainG => .var ainG.append_inr
@@ -743,14 +743,14 @@ set_option linter.unusedVariables false in
 def NotInFreeTermVars'Types'FreeTypeVars G a E := ¬[[G ⊢ a ∈ fvftv(E)]]
 
 theorem NotInFreeTermVars'Types'FreeTypeVars.TermVar_swap
-  (anin : [[G, y : A▁other, x : A, GG ⊢ a ∉ fvftv(E)]]) (xney : x ≠ y)
-  : [[G, x : A, y : A▁other, GG ⊢ a ∉ fvftv(E)]] := by
+  (anin : [[G, y : A_other, x : A, GG ⊢ a ∉ fvftv(E)]]) (xney : x ≠ y)
+  : [[G, x : A, y : A_other, GG ⊢ a ∉ fvftv(E)]] := by
   intro ain
   apply anin
   let .mk x'infv x'A'in ainftvA' := ain
   exact InFreeTermVars'Types'FreeTypeVars.mk x'infv (x'A'in.TermVar_swap xney) ainftvA'
 
-theorem NotInFreeTermVars'Types'FreeTypeVars.TermVar_shadowed (anin : [[G, x : A▁shadowed, GG, x : A, GGG ⊢ a ∉ fvftv(E)]])
+theorem NotInFreeTermVars'Types'FreeTypeVars.TermVar_shadowed (anin : [[G, x : A_shadowed, GG, x : A, GGG ⊢ a ∉ fvftv(E)]])
   : [[G, GG, x : A, GGG ⊢ a ∉ fvftv(E)]] := by
   intro ain
   apply anin
@@ -844,8 +844,8 @@ G ⊢ B
 ───────────────────── typeApp
 G ⊢ E [B] : A [a ↦ B]
 
-theorem Typing.TermVar_swap (EtyB : [[G, y : A▁other, x : A, GG ⊢ E : B]]) (xney : x ≠ y)
-  : [[G, x : A, y : A▁other, GG ⊢ E : B]] :=
+theorem Typing.TermVar_swap (EtyB : [[G, y : A_other, x : A, GG ⊢ E : B]]) (xney : x ≠ y)
+  : [[G, x : A, y : A_other, GG ⊢ E : B]] :=
   match EtyB with
   | .var x'BinGyxappGG =>
     match x'BinGyxappGG.append_elim with
@@ -892,7 +892,7 @@ theorem Typing.append_inr : [[G ⊢ E : A]] → [[GG, G ⊢ E : A]]
   | .typeGen a'nin E'tyA' => .typeGen (a'nin.append_inr E'tyA') E'tyA'.append_inr
   | .typeApp E'ty Bwf => .typeApp E'ty.append_inr Bwf.append_inr
 
-theorem Typing.TermVar_shadowed : [[G, x : A▁shadowed, GG, x : A, GGG ⊢ E : B]] → [[G, GG, x : A, GGG ⊢ E : B]]
+theorem Typing.TermVar_shadowed : [[G, x : A_shadowed, GG, x : A, GGG ⊢ E : B]] → [[G, GG, x : A, GGG ⊢ E : B]]
   | var x'BinGxGGxGGG =>
     match x'BinGxGGxGGG.append_elim with
     | .inl ⟨x'BinGx, x'ninGGxGGG⟩ =>
@@ -1155,20 +1155,20 @@ judgement_syntax "⊢ " E " -> " F : OperationalSemantics
 
 judgement OperationalSemantics :=
 
-⊢ E -> E▁next
+⊢ E -> E_next
 ───────────────── appl
-⊢ E F -> E▁next F
+⊢ E F -> E_next F
 
-⊢ F -> F▁next
+⊢ F -> F_next
 ───────────────── appr
-⊢ V F -> V F▁next
+⊢ V F -> V F_next
 
 ───────────────────────────── lamApp
 ⊢ (λ x : A. E) V -> E [x ↦ V]
 
-⊢ E -> E▁next
+⊢ E -> E_next
 ───────────────────── typeApp
-⊢ E [A] -> E▁next [A]
+⊢ E [A] -> E_next [A]
 
 ─────────────────────────── typeGenApp
 ⊢ (Λ a. E) [A] -> E [a ↦ A]

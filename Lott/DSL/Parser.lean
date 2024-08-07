@@ -10,8 +10,31 @@ open Lean.Parser.Syntax
 
 declare_syntax_cat Lott.Trailing
 
--- TODO: Figure out how to be able to use underscore for separator.
-syntax "▁" sepBy1(ident, "▁") : Lott.Trailing
+def isPrefixOf (prefix' : String) (n : Name) : Bool := prefix'.isPrefixOf n.getRoot.getString!
+
+def identPrefixFn (prefix' : String) : ParserFn := fun c s =>
+  let s := tokenFn ["identifier"] c s
+  if s.hasError then
+    s
+  else
+    match s.stxStack.back with
+    | .ident _ _ val _ =>
+      if !isPrefixOf prefix' val then
+        s.mkUnexpectedTokenError s!"identifier beginning with '{prefix'}'"
+      else
+        s
+    | _ => s.mkUnexpectedTokenError "identifier"
+
+def identPrefix (prefix' : String) : Parser := {
+  fn := identPrefixFn prefix'
+  info := mkAtomicInfo "ident"
+}
+
+@[combinator_parenthesizer identPrefix] def identPrefix.parenthesizer (_prefix : String) :=
+  PrettyPrinter.Parenthesizer.visitToken
+
+@[combinator_formatter identPrefix] def identPrefix.formatter (_parser : String) :=
+  PrettyPrinter.Formatter.rawIdentNoAntiquot.formatter
 
 /- Metavariable syntax. -/
 
