@@ -8,11 +8,11 @@ metavar TypeVar, a, b
 metavar TermVar, x, y
 
 nonterminal Type', A, B :=
-  | a                   : var
-  | A " → " B           : arr
-  | "∀ " a ". " A       : forall'
-  | "(" A ")"           : paren (desugar := return A)
-  | A "[" a " ↦ " B "]" : subst (elab := return mkAppN (.const `LottExamples.SystemF.Type'.subst []) #[A, a, B])
+  | a                    : var
+  | A " → " B            : arr
+  | "∀ " a ". " A        : forall'
+  | "(" A ")"            : paren (desugar := return A)
+  | A " [" a " ↦ " B "]" : subst (elab := return mkAppN (.const `LottExamples.SystemF.Type'.subst []) #[A, a, B])
 
 def Type'.subst (A : Type') (a : TypeVar) (B : Type') : Type' := match A with
   | .var a' => if a' = a then B else .var a'
@@ -43,14 +43,14 @@ theorem Type'.subst_shadowed_forall (B : Type') : [[∀ a. A]] = [[(∀ a. A) [a
   rw [Type'.subst, if_pos rfl]
 
 nonterminal Term, E, F :=
-  | x                     : var
-  | "λ " x " : " A ". " E : lam
-  | E F                   : app
-  | "Λ " a ". " E         : typeGen
-  | E " [" A "]"          : typeApp
-  | "(" E ")"             : paren (desugar := return E)
-  | E "[" x " ↦ " F "]"   : subst (elab := return mkAppN (.const `LottExamples.SystemF.Term.tmSubst []) #[E, x, F])
-  | E "[" a " ↦ " A "]"   : typeSubst (elab := return mkAppN (.const `LottExamples.SystemF.Term.tySubst []) #[E, a, A])
+  | x                      : var
+  | "λ " x " : " A ". " E  : lam
+  | E F                    : app
+  | "Λ " a ". " E          : typeGen
+  | E " [" A "]"           : typeApp
+  | "(" E ")"              : paren (desugar := return E)
+  | E " [" x " ↦ " F "]"   : subst (elab := return mkAppN (.const `LottExamples.SystemF.Term.tmSubst []) #[E, x, F])
+  | E " [" a " ↦ " A "]"   : typeSubst (elab := return mkAppN (.const `LottExamples.SystemF.Term.tySubst []) #[E, a, A])
 
 def Term.tmSubst (E : Term) (x : TermVar) (F : Term) : Term := match E with
   | .var x' => if x' = x then F else .var x'
@@ -67,12 +67,12 @@ def Term.tySubst (E : Term) (a : TypeVar) (A : Type') : Term := match E with
   | .typeApp E' A' => .typeApp (E'.tySubst a A) (A'.subst a A)
 
 nonterminal Environment, G, D :=
-  | "ε"                 : empty
-  | G ", " x " : " A    : termVarExt
-  | G ", " a            : typeVarExt
-  | G ", " D            : append (elab := return mkAppN (.const `LottExamples.SystemF.Environment.append []) #[G, D])
-  | "(" G ")"           : paren (desugar := return G)
-  | G "[" a " ↦ " A "]" : subst (elab := return mkAppN (.const `LottExamples.SystemF.Environment.subst []) #[G, a, A])
+  | "ε"                  : empty
+  | G ", " x " : " A     : termVarExt
+  | G ", " a             : typeVarExt
+  | G ", " D             : append (elab := return mkAppN (.const `LottExamples.SystemF.Environment.append []) #[G, D])
+  | "(" G ")"            : paren (desugar := return G)
+  | G " [" a " ↦ " A "]" : subst (elab := return mkAppN (.const `LottExamples.SystemF.Environment.subst []) #[G, a, A])
 
 def Environment.append (G : Environment) : Environment → Environment
   | .empty => G
@@ -129,7 +129,6 @@ a ∈ G, a'
 
 judgement_syntax a " ∉ " G : TypeVarNotInEnvironment
 
-set_option linter.unusedVariables false in
 def TypeVarNotInEnvironment a G := ¬[[a ∈ G]]
 
 theorem TypeVarInEnvironment.append_elim (ainGappGG : [[a ∈ G, GG]]) : [[a ∈ G]] ∨ [[a ∈ GG]] := by
@@ -291,7 +290,6 @@ x : A ∈ G, a
 
 judgement_syntax x " ∉ " G : TermVarNotInEnvironment
 
-set_option linter.unusedVariables false in
 def TermVarNotInEnvironment x G := ∀ A : Type', ¬[[x : A ∈ G]]
 
 theorem TermVarInEnvironment.append_elim (xAinGappGG : [[x : A ∈ G, GG]])
@@ -418,7 +416,6 @@ theorem TermVarInEnvironment.subst (xAinG : [[x : A ∈ G]]) (aninG : [[a ∉ G]
     apply ih xAinG'
     exact aninG.TypeVar_drop
 
-set_option linter.unusedVariables false in
 theorem TermVarInEnvironment.unsubst (xAsinGs : [[x : A' ∈ G [a ↦ B] ]]) (aninG : [[a ∉ G]])
   : ∃ A, [[x : A ∈ G]] ∧ A' = [[(A [a ↦ B])]] := by
   rw [Environment.subst] at xAsinGs
@@ -622,7 +619,6 @@ a ∈ ftv(∀ b. A)
 
 judgement_syntax a " ∉ " "ftv" "(" A ")" : NotInFreeTypeVars
 
-set_option linter.unusedVariables false in
 def NotInFreeTypeVars a A := ¬[[a ∈ ftv(A)]]
 
 theorem NotInFreeTypeVars.of_TypeWellFormedness_of_TypeVarNotInEnvironment (Awf : [[G ⊢ A]])
@@ -720,7 +716,6 @@ x ∈ fv(E [A])
 
 judgement_syntax x " ∉ " "fv" "(" E ")" : NotInFreeTermVars
 
-set_option linter.unusedVariables false in
 def NotInFreeTermVars x E := ¬[[x ∈ fv(E)]]
 
 judgement_syntax G " ⊢ " a " ∈ " "fvftv" "(" E ")" : InFreeTermVars'Types'FreeTypeVars
@@ -735,7 +730,6 @@ G ⊢ a ∈ fvftv(E)
 
 judgement_syntax G " ⊢ " a " ∉ " "fvftv" "(" E ")" : NotInFreeTermVars'Types'FreeTypeVars
 
-set_option linter.unusedVariables false in
 def NotInFreeTermVars'Types'FreeTypeVars G a E := ¬[[G ⊢ a ∈ fvftv(E)]]
 
 theorem NotInFreeTermVars'Types'FreeTypeVars.TermVar_swap
@@ -902,7 +896,6 @@ theorem Typing.TermVar_shadowed : [[G, x : A_shadowed, GG, x : A, GGG ⊢ E : B]
   | typeGen a'nin E'tyA' => .typeGen a'nin.TermVar_shadowed <| E'tyA'.TermVar_shadowed (GGG := GGG.typeVarExt _)
   | typeApp E'ty B'wf => .typeApp E'ty.TermVar_shadowed B'wf.TermVar_drop
 
-set_option linter.unusedVariables false in
 theorem Typing.TypeVar_shadowed_subst (EtyA : [[ε, a, G, a, GG ⊢ E : A]]) (Bwf : [[ε ⊢ B]])
   (aninG : [[a ∉ G]])
   (ih : ∀ x : TermVar, [[x ∈ fv(E)]] → (∃ A, [[x : A ∈ GG]]) ∨ ∀ A, [[x : A ∈ G]] → [[a ∉ ftv(A)]])
@@ -1179,7 +1172,6 @@ theorem preservation (EtyA : [[ε ⊢ E : A]]) (EstepF : [[⊢ E -> F]]) : [[ε 
   | .typeGenApp, .typeApp (.typeGen _ E'tyA'') A'wf =>
     E'tyA''.tySubst_preservation (G := .empty) TypeVarNotInEnvironment.ε A'wf
 
-set_option linter.unusedVariables false in
 theorem progress (EtyA : [[ε ⊢ E : A]]) : (∃ F, [[⊢ E -> F]]) ∨ ∃ V : Value, V.val = E :=
   match E, EtyA with
   | .lam x A' E', _ => .inr <| Exists.intro { val := .lam x A' E', property := by simp } rfl
@@ -1208,5 +1200,7 @@ theorem progress (EtyA : [[ε ⊢ E : A]]) : (∃ F, [[⊢ E -> F]]) ∨ ∃ V :
       rw [VE'eqE'] at E'val
       match E' with
       | .typeGen a E'' => exact .inl <| Exists.intro (E''.tySubst a A') .typeGenApp
+
+filter "LottExamples/SystemF/main.tex" "LottExamples/SystemF/main.mng"
 
 end LottExamples.SystemF
