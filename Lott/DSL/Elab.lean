@@ -437,6 +437,13 @@ elab_rules : command | `(subrule $names,* of $parent := $prods,*) => do
           return Lean.Expr.proj `Subtype 0 e
         | _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
+  let parentTexElabName := mkIdent <| parentName.appendAfter "TexElab"
+  elabCommand <| ←
+    `(@[lott_tex_elab $parentCatIdent] def $parentTexElabName : Lott.DSL.LottTexElab
+        | _, Lean.Syntax.node _ $(quote parentCatName) #[Lean.Syntax.node _ $(quote catName) #[Lean.Syntax.ident _ _ n _] ] => do
+          return Lott.DSL.texEscape <| n.toString (escape := false)
+        | _, _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
+
 /- Judgement syntax. -/
 
 elab_rules : command | `(judgement_syntax $ps* : $name) => do
