@@ -146,6 +146,42 @@ def variablePrefix := `Lott.Variable
 private
 def judgementPrefix := `Lott.Judgement
 
+private
+inductive LottSyntaxIR where
+  | category (n : Name)
+  | atom (s : String)
+deriving Inhabited, BEq
+
+private
+def LottSyntaxIR.toParser : LottSyntaxIR → TermElabM (TSyntax `term)
+  | .category n => `(categoryParser $(quote n) Parser.maxPrec)
+  | .atom s => `(symbol $(mkStrLit s))
+
+private
+abbrev LottSyntax := TSyntaxArray [`Lean.Parser.Syntax.atom, `ident]
+
+private
+def LottSyntax.toParser (stx : LottSyntax) (catName : Name) : CommandElabM (Term × Term) := do
+  let stx ← stx.mapM fun
+    | `($name:ident) => return LottSyntaxIR.category <| symbolPrefix ++ (← resolveSymbol name)
+    | `(stx| $atom:str) => return LottSyntaxIR.atom atom.getString
+    | _ => throwUnsupportedSyntax
+
+  if stx[0]? == .some (.category catName) then
+    let rest ← stx.extract 1 stx.size |> go
+    return (← `(trailingNode $(quote catName) Parser.maxPrec 0 $rest), ← `(TrailingParser))
+  else
+    let rest ← go stx
+    return (← `(leadingNode $(quote catName) Parser.maxPrec $rest), ← `(Parser))
+where
+  go stx := do
+    if stx.size == 0 then
+      throwUnsupportedSyntax
+
+    liftTermElabM <| stx.extract 1 stx.size |>.foldlM
+      (init := ← liftTermElabM <| stx[0]!.toParser)
+      fun acc ir => do `($acc >> $(← ir.toParser))
+
 /- Metavariable syntax. -/
 
 elab_rules : command | `(metavar $names,*) => do
@@ -247,19 +283,9 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       let `(Production| | $[$ps]* : $prodIdent $[$desugarConfig?]? $[$elabConfig?]?) := prod
         | throwUnsupportedSyntax
 
-      let ps ← ps.mapM (β := Syntax) fun
-        | `($name:ident) => do
-          `(cat| $(mkIdentFrom name <| symbolPrefix ++ (← resolveSymbol name)):ident)
-        | other => return other
-      let (val, lhsPrec?) ← liftTermElabM <| toParserDescr (mkNullNode ps) catName
+      let (val, type) ← LottSyntax.toParser ps catName
       let parserIdent := mkIdentFrom prodIdent <| canonName ++ prodIdent.getId |>.appendAfter "_parser"
-
-      elabCommand <| ← if let some lhsPrec := lhsPrec? then
-        `(@[Lott.Symbol_parser, $attrIdent:ident] def $parserIdent : TrailingParserDescr :=
-            ParserDescr.trailingNode $(quote catName) $(quote leadPrec) $(quote lhsPrec) $val)
-      else
-        `(@[Lott.Symbol_parser, $attrIdent:ident] def $parserIdent : ParserDescr :=
-            ParserDescr.node $(quote catName) $(quote leadPrec) $val)
+      elabCommand <| ← `(@[Lott.Symbol_parser, $attrIdent:ident] def $parserIdent : $type := $val)
 
     -- Define variable parsers, plus variable category parser in symbol category.
     let varCatName := varCatOfName canon
@@ -274,9 +300,9 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
     let varParserIdent := mkIdentFrom canon <| canonName.appendAfter "_variable_parser"
     elabCommand <| ←
-      `(@[$attrIdent:ident] def $varParserIdent : ParserDescr :=
-          ParserDescr.node $(quote catName) $(quote leadPrec) <|
-            ParserDescr.cat $(quote varCatName) $(quote leadPrec))
+      `(@[$attrIdent:ident] def $varParserIdent : Parser :=
+          leadingNode $(quote catName) Parser.maxPrec <|
+            categoryParser $(quote varCatName) Parser.maxPrec)
 
     -- Define desugar macros.
     let catIdent := mkIdent catName
@@ -406,9 +432,9 @@ elab_rules : command | `(subrule $names,* of $parent := $prods,*) => do
   let parentAttrIdent := mkIdent <| parentCatName.appendAfter "_parser"
   let parentParserIdent := mkIdentFrom canon <| parentName ++ canonName.appendAfter "_parser"
   elabCommand <| ←
-    `(@[$parentAttrIdent:ident] def $parentParserIdent : ParserDescr :=
-        ParserDescr.node $(quote parentCatName) $(quote leadPrec) <|
-          ParserDescr.cat $(quote catName) 0)
+    `(@[$parentAttrIdent:ident] def $parentParserIdent : Parser :=
+        leadingNode $(quote parentCatName) Parser.maxPrec <|
+          categoryParser $(quote catName) 0)
 
   -- Declare type.
   let matchAlts ← prods.getElems.mapM fun prod =>
@@ -455,19 +481,11 @@ elab_rules : command | `(judgement_syntax $ps* : $name) => do
   setEnv <| ← Parser.registerParserCategory (← getEnv) attrName catName .symbol
 
   -- Declare parser.
-  let ps := ps.map (β := TSyntax [`Lean.Parser.Syntax.atom, `ident]) fun
-    | `($name:ident) => name
-    | `(atom| $atom) => atom
-  let syntaxParser := mkNullNode <| ← ps.mapM (β := Syntax) fun
-    | `($name:ident) => do
-      `(cat| $(mkIdentFrom name <| symbolPrefix ++ (← resolveSymbol name)):ident)
-    | other => return other
-  let (val, none) ← liftTermElabM <| toParserDescr syntaxParser catName
-    | throwError "invalid left recursive judgement syntax"
+  let (val, type) ← LottSyntax.toParser ps catName
+  if type != (← `(term| Parser)) then throwError "invalid left recursive judgement syntax"
   let parserIdent := mkIdentFrom name <| name.getId.appendAfter "_parser"
   elabCommand <| ←
-    `(@[Lott.Judgement_parser, $(mkIdentFrom name attrName):ident] def $parserIdent : ParserDescr :=
-      ParserDescr.node $(quote catName) $(quote leadPrec) $val)
+    `(@[Lott.Judgement_parser, $(mkIdentFrom name attrName):ident] def $parserIdent : Parser := $val)
 
   -- Define elaboration.
   let (patternArgs, termSeqItems, texSeqItems, exprArgs, joinArgs) ← ps.foldlM (init := (#[], #[], #[], #[], #[])) fun (pa, msi, xsi, ea, ja) stx =>
