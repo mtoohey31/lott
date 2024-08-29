@@ -158,31 +158,28 @@ def LottSyntaxIR.toParser : LottSyntaxIR → TermElabM (TSyntax `term)
   | .atom s => `(symbol $(mkStrLit s))
 
 private
-abbrev LottSyntax := TSyntaxArray [`Lean.Parser.Syntax.atom, `ident]
-
-private
-def LottSyntax.toParser (stx : LottSyntax) (catName : Name) : CommandElabM (Term × Term) := do
-  let stx ← stx.mapM fun
-    | `($name:ident) => return LottSyntaxIR.category <| symbolPrefix ++ (← resolveSymbol name)
+def toParser (ps : TSyntaxArray `stx) (catName : Name) : CommandElabM (Term × Term) := do
+  let ps ← ps.mapM fun
+    | `(stx| $name:ident) => return LottSyntaxIR.category <| symbolPrefix ++ (← resolveSymbol name)
     | `(stx| $atom:str) => return LottSyntaxIR.atom atom.getString
     | _ => throwUnsupportedSyntax
 
-  if stx[0]? == .some (.category catName) then
-    let rest ← stx.extract 1 stx.size |> go
+  if ps[0]? == .some (.category catName) then
+    let rest ← ps.extract 1 ps.size |> go
     return (
       ← `(trailingNode $(quote catName) Parser.maxPrec 0 <| checkLineEq >> $rest),
       ← `(TrailingParser),
     )
   else
-    let rest ← go stx
+    let rest ← go ps
     return (← `(leadingNode $(quote catName) Parser.maxPrec $rest), ← `(Parser))
 where
-  go stx := do
-    if stx.size == 0 then
+  go ps := do
+    if ps.size == 0 then
       throwUnsupportedSyntax
 
-    liftTermElabM <| stx.extract 1 stx.size |>.foldlM
-      (init := ← liftTermElabM <| stx[0]!.toParser)
+    liftTermElabM <| ps.extract 1 ps.size |>.foldlM
+      (init := ← liftTermElabM <| ps[0]!.toParser)
       fun acc ir => do `($acc >> checkLineEq >> $(← ir.toParser))
 
 /- Metavariable syntax. -/
@@ -268,7 +265,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         | throwUnsupportedSyntax
       if desugarConfig?.isSome || elabConfig?.isSome then return none
       let ctorType ← ps.foldrM (init := name) fun
-        | `($name:ident), acc => do `($(mkIdentFrom name (← resolveSymbol name)) → $acc)
+        | `(stx| $name:ident), acc => do `($(mkIdentFrom name (← resolveSymbol name)) → $acc)
         | _, acc => return acc
       `(ctor| | $prodIdent:ident : $ctorType)
     `(inductive $name where $ctors*)
@@ -286,7 +283,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       let `(Production| | $[$ps]* : $prodIdent $[$desugarConfig?]? $[$elabConfig?]?) := prod
         | throwUnsupportedSyntax
 
-      let (val, type) ← LottSyntax.toParser ps catName
+      let (val, type) ← toParser ps catName
       let parserIdent := mkIdentFrom prodIdent <| canonName ++ prodIdent.getId |>.appendAfter "_parser"
       elabCommand <| ← `(@[Lott.Symbol_parser, $attrIdent:ident] def $parserIdent : $type := $val)
 
@@ -314,7 +311,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       let macroIdent := mkIdentFrom prodIdent <| canonName ++ prodIdent.getId |>.appendAfter "_macro"
       let patternArgs ← ps.mapM fun stx =>
         match stx with
-        | `($name:ident) => do
+        | `(stx| $name:ident) => do
           let cat := symbolPrefix ++ (← resolveSymbol name)
           `($name@(Lean.Syntax.node _ $(quote cat) _))
         | `(stx| $atom:str) => `(Lean.Syntax.atom _ $(mkStrLit atom.getString.trim))
@@ -332,7 +329,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
       let (patternArgs, seqItems, exprArgs) ← ps.foldlM (init := (#[], #[], #[])) fun (pa, si, ea) stx =>
         match stx with
-        | `($name:ident) => do
+        | `(stx| $name:ident) => do
           let cat := quote <| symbolPrefix ++ (← resolveSymbol name)
           return (
             pa.push <| ← `($name@(Lean.Syntax.node _ $cat _)),
@@ -368,7 +365,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         | throwUnsupportedSyntax
       let (patternArgs, seqItems, joinArgs) ← ps.foldlM (init := (#[], #[], #[])) fun (pa, si, ja) stx =>
         match stx with
-        | `($name:ident) => do
+        | `(stx| $name:ident) => do
           let cat := quote <| symbolPrefix ++ (← resolveSymbol name)
           return (
             pa.push <| ← `($name@(Lean.Syntax.node _ $cat _)),
@@ -475,7 +472,7 @@ elab_rules : command | `(subrule $names,* of $parent := $prods,*) => do
 
 /- Judgement syntax. -/
 
-elab_rules : command | `(judgement_syntax $ps* : $name) => do
+elab_rules : command | `(judgement_syntax $[$ps]* : $name) => do
   -- Declare syntax category.
   let ns ← getCurrNamespace
   let qualified := ns ++ name.getId
@@ -484,7 +481,7 @@ elab_rules : command | `(judgement_syntax $ps* : $name) => do
   setEnv <| ← Parser.registerParserCategory (← getEnv) attrName catName .symbol
 
   -- Declare parser.
-  let (val, type) ← LottSyntax.toParser ps catName
+  let (val, type) ← toParser ps catName
   if type != (← `(term| Parser)) then throwError "invalid left recursive judgement syntax"
   let parserIdent := mkIdentFrom name <| name.getId.appendAfter "_parser"
   elabCommand <| ←
@@ -493,7 +490,7 @@ elab_rules : command | `(judgement_syntax $ps* : $name) => do
   -- Define elaboration.
   let (patternArgs, termSeqItems, texSeqItems, exprArgs, joinArgs) ← ps.foldlM (init := (#[], #[], #[], #[], #[])) fun (pa, msi, xsi, ea, ja) stx =>
     match stx with
-    | `($name:ident) => do
+    | `(stx| $name:ident) => do
       let cat := quote <| symbolPrefix ++ (← resolveSymbol name)
       return (
         pa.push <| ← `($name@(Lean.Syntax.node _ $cat _)),
@@ -543,7 +540,7 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
       | throwError "judgement_syntax for {name} not given before use in judgement"
 
     let type ← ps.reverse.foldlM (init := ← `(term| Prop)) fun
-      | acc, `($name:ident) => do `($(mkIdentFrom name (← resolveSymbol name)) → $acc)
+      | acc, `(stx| $name:ident) => do `($(mkIdentFrom name (← resolveSymbol name)) → $acc)
       | acc, _ => return acc
 
     let ctors ← rules.mapM fun rule => do

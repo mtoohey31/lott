@@ -52,7 +52,7 @@ syntax "(" "desugar" " := " term ")" : Lott.DSL.DesugarConfig
 
 syntax "(" "elab" " := " term ")" : Lott.DSL.ElabConfig
 
-syntax " | " (atom <|> ident)* " : " ident atomic(Lott.DSL.DesugarConfig)? (Lott.DSL.ElabConfig)? : Lott.DSL.Production
+syntax " | " stx+ " : " ident atomic(Lott.DSL.DesugarConfig)? (Lott.DSL.ElabConfig)? : Lott.DSL.Production
 
 syntax "nonterminal " ident,+ " := " Lott.DSL.Production* : Lott.DSL.NonTerminal
 
@@ -68,7 +68,7 @@ declare_syntax_cat Lott.Judgement
 declare_syntax_cat Lott.DSL.InferenceRule
 declare_syntax_cat Lott.DSL.JudgementDecl
 
-syntax "judgement_syntax " (atom <|> ident)* " : " ident : command
+syntax "judgement_syntax " stx+ " : " ident : command
 
 syntax withPosition(Lott.Judgement)* "─"+ ident withPosition(Lott.Judgement) : Lott.DSL.InferenceRule
 

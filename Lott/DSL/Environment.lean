@@ -35,7 +35,7 @@ initialize lottSymbolExt : PersistentEnvExtension LottSymbolAlias LottSymbolAlia
 
 structure LottJudgement where
   name : Name
-  ps : TSyntaxArray [`Lean.Parser.Syntax.atom, `ident]
+  ps : TSyntaxArray `stx
 
 structure LottJudgementState where
   byName : NameMap LottJudgement
