@@ -169,7 +169,10 @@ def LottSyntax.toParser (stx : LottSyntax) (catName : Name) : CommandElabM (Term
 
   if stx[0]? == .some (.category catName) then
     let rest ← stx.extract 1 stx.size |> go
-    return (← `(trailingNode $(quote catName) Parser.maxPrec 0 $rest), ← `(TrailingParser))
+    return (
+      ← `(trailingNode $(quote catName) Parser.maxPrec 0 <| checkLineEq >> $rest),
+      ← `(TrailingParser),
+    )
   else
     let rest ← go stx
     return (← `(leadingNode $(quote catName) Parser.maxPrec $rest), ← `(Parser))
@@ -180,7 +183,7 @@ where
 
     liftTermElabM <| stx.extract 1 stx.size |>.foldlM
       (init := ← liftTermElabM <| stx[0]!.toParser)
-      fun acc ir => do `($acc >> $(← ir.toParser))
+      fun acc ir => do `($acc >> checkLineEq >> $(← ir.toParser))
 
 /- Metavariable syntax. -/
 

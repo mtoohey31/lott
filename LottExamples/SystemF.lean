@@ -1140,29 +1140,29 @@ theorem Typing.tySubst_preservation (EtyA : [[ε, a, G ⊢ E : A]]) (aninG : [[a
       rw [Type'.forall_subst_eq_subst_forall a'nea]
       exact E'ty.tySubst_preservation aninG Bwf
 
-judgement_syntax "⊢ " E " -> " F : OperationalSemantics
+judgement_syntax E " -> " F : OperationalSemantics
 
 judgement OperationalSemantics :=
 
-⊢ E -> E'
-───────────── appl
-⊢ E F -> E' F
+E -> E'
+─────────── appl
+E F -> E' F
 
-⊢ F -> F'
-───────────── appr
-⊢ V F -> V F'
+F -> F'
+─────────── appr
+V F -> V F'
 
-───────────────────────────── lamApp
-⊢ (λ x : A. E) V -> E [x ↦ V]
+─────────────────────────── lamApp
+(λ x : A. E) V -> E [x ↦ V]
 
-⊢ E -> E'
-───────────────── typeApp
-⊢ E [A] -> E' [A]
+E -> E'
+─────────────── typeApp
+E [A] -> E' [A]
 
-─────────────────────────── typeGenApp
-⊢ (Λ a. E) [A] -> E [a ↦ A]
+───────────────────────── typeGenApp
+(Λ a. E) [A] -> E [a ↦ A]
 
-theorem preservation (EtyA : [[ε ⊢ E : A]]) (EstepF : [[⊢ E -> F]]) : [[ε ⊢ F : A]] :=
+theorem preservation (EtyA : [[ε ⊢ E : A]]) (EstepF : [[E -> F]]) : [[ε ⊢ F : A]] :=
   match EstepF, EtyA with
   | .appl E'stepE'next, .app E'tyA'arrA FtyA' => .app (preservation E'tyA'arrA E'stepE'next) FtyA'
   | .appr FstepFnext, .app VtyA'arrA FtyA' => .app VtyA'arrA <| preservation FtyA' FstepFnext
@@ -1172,7 +1172,7 @@ theorem preservation (EtyA : [[ε ⊢ E : A]]) (EstepF : [[⊢ E -> F]]) : [[ε 
   | .typeGenApp, .typeApp (.typeGen _ E'tyA'') A'wf =>
     E'tyA''.tySubst_preservation (G := .empty) TypeVarNotInEnvironment.ε A'wf
 
-theorem progress (EtyA : [[ε ⊢ E : A]]) : (∃ F, [[⊢ E -> F]]) ∨ ∃ V : Value, V.val = E :=
+theorem progress (EtyA : [[ε ⊢ E : A]]) : (∃ F, [[E -> F]]) ∨ ∃ V : Value, V.val = E :=
   match E, EtyA with
   | .lam x A' E', _ => .inr <| Exists.intro { val := .lam x A' E', property := by simp } rfl
   | .app E' F', .app E'tyA'arrA F'tyA' =>

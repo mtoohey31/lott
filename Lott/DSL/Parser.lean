@@ -70,7 +70,7 @@ declare_syntax_cat Lott.DSL.JudgementDecl
 
 syntax "judgement_syntax " (atom <|> ident)* " : " ident : command
 
-syntax Lott.Judgement* "─"+ ident Lott.Judgement : Lott.DSL.InferenceRule
+syntax withPosition(Lott.Judgement)* "─"+ ident withPosition(Lott.Judgement) : Lott.DSL.InferenceRule
 
 syntax "judgement " ident " := " Lott.DSL.InferenceRule* : Lott.DSL.JudgementDecl
 
@@ -125,7 +125,7 @@ syntax (name := lott_symbol_embed) "[[" ident "|" lottSymbolParser "]]" : term
 
 syntax "[[" Lott.Symbol "]]" : term
 
-syntax "[[" Lott.Judgement "]]" : term
+syntax "[[" withPosition(Lott.Judgement) "]]" : term
 
 /- External interaction syntax. -/
 
@@ -150,7 +150,9 @@ def filterParserFnAux (startPos : String.Pos) : ParserFn := fun c s =>
       if s'''.hasError then
         s'''
       else
-        let s'''' := orelseFn (categoryParserFn `Lott.Symbol) (categoryParserFn `Lott.Judgement) c s'''
+        let s'''' := withPosition (orelse
+          (categoryParser `Lott.Symbol 0)
+          (categoryParser `Lott.Judgement 0)) |>.fn c s'''
         if s''''.hasError then
           s''''
         else
