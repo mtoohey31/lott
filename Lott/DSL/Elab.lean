@@ -576,8 +576,7 @@ elab_rules : command
     else if !ictx.input.atEnd s.pos then
       throwError s.mkError "end of input" |>.toErrorMsg ictx
 
-    let .node _ _ #[.node _ _ args] := s.stxStack.back | throwUnsupportedSyntax
-    let output ← args.mapM fun
+    let output ← s.stxStack.toSubarray.toArray.mapM fun
       | .node _ `Lott.NonEmbed #[.atom _ s] => return s
       | stx => do
         let s ← liftTermElabM <| elabTex stx.getKind inputFname stx

@@ -130,7 +130,7 @@ syntax "[[" Lott.Judgement "]]" : term
 /- External interaction syntax. -/
 
 partial
-def nonEmbedParserFnAux (startPos : String.Pos) : ParserFn := fun c s =>
+def filterParserFnAux (startPos : String.Pos) : ParserFn := fun c s =>
   let input := c.input
   let i := s.pos
   if h : input.atEnd i then
@@ -165,27 +165,19 @@ def nonEmbedParserFnAux (startPos : String.Pos) : ParserFn := fun c s =>
               s''''''.mkEOIError
             else if input.get i'''''' == ']' then
               let s''''''' := s''''''.next' input i'''''' h''''''
-              nonEmbedParserFnAux s'''''''.pos c s'''''''
+              filterParserFnAux s'''''''.pos c s'''''''
             else
               s''''''.mkErrorAt "expected ']]'" i''''''
           else
             s'''''.mkErrorAt "expected ']]'" i'''''
     else
-      nonEmbedParserFnAux startPos c <| s'.next' input i' h'
+      filterParserFnAux startPos c <| s'.next' input i' h'
   else
-    nonEmbedParserFnAux startPos c <| s.next' input i h
+    filterParserFnAux startPos c <| s.next' input i h
 
-def nonEmbedParserFn : ParserFn := fun c s => nonEmbedParserFnAux s.pos c s
+def filterParserFn : ParserFn := fun c s => filterParserFnAux s.pos c s
 
-def nonEmbedParser : Parser := { fn := nonEmbedParserFn }
-
-def symbolParser (prec : Nat := 0) : Parser :=
-  categoryParser `Lott.Symbol prec
-
-def judgementParser (prec : Nat := 0) : Parser :=
-  categoryParser `Lott.Judgement prec
-
-def filterParser : Parser := sepByNoAntiquot (allowTrailingSep := true) nonEmbedParser (symbol "[[" >> (symbolParser <|> judgementParser) >> symbol "]]")
+def filterParser : Parser := { fn := filterParserFn }
 
 syntax "filter " str str : command
 
