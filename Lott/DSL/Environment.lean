@@ -1,9 +1,11 @@
 import Lean.Data.NameMap
+import Lean.Data.Trie
 import Lean.Environment
 
 namespace Lott.DSL
 
 open Lean
+open Lean.Data
 
 structure LottSymbolAlias where
   canon : Name
@@ -12,7 +14,7 @@ structure LottSymbolAlias where
 instance : Inhabited LottSymbolAlias where default := { canon := default, alias := default }
 
 structure LottSymbolState where
-  byAlias : NameMap LottSymbolAlias
+  byAlias : Trie LottSymbolAlias
   allCanon : NameSet
 
 instance : Inhabited LottSymbolState where default := { byAlias := default, allCanon := default }
@@ -22,15 +24,14 @@ initialize lottSymbolExt : PersistentEnvExtension LottSymbolAlias LottSymbolAlia
   mkInitial := return default
   addImportedFn := fun symss => return {
     byAlias :=
-      symss.flatten.foldl (init := mkNameMap LottSymbolAlias) fun acc a => acc.insert a.alias a
+      symss.flatten.foldl (init := .empty) fun acc a => acc.upsert a.alias.toString fun _ => a
     allCanon := symss.flatten.map (·.canon) |> RBTree.fromArray (cmp := Name.quickCmp)
   }
   addEntryFn := fun { byAlias, allCanon } a => {
-    byAlias := byAlias.insert a.alias a
+    byAlias := byAlias.insert a.alias.toString a
     allCanon := allCanon.insert a.canon
   }
-  exportEntriesFn := fun { byAlias, .. } =>
-    byAlias.fold (cmp := Name.quickCmp) (init := #[]) fun acc _ a => acc.push a
+  exportEntriesFn := fun { byAlias, .. } => byAlias.values
 }
 
 structure LottJudgement where

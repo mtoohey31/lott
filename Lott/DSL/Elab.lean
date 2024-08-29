@@ -5,6 +5,7 @@ import Lott.DSL.Parser
 namespace Lott.DSL
 
 open Lean
+open Lean.Data
 open Lean.Elab
 open Lean.Elab.Command
 open Lean.Elab.Term
@@ -100,34 +101,77 @@ where
 
 /- Utility stuff. -/
 
+partial
+def _root_.Lean.Data.Trie.findCommonPrefix (t : Trie α) (s : String) : Array α :=
+  go t 0
+where
+  go (t : Trie α) (i : Nat) : Array α :=
+    if h : i < s.utf8ByteSize then
+      let c := s.getUtf8Byte i h
+      match t with
+      | .leaf (some val) => if i != 0 then #[val] else .empty
+      | .leaf none => .empty
+      | .node1 _ c' t' =>
+        if c == c' then
+          go t' (i + 1)
+        else if i != 0 then
+          t.values
+        else
+          .empty
+      | .node _ cs ts =>
+        match cs.findIdx? (· == c) with
+        | none => if i != 0 then t.values else .empty
+        | some idx => go (ts.get! idx) (i + 1)
+    else
+      t.values
+
 private
-def resolveSymbol (symbolName : TSyntax `ident) : CommandElabM Name := do
+def resolveSymbol (symbolName : TSyntax `ident) (allowSuffix := true) : CommandElabM Name := do
   let name := symbolName.getId
   let state := lottSymbolExt.getState (← getEnv)
 
+  let find s := if allowSuffix then
+      state.byAlias.findCommonPrefix s
+    else
+      state.byAlias.find? s |>.toArray
+
   -- First check if the name itself is present in the state.
-  if let some { canon, .. } := state.byAlias.find? name then
-    return canon
-
-  -- If not, check if it's present when prepending the current namespace.
-  if let some { canon, .. } := state.byAlias.find? <| (← getCurrNamespace) ++ name then
-    return canon
-
-  -- Otherwise, check the namespaces we've opened.
-  resolveWithOpens name state (← getOpenDecls)
+  match find name.toString with
+    -- If not, check if it's present when prepending the current namespace.
+  | #[] => match find <| (← getCurrNamespace) ++ name |>.toString with
+    -- Otherwise, check the namespaces we've opened.
+    | #[] => do
+      let names ← resolveOpensNames name state #[] (← getOpenDecls)
+      let aliases := names.map find |>.flatten
+      match aliases.foldl (fun acc a => acc.insert a.canon a) (mkNameMap _) |>.toList with
+      | [] => throwErrorAt symbolName "unknown lott symbol {symbolName}"
+      | [(canon, _)] => pure canon
+      | results => disambiguate <| results.toArray.map Prod.snd
+    | #[{ canon, .. }] => pure canon
+    | results => disambiguate results
+  | #[{ canon, .. }] => pure canon
+  | results => disambiguate results
 where
-  resolveWithOpens name state
-    | [] => throwErrorAt symbolName "unknown lott symbol {symbolName}"
+  resolveOpensNames name state acc
+    | [] => pure #[]
     | .simple ns except :: decls => do
+      let mut acc := acc
       if !except.contains name then
-        if let some { canon, .. } := state.byAlias.find? <| ns ++ name then
-          return canon
-      resolveWithOpens name state decls
+        acc := acc.push <| ns ++ name
+      resolveOpensNames name state acc decls
     | .explicit id declName :: decls => do
+      let mut acc := acc
       if id = name then
-        if let some { canon, .. } := state.byAlias.find? declName then
-          return canon
-      resolveWithOpens name state decls
+        acc := acc.push declName
+      resolveOpensNames name state acc decls
+
+  disambiguate results := do
+    let sortedResults := results.qsort (·.alias.toString.length < ·.alias.toString.length)
+    match sortedResults.filter (·.alias.toString.length == sortedResults[0]!.alias.toString.length) with
+    | #[] => unreachable!
+    | #[{ canon, .. }] => pure canon
+    | results => throwErrorAt symbolName
+        "ambiguous lott symbol {symbolName}; found multiple matches: {results.map (·.alias)}"
 
 def texEscape (s : String) : String :=
   String.join <| s.data.map fun c => match c with
@@ -427,7 +471,7 @@ elab_rules : command | `(subrule $names,* of $parent := $prods,*) => do
 
   -- TODO: Support parsing of the subset of the syntax instead of just variables.
 
-  let parentName ← resolveSymbol parent
+  let parentName ← resolveSymbol parent (allowSuffix := false)
   let parentCatName := symbolPrefix ++ parentName
   let parentAttrIdent := mkIdent <| parentCatName.appendAfter "_parser"
   let parentParserIdent := mkIdentFrom canon <| parentName ++ canonName.appendAfter "_parser"
