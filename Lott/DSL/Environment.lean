@@ -1,25 +1,25 @@
-import Lean.Data.NameMap
 import Lean.Data.Trie
 import Lean.Environment
+import Lott.DSL.IR
 
 namespace Lott.DSL
 
 open Lean
 open Lean.Data
 
-structure LottSymbolAlias where
+structure SymbolAlias where
   canon : Name
   alias : Name
 
-instance : Inhabited LottSymbolAlias where default := { canon := default, alias := default }
+instance : Inhabited SymbolAlias where default := { canon := default, alias := default }
 
-structure LottSymbolState where
-  byAlias : Trie LottSymbolAlias
+structure SymbolState where
+  byAlias : Trie SymbolAlias
   allCanon : NameSet
 
-instance : Inhabited LottSymbolState where default := { byAlias := default, allCanon := default }
+instance : Inhabited SymbolState where default := { byAlias := default, allCanon := default }
 
-initialize lottSymbolExt : PersistentEnvExtension LottSymbolAlias LottSymbolAlias LottSymbolState ←
+initialize symbolExt : PersistentEnvExtension SymbolAlias SymbolAlias SymbolState ←
   registerPersistentEnvExtension {
   mkInitial := return default
   addImportedFn := fun symss => return {
@@ -34,17 +34,17 @@ initialize lottSymbolExt : PersistentEnvExtension LottSymbolAlias LottSymbolAlia
   exportEntriesFn := fun { byAlias, .. } => byAlias.values
 }
 
-structure LottJudgement where
+structure Judgement where
   name : Name
-  ps : TSyntaxArray `stx
+  ir : Array IR
 
-structure LottJudgementState where
-  byName : NameMap LottJudgement
+structure JudgementState where
+  byName : NameMap Judgement
   all : NameSet
 
-instance : Inhabited LottJudgementState where default := { byName := default, all := default }
+instance : Inhabited JudgementState where default := { byName := default, all := default }
 
-initialize lottJudgementExt : PersistentEnvExtension LottJudgement LottJudgement LottJudgementState ← registerPersistentEnvExtension {
+initialize judgementExt : PersistentEnvExtension Judgement Judgement JudgementState ← registerPersistentEnvExtension {
   mkInitial := return default
   addImportedFn := fun jds => return {
     byName := jds.flatten.foldl (init := mkNameMap _) fun acc jd => acc.insert jd.name jd
