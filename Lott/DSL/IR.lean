@@ -79,7 +79,7 @@ def toType : IR → CommandElabM (Option Term)
   | IR.mk _ (.atom _) => return none
   | IR.mk _ (.sepBy ir _) => do
     let some type' ← toTypeProdSeq ir | return none
-    ``(Array $type')
+    ``(List $type')
   | IR.mk _ (.optional ir) => do
     let some type' ← toTypeProdSeq ir | return none
     return some <| ← ``(Option $type')
@@ -98,7 +98,7 @@ def toMkTypeExpr : IR → CommandElabM (Option Term)
   | IR.mk _ (.atom _) => return none
   | IR.mk _ (.sepBy ir _) => do
     let some type' ← toMkTypeProdSeqExpr ir | return none
-    ``(mkApp (Expr.const `Array [levelOne]) $type')
+    ``(mkApp (Expr.const `List [levelOne]) $type')
   | IR.mk _ (.optional ir) => do
     let some type' ← toMkTypeProdSeqExpr ir | return none
     ``(mkApp (Expr.const `Option [levelOne]) $type')
