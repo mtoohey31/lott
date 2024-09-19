@@ -1,0 +1,13 @@
+name: Build
+on:
+  push:
+    branches: ["**"]
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: Julian/setup-lean@v1
+      with:
+        default-toolchain-file: lean-toolchain
+    - run: lake build Lott LottExamples
