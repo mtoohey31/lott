@@ -170,7 +170,6 @@ where
     | results => throwErrorAt symbolName
         "ambiguous lott symbol {symbolName}; found multiple matches: {results.map (·.alias)}"
 
-private
 def texEscape (s : String) : String :=
   String.join <| s.data.map fun c => match c with
     | '&' | '%' | '$' | '#' | '_' | '{' | '}' => "\\" ++ c.toString
