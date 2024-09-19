@@ -12,6 +12,6 @@ def judgementComprehensionTermElab : TermElab := fun stx => do
     throwUnsupportedSyntax
   -- TODO: Figure out why Lean can't resolve the Membership instance here without help, then allow
   -- for arbitrary sets.
-  Lean.Elab.Term.elabTerm (← `(∀ $i:ident, Membership.mem (self := Lott.Data.instMembershipFinFinRange) $i [$start : $stop]ᶠ → [[$«judgement»:Lott.Judgement]])) none
+  Lean.Elab.Term.elabTerm (← `(∀ $i:ident, Membership.mem (self := Lott.Data.FinRange.instMembershipFinFinRange) $i [$start : $stop]ᶠ → [[$«judgement»:Lott.Judgement]])) none
 
 end Lott.DSL.Elab

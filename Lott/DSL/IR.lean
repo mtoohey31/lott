@@ -11,6 +11,13 @@ open Lean.Parser.Term
 
 def symbolPrefix := `Lott.Symbol
 
+def sepByPrefix := `Lott.SepBy
+
+-- Useful for avoiding "un-uniqueification" resulting from the use of `eraseMacroScopes`.
+def _root_.Lean.Name.obfuscateMacroScopes (n : Name) : Name :=
+    let scopesView := extractMacroScopes n
+    scopesView.scopes.foldl (.str · <| toString ·) scopesView.name
+
 -- TODO: Is there a way to use Lean's existing parser resolution instead of this custom stuff?
 
 mutual
@@ -29,48 +36,66 @@ end
 
 namespace IR
 
-private partial
-def splitTrailing (ir : Array IR) (catName : Name) : Option (CommandElabM (Array IR)) := do
-  match (← ir[0]?) with
-  | mk _ (.category n) =>
-    if symbolPrefix ++ n == catName then
-      return return ir.extract 1 ir.size
-    else
-      none
-  | mk _ (.atom _) => none
-  -- TODO: Support trailing nested inside of sepBy1 and optional.
-  | mk _ (.sepBy ir' _)
-  | mk _ (.optional ir') => do
-    let _ ← IR.splitTrailing ir' catName
-    return throwUnsupportedSyntax
-
 mutual
 private partial
-def toParser' : IR → CommandElabM Term
+def toParser' (canon : Name) : IR → CommandElabM Term
   | mk _ (.category n) => ``(categoryParser $(quote <| symbolPrefix ++ n) Parser.maxPrec)
   | mk _ (.atom s) => ``(symbol $(mkStrLit s))
-  | mk _ (.sepBy ir sep) => do ``(sepBy $(← toParserSeq ir) $(quote sep))
-  | mk _ (.optional ir) => do ``(Parser.optional $(← toParserSeq ir))
+  | mk l (.sepBy ir sep) => do
+    let canon' := canon ++ l.getId |>.obfuscateMacroScopes
+    let catName := sepByPrefix ++ (← getCurrNamespace) ++ canon'
+    let parserAttrName := catName.appendAfter "_parser"
+
+    setEnv <| ← Parser.registerParserCategory (← getEnv) parserAttrName catName .symbol
+
+    let attrIdent := mkIdent parserAttrName
+    let (val, type) ← toParser ir canon' sepByPrefix
+    if type != (← `(term| Parser)) then throwError "invalid left recursive sepBy syntax"
+    let parserIdent := mkIdentFrom l <| canon'.appendAfter "_parser"
+    elabCommand <| ← `(@[$attrIdent:ident] def $parserIdent : Parser := $val)
+
+    let comprehensionIdent := mkIdentFrom l <| canon'.appendAfter "_comprehension_parser"
+    elabCommand <| ←
+      `(@[$attrIdent:ident] def $comprehensionIdent : Parser :=
+          leadingNode $(quote catName) Parser.maxPrec <|
+            "</ " >> withPosition (categoryParser $(quote catName) 0) >> " // " >>
+            Parser.ident >> " ∈ " >> "[" >> termParser >> " : " >> termParser >> "]ᶠ" >> " />")
+
+    let sepIdent := mkIdentFrom l <| canon'.appendAfter "_sep_parser"
+    elabCommand <| ←
+      `(@[$attrIdent:ident] def $sepIdent : TrailingParser :=
+          trailingNode $(quote catName) Parser.maxPrec 0 <|
+            checkLineEq >> $(quote sep) >> categoryParser $(quote catName) 0)
+
+    ``(Parser.optional (categoryParser $(quote catName) 0))
+  | mk _ (.optional ir) => do ``(Parser.optional $(← toParserSeq canon ir))
 
 private partial
-def toParserSeq (ir : Array IR) : CommandElabM Term := do
+def toParserSeq (canon : Name) (ir : Array IR) : CommandElabM Term := do
   if ir.size == 0 then
     throwUnsupportedSyntax
 
-  ir.extract 1 ir.size |>.foldlM (init := ← ir[0]!.toParser')
-    fun acc ir => do ``($acc >> checkLineEq >> $(← ir.toParser'))
-end
+  ir.extract 1 ir.size |>.foldlM (init := ← ir[0]!.toParser' canon)
+    fun acc ir => do ``($acc >> checkLineEq >> $(← ir.toParser' canon))
 
-def toParser (ir : Array IR) (catName : Name) : CommandElabM (Term × Term) := do
-  if let some ir' := IR.splitTrailing ir catName then
-    let rest ← toParserSeq (← ir')
-    return (
-      ← ``(trailingNode $(quote catName) Parser.maxPrec 0 <| checkLineEq >> $rest),
-      ← ``(TrailingParser),
-    )
-  else
-    let rest ← toParserSeq ir
-    return (← ``(leadingNode $(quote catName) Parser.maxPrec $rest), ← ``(Parser))
+partial
+def toParser (ir : Array IR) (canon catPrefix : Name) : CommandElabM (Term × Term) := do
+  let qualified := (← getCurrNamespace) ++ canon
+  let catName := catPrefix ++ qualified
+  if let some (mk _ (.category n)) := ir[0]? then
+    if n == qualified then
+      let rest ← toParserSeq canon <| ir.extract 1 ir.size
+      return (
+        ← ``(trailingNode $(quote catName) Parser.maxPrec 0 <| checkLineEq >> $rest),
+        ← ``(TrailingParser),
+      )
+
+  if let some (mk _ (.optional _)) := ir[0]? then
+    throwError "unsupported optionally left recursive syntax"
+
+  let rest ← toParserSeq canon ir
+  return (← ``(leadingNode $(quote catName) Parser.maxPrec $rest), ← ``(Parser))
+end
 
 mutual
 partial

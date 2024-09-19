@@ -1,3 +1,4 @@
+import Lott.Data.FinRange
 import Lott.DSL.Environment
 import Lott.DSL.Parser
 import Lott.DSL.IR
@@ -169,6 +170,7 @@ where
     | results => throwErrorAt symbolName
         "ambiguous lott symbol {symbolName}; found multiple matches: {results.map (·.alias)}"
 
+private
 def texEscape (s : String) : String :=
   String.join <| s.data.map fun c => match c with
     | '&' | '%' | '$' | '#' | '_' | '{' | '}' => "\\" ++ c.toString
@@ -215,27 +217,62 @@ def _root_.Lott.DSL.IR.toExprArgs (ir : Array IR) : CommandElabM (TSepArray `ter
 
       return some l
 
+private
+def elabSymbolComprehension (start stop : Term) (i : Ident) (symbol : TSyntax `Lott.Symbol)
+  (type : Expr) : TermElabM Expr := do
+  let stx ← `([$start : $stop]ᶠ.map (fun $i => [[$symbol:Lott.Symbol]]) |>.join)
+  let expr ← Term.elabTerm stx (Expr.app (.const `List [levelOne]) type)
+  Meta.liftMetaM <| Meta.reduce expr
+
 private partial
-def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) : CommandElabM (TSyntaxArray `Lean.Parser.Term.doSeqItem) :=
+def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) : CommandElabM (TSyntaxArray `Lean.Parser.Term.doSeqItem) :=
   ir.filterMapM fun
     | mk l (.category n) => `(doSeqItem| let $l ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ n) $l)
     | mk _ (.atom _) => return none
-    | mk l (.sepBy ir _) => do
+    | mk l (.sepBy ir sep) => do
+      let catName := sepByPrefix ++ (← getCurrNamespace) ++ canon ++ l.getId |>.obfuscateMacroScopes
       let patternArgs ← IR.toPatternArgs ir
-      let seqItems ← IR.toTermSeqItems ir
+      let seqItems ← IR.toTermSeqItems ir canon
       let exprArgs ← IR.toExprArgs ir
       let exprTypes ← ir.filterMapM IR.toMkTypeExpr
       let some (mkProd, type) ← mkMkProd (exprArgs.getElems.zip exprTypes) | return none
 
-      `(doSeqItem| let $l ← do
-          let prodExprs ← Syntax.getArgs $l |>.mapM fun stx => do
-            let Syntax.node _ _ #[$patternArgs,*] := stx | throwUnsupportedSyntax
-            $seqItems*
-            return $mkProd
-          Meta.liftMetaM <| Meta.mkListLit $type prodExprs.toList)
+      let termElabIdent := mkIdentFrom l <| canon ++ l.getId.appendAfter "TermElab"
+      elabCommand <| ←
+        `(@[lott_term_elab $(mkIdent catName)] def $termElabIdent : Lott.DSL.Elab.TermElab
+            | Syntax.node _ $(quote catName) #[
+              Lean.Syntax.atom _ "</",
+              symbol,
+              Lean.Syntax.atom _ "//",
+              i@(Syntax.ident ..),
+              Lean.Syntax.atom _ "∈",
+              Lean.Syntax.atom _ "[",
+              start,
+              Lean.Syntax.atom _ ":",
+              stop,
+              Lean.Syntax.atom _ "]ᶠ",
+              Lean.Syntax.atom _ "/>"
+            ] => do
+              elabSymbolComprehension (TSyntax.mk start) (TSyntax.mk stop) (TSyntax.mk i) (TSyntax.mk symbol) $type
+            | Syntax.node _ $(quote catName) #[
+                lhs@(Syntax.node _ $(quote catName) _),
+                Lean.Syntax.atom _ $(quote sep.trim),
+                rhs@(Syntax.node _ $(quote catName) _)
+              ] => do
+              let lhs ← Lott.DSL.Elab.elabTerm $(quote catName) lhs
+              let rhs ← Lott.DSL.Elab.elabTerm $(quote catName) rhs
+              Meta.liftMetaM <| Meta.reduce <| mkApp3 (Expr.const `List.append [0]) $type lhs rhs
+            | Syntax.node _ $(quote catName) #[$patternArgs,*] => do
+              $seqItems*
+              return mkApp3 (Expr.const `List.cons [0]) $type $mkProd <| Expr.app (Expr.const `List.nil [0]) $type
+            | _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
+
+      `(doSeqItem| let $l ← match (Syntax.getArgs $l)[0]? with
+          | some stx => Lott.DSL.Elab.elabTerm $(quote catName) stx
+          | none => pure <| Expr.app (Expr.const `List.nil [0]) $type)
     | mk l (.optional ir) => do
       let patternArgs ← IR.toPatternArgs ir
-      let seqItems ← IR.toTermSeqItems ir
+      let seqItems ← IR.toTermSeqItems ir canon
       let exprArgs ← IR.toExprArgs ir
       let exprTypes ← ir.filterMapM IR.toMkTypeExpr
       let some (mkProd, type) ← mkMkProd (exprArgs.getElems.zip exprTypes) | return none
@@ -245,16 +282,16 @@ def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) : CommandElabM (TSyntaxArr
             let Syntax.node _ _ #[$patternArgs,*] := stx | throwUnsupportedSyntax
             $seqItems*
             return mkApp2 (Expr.const `Option.some [levelOne]) $type $mkProd
-          | none => return mkApp (Expr.const `Option.none [levelOne]))
+          | none => return Expr.app (Expr.const `Option.none [levelOne]))
 
 partial
-def _root_.Lott.DSL.IR.toTexSeqItems (ir : Array IR) : CommandElabM (TSyntaxArray `Lean.Parser.Term.doSeqItem) :=
+def _root_.Lott.DSL.IR.toTexSeqItems (ir : Array IR) (canon : Name) : CommandElabM (TSyntaxArray `Lean.Parser.Term.doSeqItem) :=
   ir.mapM fun
     | mk l (.category n) => `(doSeqItem| let $l ← Lott.DSL.Elab.elabTex $(quote <| symbolPrefix ++ n) ref $l)
     | mk l (.atom s) => `(doSeqItem| let $l := $(quote s))
     | mk l (.sepBy ir _) => do
       let patternArgs ← IR.toPatternArgs ir
-      let seqItems ← IR.toTexSeqItems ir
+      let seqItems ← IR.toTexSeqItems ir canon
       let joinArgs := IR.toJoinArgs ir
 
       `(doSeqItem| let $l ← do
@@ -265,7 +302,7 @@ def _root_.Lott.DSL.IR.toTexSeqItems (ir : Array IR) : CommandElabM (TSyntaxArra
           pure <| String.join strings.toList)
     | mk l (.optional ir) => do
       let patternArgs ← IR.toPatternArgs ir
-      let seqItems ← IR.toTexSeqItems ir
+      let seqItems ← IR.toTexSeqItems ir canon
       let joinArgs := IR.toJoinArgs ir
 
       `(doSeqItem| let $l ← (Syntax.getArgs $l)[0]?.mapM fun stx => do
@@ -412,7 +449,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
     let canonName := canon.getId
     let attrIdent := mkIdent <| ← nt.parserAttrName
     for { name, ir, .. } in prods do
-      let (val, type) ← IR.toParser ir <| ← nt.catName
+      let (val, type) ← IR.toParser ir nt.canon.getId symbolPrefix
       let parserIdent := mkIdentFrom name <| canonName ++ name.getId |>.appendAfter "_parser"
       elabCommand <| ← `(@[Lott.Symbol_parser, $attrIdent:ident] def $parserIdent : $type := $val)
 
@@ -431,7 +468,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       `(@[$attrIdent:ident] def $varParserIdent : Parser :=
           leadingNode $(quote <| ← nt.catName) Parser.maxPrec <|
             categoryParser $(quote <| ← nt.varCatName) Parser.maxPrec >>
-            Parser.optional (checkLineEq >> symbol "@" >> checkLineEq >> Parser.ident))
+            Parser.optional (checkLineEq >> "@" >> checkLineEq >> Parser.ident))
 
     -- Define desugar macros and elaboration.
     let catIdent := mkIdent <| ← nt.catName
@@ -446,7 +483,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
               | _ => Lean.Macro.throwUnsupported)
         return none
 
-      let seqItems ← IR.toTermSeqItems ir
+      let seqItems ← IR.toTermSeqItems ir canon.getId
       let exprArgs ← IR.toExprArgs ir
       let rest ← if let .customElab elab' := type then
           pure elab'
@@ -479,7 +516,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
     let texProdMatchAlts ← prods.mapM fun { ir, .. } => do
       let patternArgs ← IR.toPatternArgs ir
-      let seqItems ← IR.toTexSeqItems ir
+      let seqItems ← IR.toTexSeqItems ir canon.getId
       let joinArgs := IR.toJoinArgs ir
 
       `(matchAltExpr| | ref, Lean.Syntax.node _ $(quote <| ← nt.catName) #[$patternArgs,*] => do
@@ -594,7 +631,7 @@ elab_rules : command | `(judgement_syntax $[$ps]* : $name) => do
   setEnv <| judgementExt.addEntry (← getEnv) { name := qualified, ir }
 
   -- Declare parser.
-  let (val, type) ← IR.toParser ir catName
+  let (val, type) ← IR.toParser ir name.getId judgementPrefix
   if type != (← `(term| Parser)) then throwError "invalid left recursive judgement syntax"
   let parserIdent := mkIdentFrom name <| name.getId.appendAfter "_parser"
   elabCommand <| ←
@@ -602,7 +639,7 @@ elab_rules : command | `(judgement_syntax $[$ps]* : $name) => do
 
   -- Define elaboration.
   let patternArgs ← IR.toPatternArgs ir
-  let termSeqItems ← IR.toTermSeqItems ir
+  let termSeqItems ← IR.toTermSeqItems ir name.getId
   let exprArgs ← IR.toExprArgs ir
   let catIdent := mkIdent catName
   let termElabIdent := mkIdentFrom name <| name.getId.appendAfter "TermElab"
@@ -616,7 +653,7 @@ elab_rules : command | `(judgement_syntax $[$ps]* : $name) => do
           return Lean.mkAppN e #[$exprArgs,*]
         | _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
-  let texSeqItems ← IR.toTexSeqItems ir
+  let texSeqItems ← IR.toTexSeqItems ir name.getId
   let joinArgs := IR.toJoinArgs ir
   let texElabName := mkIdentFrom name <| name.getId.appendAfter "TexElab"
   elabCommand <| ←
