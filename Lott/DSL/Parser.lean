@@ -68,8 +68,6 @@ declare_syntax_cat Lott.Judgement
 declare_syntax_cat Lott.DSL.InferenceRule
 declare_syntax_cat Lott.DSL.JudgementDecl
 
-syntax (name := judgementComprehension) "</ " withPosition(Lott.Judgement) " // " ident " ∈ " "[" term " : " term "]ᶠ" " />" : Lott.Judgement
-
 syntax "judgement_syntax " stx+ " : " ident : command
 
 syntax withPosition(Lott.Judgement)* "─"+ ident withPosition(Lott.Judgement) : Lott.DSL.InferenceRule

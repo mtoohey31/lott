@@ -1,4 +1,3 @@
-import Lott.Data.FinRange
 import Lott.DSL.Environment
 import Lott.DSL.Parser
 import Lott.DSL.IR
@@ -217,11 +216,10 @@ def _root_.Lott.DSL.IR.toExprArgs (ir : Array IR) : CommandElabM (TSepArray `ter
       return some l
 
 private
-def elabSymbolComprehension (start stop : Term) (i : Ident) (symbol : TSyntax `Lott.Symbol)
+def elabSymbolComprehension (symbol : TSyntax `Lott.Symbol) (i : Ident) (collection : Term)
   (type : Expr) : TermElabM Expr := do
-  let stx ← `([$start : $stop]ᶠ.map (fun $i => [[$symbol:Lott.Symbol]]) |>.join)
-  let expr ← Term.elabTerm stx (Expr.app (.const `List [levelOne]) type)
-  Meta.liftMetaM <| Meta.reduce expr
+  let stx ← `(Coe.coe (β := List Nat) $collection |>.map (fun $i => [[$symbol:Lott.Symbol]]) |>.join)
+  Term.elabTerm stx (Expr.app (.const `List [levelOne]) type)
 
 private partial
 def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) : CommandElabM (TSyntaxArray `Lean.Parser.Term.doSeqItem) :=
@@ -245,14 +243,10 @@ def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) : CommandEl
               Lean.Syntax.atom _ "//",
               i@(Syntax.ident ..),
               Lean.Syntax.atom _ "∈",
-              Lean.Syntax.atom _ "[",
-              start,
-              Lean.Syntax.atom _ ":",
-              stop,
-              Lean.Syntax.atom _ "]ᶠ",
+              collection,
               Lean.Syntax.atom _ "/>"
             ] => do
-              elabSymbolComprehension (TSyntax.mk start) (TSyntax.mk stop) (TSyntax.mk i) (TSyntax.mk symbol) $type
+              elabSymbolComprehension (TSyntax.mk symbol) (TSyntax.mk i) (TSyntax.mk collection) $type
             | Syntax.node _ $(quote catName) #[
                 lhs@(Syntax.node _ $(quote catName) _),
                 Lean.Syntax.atom _ $(quote sep.trim),
@@ -506,11 +500,15 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
             let type ← Lean.Elab.Term.elabType <| mkIdent $(quote <| ns ++ canonName)
             Lean.Elab.Term.elabTerm ident type
           | Lean.Syntax.node _ $(quote <| ← nt.catName) #[
-              Lean.Syntax.node _ $(quote <| ← nt.varCatName) #[array@(Lean.Syntax.ident ..)],
-              Lean.Syntax.node _ `null #[Lean.Syntax.atom _ "@", idx@(Lean.Syntax.ident ..)]
+              Lean.Syntax.node _ $(quote <| ← nt.varCatName) #[fun'@(Lean.Syntax.ident ..)],
+              Lean.Syntax.node _ `null #[Lean.Syntax.atom _ "@", i@(Lean.Syntax.ident ..)]
             ] => do
             let type ← Lean.Elab.Term.elabType <| mkIdent $(quote <| ns ++ canonName)
-            Lean.Elab.Term.elabTerm (Lean.mkNode `Lean.Parser.Term.app #[(mkCIdent `List.get), Lean.mkNullNode #[array, idx] ]) type
+            let natType := Expr.const `Nat []
+            let funType := Expr.forallE `x natType type .default
+            let funExpr ← Lean.Elab.Term.elabTerm fun' funType
+            let idxExpr ← Lean.Elab.Term.elabTerm i natType
+            return Expr.app funExpr idxExpr
           | _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
     let texProdMatchAlts ← prods.mapM fun { ir, .. } => do

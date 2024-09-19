@@ -22,17 +22,19 @@ def nat.term_parser : Parser :=
 
 @[lott_term_elab Lott.Symbol.Nat]
 def natTermElab : TermElab
-  | `($i:ident) => Term.elabTerm i <| .some (.const `Nat [])
-  | `($n:num) => Term.elabTerm n <| .some (.const `Nat [])
-  | `(($t:term)) => Term.elabTerm t <| .some (.const `Nat [])
+  | .node _ `Lott.Symbol.Nat #[n@(.ident ..)]
+  | .node _ `Lott.Symbol.Nat #[n@(.node _ `num _)]
+  | .node _ `Lott.Symbol.Nat #[.atom _ "(", n, .atom _ ")"] =>
+    Term.elabTerm n <| .some (.const `Nat [])
   | _ => throwUnsupportedSyntax
 
 @[lott_tex_elab Lott.Symbol.Nat]
 def natTexElab : TexElab
-  | _, `($i:ident) => return texEscape <| i.getId.toString (escape := false)
-  | _, `($n:num) => return texEscape <| toString n.getNat
-  | _, `(($t:term)) => do
-    let some ss := t.raw.getSubstring? | throwUnsupportedSyntax
+  | _, Syntax.node _ `Lott.Symbol.Nat #[i@(.ident ..)] =>
+    return texEscape <| i.getId.toString (escape := false)
+  | _, .node _ `Lott.Symbol.Nat #[s@(.node _ `num _)]
+  | _, .node _ `Lott.Symbol.Nat #[.atom _ "(", s, .atom _ ")"] => do
+    let some ss := s.getSubstring? | throwUnsupportedSyntax
     return texEscape ss.toString
   | _, _ => throwUnsupportedSyntax
 
