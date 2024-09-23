@@ -166,24 +166,22 @@ def _root_.Array.product (as : Array (Array α)) : Array α :=
   as.foldl (init := #[]) fun as acc => as.map (acc.push ·) |>.flatten
 
 partial
-def toIsParentMatchAlts (name : Ident) (qualified pqualified : Name) (ir pir : Array IR)
+def toIsParentMatchAlts (nameIdent isIdent : Ident) (qualified pqualified : Name) (ir pir : Array IR)
   : CommandElabM (TSyntaxArray `Lean.Parser.Term.matchAlt) := do
   if ir.size != pir.size then
-    throwErrorAt name "length of child production ({ir.size}) doesn't match length of parent production ({pir.size})"
+    throwErrorAt nameIdent "length of child production ({ir.size}) doesn't match length of parent production ({pir.size})"
 
   let (argsAndOps, extraAcc) ← toArgsAndOps (ir.zip pir)
   let argsAndOps := argsAndOps ++ extraAcc.map fun (args, ops, recArgs) =>
-    (args, ops.push <| mkApp isIdent #[mkApp (mkIdent <| pqualified ++ name.getId) recArgs])
+    (args, ops.push <| mkApp isIdent #[mkApp (mkIdent <| pqualified ++ nameIdent.getId) recArgs])
   argsAndOps.mapM fun (args, ops) => do
-    let lhs := mkApp (mkIdent <| pqualified ++ name.getId) args
+    let lhs := mkApp (mkIdent <| pqualified ++ nameIdent.getId) args
     let rhs ← if let some op := ops[0]? then
         ops.foldlM (init := op) (start := 1) fun acc op => ``($acc && $op)
       else
         ``(true)
     `(matchAltExpr| | $lhs => $rhs)
 where
-  isIdent := mkIdent <| qualified.appendBefore "is"
-
   filterTypeIR (ir : Array IR) := ir.filterM fun ir => return Option.isSome <| ← IR.toType ir
 
   mkProd (as : Array Term) : CommandElabM Term := if let some a := as.back? then
@@ -213,18 +211,18 @@ where
         return ← toArgsAndOps irs' (namesAcc.push l) extraAcc <|
           ← acc.mapM fun (args, ops) => return (args.push l, ops.push <| ← `($isIdent $l))
 
-      throwErrorAt name "couldn't find parent/child relationship between {pqualified} and {qualified}"
+      throwErrorAt nameIdent "couldn't find parent/child relationship between {pqualified} and {qualified}"
     | .atom s, .atom sp => do
       if s != sp then
-        throwErrorAt name "mismatched atoms \"{s}\" and \"{sp}\""
+        throwErrorAt nameIdent "mismatched atoms \"{s}\" and \"{sp}\""
 
       toArgsAndOps irs' namesAcc extraAcc acc
     | .sepBy ir sep, .sepBy pir psep => do
       if sep != psep then
-        throwErrorAt name "mismatched separators \"{sep}\" and \"{psep}\""
+        throwErrorAt nameIdent "mismatched separators \"{sep}\" and \"{psep}\""
 
       if ir.size != pir.size then
-        throwErrorAt name "length of child sepBy ({ir.size}) doesn't match length of parent sepBy ({pir.size})"
+        throwErrorAt nameIdent "length of child sepBy ({ir.size}) doesn't match length of parent sepBy ({pir.size})"
 
       match ← toArgsAndOps (ir.zip pir) with
       -- In this case, the sepBy doesn't actually contain anything stored in the datatype so we can
@@ -256,7 +254,7 @@ where
           ← acc.mapM fun (args, ops) => return (args.push <| ← ``(List.nil), ops)
     | .optional ir, .optional pir => do
       if ir.size != pir.size then
-        throwErrorAt name "length of child sepBy ({ir.size}) doesn't match length of parent sepBy ({pir.size})"
+        throwErrorAt nameIdent "length of child sepBy ({ir.size}) doesn't match length of parent sepBy ({pir.size})"
 
       match ← toArgsAndOps (ir.zip pir) with
       -- In this case, the sepBy doesn't actually contain anything stored in the datatype so we can
@@ -269,7 +267,7 @@ where
           ← acc.mapM fun (args, ops) => return (args.push <| ← `(_), ops)
       | (argsAndOps, extraAcc') => do
         if !extraAcc'.isEmpty then
-          throwErrorAt name "sepBy inside optional of value parent is not yet supported"
+          throwErrorAt nameIdent "sepBy inside optional of value parent is not yet supported"
 
         let noneAcc ← acc.mapM fun (args, ops) => return (args.push <| ← ``(Option.none), ops)
         let someAcc ← acc.concatMapM fun (args, ops) =>
@@ -277,7 +275,7 @@ where
             let prod ← mkProd args'
             return (args.push <| ← ``(Option.some $prod), ops ++ ops')
         toArgsAndOps irs' (namesAcc.push l) extraAcc <| noneAcc ++ someAcc
-    | _, _ => throwErrorAt name "mismatched syntax"
+    | _, _ => throwErrorAt nameIdent "mismatched syntax"
 
 end IR
 

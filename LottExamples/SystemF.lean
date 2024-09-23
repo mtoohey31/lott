@@ -1177,7 +1177,7 @@ theorem preservation (EtyA : [[ε ⊢ E : A]]) (EstepF : [[E -> F]]) : [[ε ⊢ 
 theorem progress (EtyA : [[ε ⊢ E : A]]) : (∃ F, [[E -> F]]) ∨ ∃ V : Value, V.val = E :=
   match E, EtyA with
   | .lam x A' E', _ =>
-    .inr <| Exists.intro { val := .lam x A' E', property := by simp [isValue] } rfl
+    .inr <| Exists.intro { val := .lam x A' E', property := by simp [Term.isValue] } rfl
   | .app E' F', .app E'tyA'arrA F'tyA' =>
     match progress E'tyA'arrA with
     | .inl ⟨E'_next, E'stepE'_next⟩ => .inl <| Exists.intro (E'_next.app F') (.appl E'stepE'_next)
@@ -1194,7 +1194,7 @@ theorem progress (EtyA : [[ε ⊢ E : A]]) : (∃ F, [[E -> F]]) ∨ ∃ V : Val
           rw [← VF'eqF']
           exact .inl <| Exists.intro (E''.tmSubst x VF'.val) .lamApp
   | .typeGen a E', _ =>
-    .inr <| Exists.intro { val := .typeGen a E', property := by simp [isValue] } rfl
+    .inr <| Exists.intro { val := .typeGen a E', property := by simp [Term.isValue] } rfl
   | .typeApp E' A', .typeApp E'ty A'wf =>
     match progress E'ty with
     | .inl ⟨E'_next, E'stepE'_next⟩ =>

@@ -442,7 +442,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       let some { normalProds, .. } := symbolExt.getState (← getEnv) |>.find? parent'.getId
         | throwErrorAt parent' "unknown parent {parent'.getId}"
 
-      let isIdent := mkIdentFrom canon <| canon.getId.appendBefore "is"
+      let isIdent := mkIdentFrom canon <| parent'.getId ++ canon.getId.appendBefore "is"
       let matchAlts ← prods.mapM fun { name, ir, type } => match type with
         | .sugar ref | .customElab ref =>
           throwErrorAt ref "nonterminal with parent can only contain normal productions"
@@ -450,9 +450,9 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
           let some pir := normalProds.find? name.getId
             | throwErrorAt name "normal production with matching name not found in parent"
 
-          IR.toIsParentMatchAlts name (← nt.qualified) parent'.getId ir pir
+          IR.toIsParentMatchAlts name isIdent (← nt.qualified) parent'.getId ir pir
       elabCommand <| ←
-        `(def $isIdent : $parent' → Bool
+        `(def $(mkIdentFrom isIdent <| `_root_ ++ isIdent.getId) : $parent' → Bool
             $(matchAlts.flatten):matchAlt*
             | _ => no_error_if_unused% false)
 
