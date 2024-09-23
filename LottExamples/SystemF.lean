@@ -43,14 +43,14 @@ theorem Type'.subst_shadowed_forall (B : Type') : [[∀ a. A]] = [[(∀ a. A) [a
   rw [Type'.subst, if_pos rfl]
 
 nonterminal Term, E, F :=
-  | x                      : var
-  | "λ " x " : " A ". " E  : lam
-  | E F                    : app
-  | "Λ " a ". " E          : typeGen
-  | E " [" A "]"           : typeApp
-  | "(" E ")"              : paren (desugar := return E)
-  | E " [" x " ↦ " F "]"   : subst (elab := return mkAppN (.const `LottExamples.SystemF.Term.tmSubst []) #[E, x, F])
-  | E " [" a " ↦ " A "]"   : typeSubst (elab := return mkAppN (.const `LottExamples.SystemF.Term.tySubst []) #[E, a, A])
+  | x                     : var
+  | "λ " x " : " A ". " E : lam
+  | E F                   : app
+  | "Λ " a ". " E         : typeGen
+  | E " [" A "]"          : typeApp
+  | "(" E ")"             : paren (desugar := return E)
+  | E " [" x " ↦ " F "]"  : subst (elab := return mkAppN (.const `LottExamples.SystemF.Term.tmSubst []) #[E, x, F])
+  | E " [" a " ↦ " A "]"  : typeSubst (elab := return mkAppN (.const `LottExamples.SystemF.Term.tySubst []) #[E, a, A])
 
 def Term.tmSubst (E : Term) (x : TermVar) (F : Term) : Term := match E with
   | .var x' => if x' = x then F else .var x'
@@ -105,7 +105,9 @@ theorem Environment.subst_empty : Environment.empty = Environment.empty.subst a 
 theorem Environment.subst_typeVarExt_eq_typeVarExt_subst
   : [[(G [b ↦ B]), a]] = [[((G, a) [b ↦ B])]] := rfl
 
-subrule Value, V of Term := lam, typeGen
+nonterminal (parent := Term) Value, V :=
+  | "λ " x " : " A ". " E : lam
+  | "Λ " a ". " E         : typeGen
 
 judgement_syntax a " ≠ " b : TypeVarNe
 
@@ -1174,7 +1176,8 @@ theorem preservation (EtyA : [[ε ⊢ E : A]]) (EstepF : [[E -> F]]) : [[ε ⊢ 
 
 theorem progress (EtyA : [[ε ⊢ E : A]]) : (∃ F, [[E -> F]]) ∨ ∃ V : Value, V.val = E :=
   match E, EtyA with
-  | .lam x A' E', _ => .inr <| Exists.intro { val := .lam x A' E', property := by simp } rfl
+  | .lam x A' E', _ =>
+    .inr <| Exists.intro { val := .lam x A' E', property := by simp [isValue] } rfl
   | .app E' F', .app E'tyA'arrA F'tyA' =>
     match progress E'tyA'arrA with
     | .inl ⟨E'_next, E'stepE'_next⟩ => .inl <| Exists.intro (E'_next.app F') (.appl E'stepE'_next)
@@ -1190,7 +1193,8 @@ theorem progress (EtyA : [[ε ⊢ E : A]]) : (∃ F, [[E -> F]]) ∨ ∃ V : Val
         | .lam x A' E'' =>
           rw [← VF'eqF']
           exact .inl <| Exists.intro (E''.tmSubst x VF'.val) .lamApp
-  | .typeGen a E', _ => .inr <| Exists.intro { val := .typeGen a E', property := by simp } rfl
+  | .typeGen a E', _ =>
+    .inr <| Exists.intro { val := .typeGen a E', property := by simp [isValue] } rfl
   | .typeApp E' A', .typeApp E'ty A'wf =>
     match progress E'ty with
     | .inl ⟨E'_next, E'stepE'_next⟩ =>

@@ -8,7 +8,7 @@ open Lean.Parser
 
 declare_syntax_cat Lott.Symbol.Nat
 
-run_cmd setEnv <| symbolExt.addEntry (← getEnv) { canon := `Nat, alias := `n }
+run_cmd setEnv <| aliasExt.addEntry (← getEnv) { canon := `Nat, alias := `n }
 
 @[Lott.Symbol.Nat_parser]
 def nat.n_parser : Parser := leadingNode `Lott.Symbol.Nat maxPrec <| identPrefix "n"

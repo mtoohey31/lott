@@ -54,13 +54,9 @@ syntax "(" "elab" " := " term ")" : Lott.DSL.ElabConfig
 
 syntax " | " stx+ " : " ident atomic(Lott.DSL.DesugarConfig)? (Lott.DSL.ElabConfig)? : Lott.DSL.Production
 
-syntax "nonterminal " ident,+ " := " Lott.DSL.Production* : Lott.DSL.NonTerminal
+syntax "nonterminal " ("(" "parent" " := " ident ")")? ident,+ " := " Lott.DSL.Production* : Lott.DSL.NonTerminal
 
 syntax Lott.DSL.NonTerminal : command
-
-/- Subrule syntax. -/
-
-syntax "subrule " ident,+ " of " ident " := " ident,+ : command
 
 /- Judgement syntax. -/
 

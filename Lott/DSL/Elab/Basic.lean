@@ -124,7 +124,7 @@ where
 
 def resolveSymbol (symbolName : Ident) (allowSuffix := true) : CommandElabM Name := do
   let name := symbolName.getId
-  let state := symbolExt.getState (← getEnv)
+  let state := aliasExt.getState (← getEnv)
 
   let find s := if allowSuffix then
       state.byAlias.findCommonPrefix s
@@ -199,7 +199,7 @@ def _root_.Lott.DSL.IR.ofStx : TSyntax `stx → CommandElabM IR
 private
 def mkMkProd (entries : Array (Term × Term)) : CommandElabM (Option (Term × Term)) := do
   let some back := entries.back? | return none
-  let res ← entries.extract 0 (entries.size - 1) |>.foldrM (init := back)
+  let res ← entries.foldrM (start := entries.size - 1) (init := back)
     fun (expr, type) (mkProdAcc, typeAcc) =>
     return (
       ← ``(mkApp4 (Expr.const `Prod.mk [levelOne, levelOne]) $type $typeAcc $expr $mkProdAcc),
@@ -209,7 +209,7 @@ def mkMkProd (entries : Array (Term × Term)) : CommandElabM (Option (Term × Te
 
 private partial
 def _root_.Lott.DSL.IR.toExprArgs (ir : Array IR) : CommandElabM (TSepArray `term ",") :=
-  ir.filterMapM (β := TSyntax `term) fun | ir@(mk l _) => do
+  ir.filterMapM (β := Term) fun | ir@(mk l _) => do
       if (← IR.toType ir).isNone then
         return none
 
@@ -316,7 +316,7 @@ elab_rules : command | `(metavar $names,*) => do
   -- that they have a decidable equality relation?
   elabCommand <| ← `(def $canon := Nat)
   for name in names do
-    setEnv <| symbolExt.addEntry (← getEnv) { canon := canonQualified, alias := ns ++ name.getId }
+    setEnv <| aliasExt.addEntry (← getEnv) { canon := canonQualified, alias := ns ++ name.getId }
   elabCommand <| ← `(instance (x y : $canon) : Decidable (x = y) := Nat.decEq x y)
 
   -- Declare syntax category. For metavariables we just declare the alias name parsers directly in
@@ -355,7 +355,7 @@ elab_rules : command | `(metavar $names,*) => do
 
 private
 inductive ProductionType where
-  | none
+  | normal
   | sugar (desugar' : Term)
   | customElab (elab' : Term)
 deriving BEq
@@ -371,14 +371,19 @@ structure NonTerminal where
   canon : Ident
   aliases : Array Ident
   prods : Array Production
+  parent? : Option Ident
+
+private
+def NonTerminal.qualified (nt : NonTerminal) : CommandElabM Name :=
+  return (← getCurrNamespace) ++ nt.canon.getId
 
 private
 def NonTerminal.catName (nt : NonTerminal) : CommandElabM Name :=
-  return symbolPrefix ++ (← getCurrNamespace) ++ nt.canon.getId
+  return symbolPrefix ++ (← nt.qualified)
 
 private
 def NonTerminal.varCatName (nt : NonTerminal) : CommandElabM Name :=
-  return variablePrefix ++ (← getCurrNamespace) ++ nt.canon.getId
+  return variablePrefix ++ (← nt.qualified)
 
 private
 def NonTerminal.parserAttrName (nt : NonTerminal) : CommandElabM Name :=
@@ -394,15 +399,15 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
   -- following steps.
   let ns ← getCurrNamespace
   for nt in nts do
-    let `(NonTerminal| nonterminal $[$names],* := $_*) := nt | throwUnsupportedSyntax
+    let `(NonTerminal| nonterminal $[(parent := $parent?)]? $[$names],* := $_*) := nt | throwUnsupportedSyntax
     let names@(canonName :: _) := names.toList | throwUnsupportedSyntax
     for name in names do
-      setEnv <| symbolExt.addEntry (← getEnv)
+      setEnv <| aliasExt.addEntry (← getEnv)
         { canon := ns ++ canonName.getId, alias := ns ++ name.getId }
 
   -- Transform syntax into non-terminal structure.
   let nts ← nts.mapM fun nt => do
-    let `(NonTerminal| nonterminal $[$names],* := $prods*) := nt | throwUnsupportedSyntax
+    let `(NonTerminal| nonterminal $[(parent := $parent?)]? $[$names],* := $prods*) := nt | throwUnsupportedSyntax
     let some canon := names[0]? | throwUnsupportedSyntax
     let aliases := names.extract 1 names.size
 
@@ -416,19 +421,45 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       | some _, some _ => throwUnsupportedSyntax
       | some desugar', none => pure <| .sugar desugar'
       | none, some elab' => pure <| .customElab elab'
-      | none, none => pure .none
+      | none, none => pure .normal
 
       return { name, ir, type }
 
-    return { canon, aliases, prods : NonTerminal }
+    let parent? ← parent?.mapM fun parent' =>
+      return mkIdentFrom parent' <| ← resolveSymbol parent' (allowSuffix := false)
+
+    return { canon, aliases, prods, parent? : NonTerminal }
 
   -- Define mutual inductives and parser categories.
-  let inductives ← nts.mapM fun nt@{ canon, prods, .. } => do
+  let inductives ← nts.mapM fun nt@{ canon, prods, parent?, .. } => do
     setEnv <| ← registerParserCategory (← getEnv) (← nt.parserAttrName) (← nt.catName) .symbol
     setEnv <| ← registerParserCategory (← getEnv) (← nt.varParserAttrName) (← nt.varCatName) .symbol
 
+    if let some parent' := parent? then
+      if nts.size != 1 then
+        throwErrorAt parent' "nonterminal with parent can't appear in a mutual block"
+
+      let some { normalProds, .. } := symbolExt.getState (← getEnv) |>.find? parent'.getId
+        | throwErrorAt parent' "unknown parent {parent'.getId}"
+
+      let isIdent := mkIdentFrom canon <| canon.getId.appendBefore "is"
+      let matchAlts ← prods.mapM fun { name, ir, type } => match type with
+        | .sugar ref | .customElab ref =>
+          throwErrorAt ref "nonterminal with parent can only contain normal productions"
+        | .normal => do
+          let some pir := normalProds.find? name.getId
+            | throwErrorAt name "normal production with matching name not found in parent"
+
+          IR.toIsParentMatchAlts name (← nt.qualified) parent'.getId ir pir
+      elabCommand <| ←
+        `(def $isIdent : $parent' → Bool
+            $(matchAlts.flatten):matchAlt*
+            | _ => no_error_if_unused% false)
+
+      return ← `(def $canon := { x : $parent' // $isIdent x })
+
     let ctors ← prods.filterMapM fun { name, ir, type } => do
-      if type != .none then return none
+      if type != .normal then return none
       let ctorType ← IR.toTypeArrSeq ir canon
       `(ctor| | $name:ident : $ctorType)
     `(inductive $canon where $ctors*)
@@ -437,14 +468,20 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
   else
     elabCommand <| ← `(mutual $inductives* end)
 
-  for nt@{ canon, aliases, prods, .. } in nts do
+  for nt@{ canon, aliases, prods, parent? } in nts do
+    -- Add symbol to environment extension.
+    let normalProds := prods.foldl (init := mkNameMap _) fun acc { name, ir, type } =>
+      if type != .normal then acc else acc.insert name.getId ir
+    setEnv <| symbolExt.addEntry (← getEnv) { qualified := ← nt.qualified, normalProds }
+
     -- Define production parsers.
     let canonName := canon.getId
     let attrIdent := mkIdent <| ← nt.parserAttrName
-    for { name, ir, .. } in prods do
-      let (val, type) ← IR.toParser ir nt.canon.getId symbolPrefix
-      let parserIdent := mkIdentFrom name <| canonName ++ name.getId |>.appendAfter "_parser"
-      elabCommand <| ← `(@[Lott.Symbol_parser, $attrIdent:ident] def $parserIdent : $type := $val)
+    if parent?.isNone then
+      for { name, ir, .. } in prods do
+        let (val, type) ← IR.toParser ir nt.canon.getId symbolPrefix
+        let parserIdent := mkIdentFrom name <| canonName ++ name.getId |>.appendAfter "_parser"
+        elabCommand <| ← `(@[Lott.Symbol_parser, $attrIdent:ident] def $parserIdent : $type := $val)
 
     -- Define variable parsers, plus variable category parser in symbol category.
     let varAttrIdent := mkIdent <| ← nt.varParserAttrName
@@ -463,31 +500,45 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
             categoryParser $(quote <| ← nt.varCatName) Parser.maxPrec >>
             Parser.optional (checkLineEq >> "@" >> checkLineEq >> Parser.ident))
 
+    -- Define parser in parent.
+    if let some parent' := parent? then
+      let parentQualified := parent'.getId
+      let parentParserCatName := symbolPrefix ++ parentQualified
+      let parentParserAttrName := parentParserCatName.appendAfter "_parser"
+      let parentParserIdent :=
+        mkIdentFrom parent' <| `_root_ ++ parentQualified ++ canonName.appendAfter "_parser"
+      elabCommand <| ←
+        `(@[$(mkIdent parentParserAttrName):ident] def $parentParserIdent : Parser :=
+            leadingNode $(quote parentParserCatName) Parser.maxPrec <|
+              categoryParser $(quote <| ← nt.catName) 0)
+
     -- Define desugar macros and elaboration.
     let catIdent := mkIdent <| ← nt.catName
-    let termProdMatchAlts ← prods.filterMapM fun { name, ir, type } => do
-      let patternArgs ← IR.toPatternArgs ir
+    let termProdMatchAlts ← if parent?.isSome then pure #[] else
+      prods.filterMapM fun { name, ir, type } => do
+        let patternArgs ← IR.toPatternArgs ir
 
-      if let .sugar desugar' := type then
-        let macroIdent := mkIdentFrom name <| canonName ++ name.getId |>.appendAfter "_macro"
-        elabCommand <| ←
-          `(@[macro $catIdent] def $macroIdent : Lean.Macro
-              | Lean.Syntax.node _ $(quote <| ← nt.catName) #[$patternArgs,*] => $desugar'
-              | _ => Lean.Macro.throwUnsupported)
-        return none
+        if let .sugar desugar' := type then
+          let macroIdent := mkIdentFrom name <| canonName ++ name.getId |>.appendAfter "_macro"
+          elabCommand <| ←
+            `(@[macro $catIdent] def $macroIdent : Lean.Macro
+                | Lean.Syntax.node _ $(quote <| ← nt.catName) #[$patternArgs,*] => $desugar'
+                | _ => Lean.Macro.throwUnsupported)
+          return none
 
-      let seqItems ← IR.toTermSeqItems ir canon.getId
-      let exprArgs ← IR.toExprArgs ir
-      let rest ← if let .customElab elab' := type then
-          pure elab'
-        else
-          `(term| return Lean.mkAppN (Lean.Expr.const $(quote <| ns ++ canonName ++ name.getId) [])
-                    #[$exprArgs,*])
+        let seqItems ← IR.toTermSeqItems ir canon.getId
+        let exprArgs ← IR.toExprArgs ir
+        let rest ← if let .customElab elab' := type then
+            pure elab'
+          else
+            `(term| return Lean.mkAppN
+                      (Lean.Expr.const $(quote <| ns ++ canonName ++ name.getId) [])
+                      #[$exprArgs,*])
 
-      `(matchAltExpr|
-        | Lean.Syntax.node _ $(quote <| ← nt.catName) #[$patternArgs,*] => do
-          $seqItems*
-          $rest:term)
+        `(matchAltExpr|
+          | Lean.Syntax.node _ $(quote <| ← nt.catName) #[$patternArgs,*] => do
+            $seqItems*
+            $rest:term)
 
     let termElabIdent := mkIdentFrom canon <| canonName.appendAfter "TermElab"
     elabCommand <| ←
@@ -511,7 +562,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
             return Expr.app funExpr idxExpr
           | _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
-    let texProdMatchAlts ← prods.mapM fun { ir, .. } => do
+    let texProdMatchAlts ← if parent?.isSome then pure #[] else prods.mapM fun { ir, .. } => do
       let patternArgs ← IR.toPatternArgs ir
       let seqItems ← IR.toTexSeqItems ir canon.getId
       let joinArgs := IR.toJoinArgs ir
@@ -537,81 +588,37 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
             return "{" ++ n ++ "}_{" ++ i ++ "}"
           | _, _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
+    if let some parent' := parent? then
+      let qualified ← nt.qualified
+      let catName ← nt.catName
+      let parentQualified := parent'.getId
+      let parentCatName := symbolPrefix ++ parentQualified
+      let parentCatIdent := mkIdent parentCatName
+      let parentTermElabName :=
+        mkIdent <| `_root_ ++ parentQualified ++ canon.getId.appendAfter "TermElab"
+      let cmd ←
+        `(@[lott_term_elab $parentCatIdent] def $parentTermElabName : Lott.DSL.Elab.TermElab
+            | Lean.Syntax.node _ $(quote parentCatName) #[
+                stx@(Lean.Syntax.node _ $(quote <| ← nt.catName) _)
+              ] => do
+              let type ← Lean.Elab.Term.elabType <| mkIdent $(quote qualified)
+              let e ← Lott.DSL.Elab.elabTerm $(quote catName) stx
+              return Lean.Expr.proj `Subtype 0 e
+            | _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
+      elabCommand cmd
+
+      let parentTexElabName :=
+        mkIdent <| `_root_ ++ parentQualified ++ canon.getId.appendAfter "TexElab"
+      elabCommand <| ←
+        `(@[lott_tex_elab $parentCatIdent] def $parentTexElabName : Lott.DSL.Elab.TexElab
+            | ref, Lean.Syntax.node _ $(quote parentCatName) #[
+                stx@(Lean.Syntax.node _ $(quote <| ← nt.catName) _)
+              ] => Lott.DSL.Elab.elabTex $(quote catName) ref stx
+            | _, _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
+
 elab_rules : command
   | `($nt:Lott.DSL.NonTerminal) => elabNonTerminals #[nt]
   | `(mutual $[$nts:Lott.DSL.NonTerminal]* end) => elabNonTerminals nts
-
-/- Subrule syntax. -/
-
-elab_rules : command | `(subrule $names,* of $parent := $prods,*) => do
-  let names := names.getElems.toList
-  let canon :: aliases := names | throwUnsupportedSyntax
-  let canonName := canon.getId
-  let ns ← getCurrNamespace
-  let canonQualified := ns ++ canonName
-
-  -- Declare syntax category.
-  let catName := symbolPrefix ++ ns ++ canonName
-  let parserAttrName := catName.appendAfter "_parser"
-  setEnv <| ← Parser.registerParserCategory (← getEnv) parserAttrName catName .symbol
-
-  for name in names do
-    setEnv <| symbolExt.addEntry (← getEnv)
-      { canon := canonQualified, alias := ns ++ name.getId }
-
-  -- Declare parsers in category.
-  for alias in aliases do
-    let aliasName@(.str .anonymous nameStr) := alias.getId | throwUnsupportedSyntax
-    let parserIdent := mkIdentFrom alias <| canonName ++ aliasName.appendAfter "_parser"
-    elabCommand <| ←
-      `(@[$(mkIdent parserAttrName):ident] def $parserIdent : Parser :=
-          leadingNode $(quote catName) Parser.maxPrec <|
-            Lott.DSL.identPrefix $(quote nameStr))
-
-  -- TODO: Support parsing of the subset of the syntax instead of just variables.
-
-  let parentName ← resolveSymbol parent (allowSuffix := false)
-  let parentCatName := symbolPrefix ++ parentName
-  let parentParserAttrIdent := mkIdent <| parentCatName.appendAfter "_parser"
-  let parentParserIdent := mkIdentFrom canon <| parentName ++ canonName.appendAfter "_parser"
-  elabCommand <| ←
-    `(@[$parentParserAttrIdent:ident] def $parentParserIdent : Parser :=
-        leadingNode $(quote parentCatName) Parser.maxPrec <| categoryParser $(quote catName) 0)
-
-  -- Declare type.
-  let matchAlts ← prods.getElems.mapM fun prod =>
-    `(matchAltExpr| | $(mkIdentFrom prod <| (parentName ++ prod.getId)) .. => True)
-  elabCommand <| ← `(def $canon := { x : $parent // match x with $matchAlts:matchAlt* | _ => False })
-
-  -- Define elaboration.
-  let termElabName := mkIdentFrom canon <| canon.getId.appendAfter "TermElab"
-  elabCommand <| ←
-    `(@[lott_term_elab $(mkIdent catName)] def $termElabName : Lott.DSL.Elab.TermElab
-        | Lean.Syntax.node _ $(quote catName) #[ident@(Lean.Syntax.ident ..)] => do
-          let type ← Lean.Elab.Term.elabType <| mkIdent $(quote canonQualified)
-          Lean.Elab.Term.elabTerm ident type
-        | _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
-
-  -- Define parent elaboration.
-  let parentCatIdent := mkIdent parentCatName
-  let parentTermElabName := mkIdent <| parentName.appendAfter "TermElab"
-  elabCommand <| ←
-    `(@[lott_term_elab $parentCatIdent] def $parentTermElabName : Lott.DSL.Elab.TermElab
-        | Lean.Syntax.node _ $(quote parentCatName) #[
-            Lean.Syntax.node _ $(quote catName) #[ident@(Lean.Syntax.ident ..)]
-          ] => do
-          let type ← Lean.Elab.Term.elabType <| mkIdent $(quote canonQualified)
-          let e ← Lean.Elab.Term.elabTerm ident type
-          return Lean.Expr.proj `Subtype 0 e
-        | _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
-
-  let parentTexElabName := mkIdent <| parentName.appendAfter "TexElab"
-  elabCommand <| ←
-    `(@[lott_tex_elab $parentCatIdent] def $parentTexElabName : Lott.DSL.Elab.TexElab
-        | _, Lean.Syntax.node _ $(quote parentCatName) #[
-            Lean.Syntax.node _ $(quote catName) #[Lean.Syntax.ident _ _ n _]
-          ] => return Lott.DSL.Elab.texEscape <| n.toString (escape := false)
-        | _, _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
 /- Judgement syntax. -/
 

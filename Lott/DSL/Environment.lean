@@ -7,31 +7,48 @@ namespace Lott.DSL
 open Lean
 open Lean.Data
 
-structure SymbolAlias where
+structure Alias where
   canon : Name
   alias : Name
 
-instance : Inhabited SymbolAlias where default := { canon := default, alias := default }
+instance : Inhabited Alias where default := { canon := default, alias := default }
 
-structure SymbolState where
-  byAlias : Trie SymbolAlias
+structure AliasState where
+  byAlias : Trie Alias
   allCanon : NameSet
 
-instance : Inhabited SymbolState where default := { byAlias := default, allCanon := default }
+instance : Inhabited AliasState where default := { byAlias := default, allCanon := default }
 
-initialize symbolExt : PersistentEnvExtension SymbolAlias SymbolAlias SymbolState ←
+initialize aliasExt : PersistentEnvExtension Alias Alias AliasState ←
   registerPersistentEnvExtension {
   mkInitial := return default
-  addImportedFn := fun symss => return {
+  addImportedFn := fun aliasss => return {
     byAlias :=
-      symss.flatten.foldl (init := .empty) fun acc a => acc.upsert a.alias.toString fun _ => a
-    allCanon := symss.flatten.map (·.canon) |> RBTree.fromArray (cmp := Name.quickCmp)
+      aliasss.flatten.foldl (init := .empty) fun acc a => acc.upsert a.alias.toString fun _ => a
+    allCanon := aliasss.flatten.map (·.canon) |> RBTree.fromArray (cmp := Name.quickCmp)
   }
   addEntryFn := fun { byAlias, allCanon } a => {
     byAlias := byAlias.insert a.alias.toString a
     allCanon := allCanon.insert a.canon
   }
   exportEntriesFn := fun { byAlias, .. } => byAlias.values
+}
+
+structure Symbol where
+  qualified : Name
+  normalProds : NameMap (Array IR)
+
+instance : Inhabited Symbol where default := { qualified := default, normalProds := default }
+
+abbrev SymbolState := NameMap Symbol
+
+initialize symbolExt : PersistentEnvExtension Symbol Symbol SymbolState ←
+  registerPersistentEnvExtension {
+  mkInitial := return default
+  addImportedFn := fun symss =>
+    return symss.flatten.foldl (init := mkNameMap _) fun acc sym => acc.insert sym.qualified sym
+  addEntryFn := fun st sym => st.insert sym.qualified sym
+  exportEntriesFn := RBMap.fold (cmp := Name.quickCmp) (init := #[]) fun acc _ sym => acc.push sym
 }
 
 structure Judgement where
