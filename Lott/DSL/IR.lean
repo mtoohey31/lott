@@ -7,6 +7,7 @@ open Lean.Elab
 open Lean.Elab.Command
 open Lean.Syntax
 open Lean.Parser
+open Lean.Parser.Command
 open Lean.Parser.Term
 
 def symbolPrefix := `Lott.Symbol
@@ -152,130 +153,77 @@ def toPatternArgs (ir : Array IR) : CommandElabM (TSepArray `term ",") :=
 def toJoinArgs (ir : Array IR) : TSepArray `term "," := ir.map (β := Term) fun | mk l _ => l
 
 partial
-def isParent (self parent : Name) : IR → IR → Bool
-  | mk _ (.category ns), mk _ (.category np) => ns == np || (ns == self && np == parent)
-  | mk _ (.atom ss), mk _ (.atom sp) => ss == sp
-  | mk _ (.sepBy irs seps), mk _ (.sepBy irp sepp) => isParentSeq irs irp && seps == sepp
-  | mk _ (.optional irs), mk _ (.optional irp) => isParentSeq irs irp
-  | _, _ => false
-where
-  isParentSeq (irs irp : Array IR) :=
-    (irs.zip irp).all fun (irs, irp) => isParent self parent irs irp
-
-def _root_.Array.product (as : Array (Array α)) : Array α :=
-  as.foldl (init := #[]) fun as acc => as.map (acc.push ·) |>.flatten
-
-partial
-def toIsParentMatchAlts (nameIdent isIdent : Ident) (qualified pqualified : Name) (ir pir : Array IR)
-  : CommandElabM (TSyntaxArray `Lean.Parser.Term.matchAlt) := do
+def toIsChildCtor (prodIdent isIdent : Ident) (qualified pqualified : Name) (ir pir : Array IR)
+  : CommandElabM (TSyntax `Lean.Parser.Command.ctor) := do
   if ir.size != pir.size then
-    throwErrorAt nameIdent "length of child production ({ir.size}) doesn't match length of parent production ({pir.size})"
+    throwErrorAt prodIdent "length of child production ({ir.size}) doesn't match length of parent production ({pir.size})"
 
-  let (argsAndOps, extraAcc) ← toArgsAndOps (ir.zip pir)
-  let argsAndOps := argsAndOps ++ extraAcc.map fun (args, ops, recArgs) =>
-    (args, ops.push <| mkApp isIdent #[mkApp (mkIdent <| pqualified ++ nameIdent.getId) recArgs])
-  argsAndOps.mapM fun (args, ops) => do
-    let lhs := mkApp (mkIdent <| pqualified ++ nameIdent.getId) args
-    let rhs ← if let some op := ops[0]? then
-        ops.foldlM (init := op) (start := 1) fun acc op => ``($acc && $op)
-      else
-        ``(true)
-    `(matchAltExpr| | $lhs => $rhs)
+  let (ctorTypeRetArgs, ctorTypeArgs) ← go (ir.zip pir)
+  let ctorType ← foldrArrow ctorTypeArgs <| ← ``($isIdent ($(mkIdent <| pqualified ++ prodIdent.getId) $ctorTypeRetArgs*))
+  return ← `(ctor| | $prodIdent:ident : $ctorType)
 where
-  filterTypeIR (ir : Array IR) := ir.filterM fun ir => return Option.isSome <| ← IR.toType ir
+  foldrArrow (args : Array Term) (init : Term) : CommandElabM Term :=
+    args.foldrM (init := init) fun arg acc => ``($arg → $acc)
 
-  mkProd (as : Array Term) : CommandElabM Term := if let some a := as.back? then
+  foldrProd (as : Array Term) : CommandElabM Term := if let some a := as.back? then
       as.foldrM (init := a) (start := as.size - 1) fun a acc => `(($acc, $a))
     else
       ``(())
 
   foldlAnd (as : Array Term) : CommandElabM Term := if let some a := as[0]? then
-      as.foldlM (init := a) (start := 1) fun acc a => `($acc && $a)
+      as.foldlM (init := a) (start := 1) fun acc a => `($acc ∧ $a)
     else
-      ``(true)
+      ``(True)
 
-  toArgsAndOps (irs : Array (IR × IR)) (namesAcc : Array Ident := #[])
-    (extraAcc : Array (Array Term × Array Term × Array Term) := #[])
-    (acc : Array (Array Term × Array Term) := #[(#[], #[])])
-    : CommandElabM ((Array (Array Term × Array Term)) × Array (Array Term × Array Term × Array Term)) := do
-    let some (mk _ ir, mk l pir) := irs[0]? | return (acc, extraAcc)
+  go (irs : Array (IR × IR)) (patAcc propAcc : Array Term := #[])
+    : CommandElabM (Array Term × Array Term) := do
+    let some (mk l' ir, mk l pir) := irs[0]? | return (patAcc, propAcc)
     let irs' := irs.extract 1 irs.size
 
     match ir, pir with
     | .category n, .category np => do
       if n == np then
-        return ← toArgsAndOps irs' (namesAcc.push l) extraAcc <|
-          ← acc.mapM fun (args, ops) => return (args.push <| ← `(_), ops)
+        return ← go irs' (patAcc.push <| ← `(_)) propAcc
 
       if n == qualified && np == pqualified then
-        return ← toArgsAndOps irs' (namesAcc.push l) extraAcc <|
-          ← acc.mapM fun (args, ops) => return (args.push l, ops.push <| ← `($isIdent $l))
+        return ← go irs' (patAcc.push l) <| propAcc.push <| ← `($isIdent $l)
 
-      throwErrorAt nameIdent "couldn't find parent/child relationship between {pqualified} and {qualified}"
+      throwErrorAt prodIdent "couldn't find parent/child relationship between {pqualified} and {qualified}"
     | .atom s, .atom sp => do
       if s != sp then
-        throwErrorAt nameIdent "mismatched atoms \"{s}\" and \"{sp}\""
+        throwErrorAt prodIdent "mismatched atoms \"{s}\" and \"{sp}\""
 
-      toArgsAndOps irs' namesAcc extraAcc acc
+      go irs' patAcc propAcc
     | .sepBy ir sep, .sepBy pir psep => do
       if sep != psep then
-        throwErrorAt nameIdent "mismatched separators \"{sep}\" and \"{psep}\""
+        throwErrorAt prodIdent "mismatched separators \"{sep}\" and \"{psep}\""
 
       if ir.size != pir.size then
-        throwErrorAt nameIdent "length of child sepBy ({ir.size}) doesn't match length of parent sepBy ({pir.size})"
+        throwErrorAt prodIdent "length of child sepBy ({ir.size}) doesn't match length of parent sepBy ({pir.size})"
 
-      match ← toArgsAndOps (ir.zip pir) with
+      match ← go (ir.zip pir) with
       -- In this case, the sepBy doesn't actually contain anything stored in the datatype so we can
       -- just skip it.
-      | (#[(#[], #[])], #[]) => toArgsAndOps irs' namesAcc extraAcc acc
+      | (#[], #[]) => go irs' patAcc propAcc
       -- In this case, there is a list with stuff in it, but it doesn't contain anything for us to
       -- check, so we can just add an underscore pattern argument and proceed.
-      | (#[(_, #[])], #[]) =>
-        toArgsAndOps irs' (namesAcc.push l) extraAcc <|
-          ← acc.mapM fun (args, ops) => return (args.push <| ← `(_), ops)
-      | (argsAndOps, extraAcc') => do
-        let remainingNames := Array.map (fun (mk l _) => l) <| ← filterTypeIR <| irs'.map Prod.snd
-        let extraAcc' ← extraAcc'.mapM fun (args', ops', recArgs) => do
-          let argsProd ← mkProd args'
-          let recArgsProd ← mkProd recArgs
-          return (
-            (namesAcc : Array Term) ++ #[← ``(List.cons $argsProd $l)] ++ remainingNames,
-            ops',
-            (namesAcc : Array Term) ++ #[← ``(List.cons $recArgsProd $l)] ++ remainingNames
-          )
-        let extraAcc'' ← argsAndOps.mapM fun (args', ops') => do
-          let prod ← mkProd args'
-          return (
-            (namesAcc : Array Term) ++ #[← ``(List.cons $prod $l)] ++ remainingNames,
-            ops',
-            (namesAcc : Array Term) ++ #[(l : Term)] ++ remainingNames
-          )
-        toArgsAndOps irs' (namesAcc.push l) (extraAcc ++ extraAcc' ++ extraAcc'') <|
-          ← acc.mapM fun (args, ops) => return (args.push <| ← ``(List.nil), ops)
+      | (_, #[]) => go irs' (patAcc.push <| ← `(_)) propAcc
+      | (patArgs, props) => go irs' (patAcc.push l) <| propAcc.push <| ←
+          ``(∀ $l':ident ∈ $l, let $(← foldrProd patArgs):term := $l'; $(← foldlAnd props))
     | .optional ir, .optional pir => do
       if ir.size != pir.size then
-        throwErrorAt nameIdent "length of child sepBy ({ir.size}) doesn't match length of parent sepBy ({pir.size})"
+        throwErrorAt prodIdent "length of child optional ({ir.size}) doesn't match length of parent optional ({pir.size})"
 
-      match ← toArgsAndOps (ir.zip pir) with
-      -- In this case, the sepBy doesn't actually contain anything stored in the datatype so we can
+      match ← go (ir.zip pir) with
+      -- In this case, the optional doesn't actually contain anything stored in the datatype so we can
       -- just skip it.
-      | (#[(#[], #[])], #[]) => toArgsAndOps irs' namesAcc extraAcc acc
+      | (#[], #[]) => go irs' patAcc propAcc
       -- In this case, there is a list with stuff in it, but it doesn't contain anything for us to
       -- check, so we can just add an underscore pattern argument and proceed.
-      | (#[(_, #[])], #[]) =>
-        toArgsAndOps irs' (namesAcc.push l) extraAcc <|
-          ← acc.mapM fun (args, ops) => return (args.push <| ← `(_), ops)
-      | (argsAndOps, extraAcc') => do
-        if !extraAcc'.isEmpty then
-          throwErrorAt nameIdent "sepBy inside optional of value parent is not yet supported"
-
-        let noneAcc ← acc.mapM fun (args, ops) => return (args.push <| ← ``(Option.none), ops)
-        let someAcc ← acc.concatMapM fun (args, ops) =>
-          argsAndOps.mapM fun (args', ops') => do
-            let prod ← mkProd args'
-            return (args.push <| ← ``(Option.some $prod), ops ++ ops')
-        toArgsAndOps irs' (namesAcc.push l) extraAcc <| noneAcc ++ someAcc
-    | _, _ => throwErrorAt nameIdent "mismatched syntax"
+      | (_, #[]) => go irs' (patAcc.push <| ← `(_)) propAcc
+      | (patArgs, props) => go irs' (patAcc.push l) <| propAcc.push <| ←
+          ``(∀ $l':ident ∈ $l, let $(← foldrProd patArgs):term := $l'; $(← foldlAnd props))
+    | _, _ => throwErrorAt prodIdent "mismatched syntax"
 
 end IR
 
