@@ -159,9 +159,19 @@ def toIsChildCtor (prodIdent isIdent : Ident) (qualified pqualified : Name) (ir 
     throwErrorAt prodIdent "length of child production ({ir.size}) doesn't match length of parent production ({pir.size})"
 
   let (ctorTypeRetArgs, ctorTypeArgs) ← go (ir.zip pir)
-  let ctorType ← foldrArrow ctorTypeArgs <| ← ``($isIdent ($(mkIdent <| pqualified ++ prodIdent.getId) $ctorTypeRetArgs*))
-  return ← `(ctor| | $prodIdent:ident : $ctorType)
+  let binders ← ctorTypeRetArgs.filterMapM fun
+    | `(Lean.binderIdent| $_:hole) => return none
+    | `(Lean.binderIdent| $i:ident) => `(bracketedBinder| {$i})
+    | _ => throwUnsupportedSyntax
+  let ctorType ← foldrArrow ctorTypeArgs <| ← ``($isIdent ($(mkIdent <| pqualified ++ prodIdent.getId) $(← toTerms ctorTypeRetArgs)*))
+  return ← `(ctor| | $prodIdent:ident $binders:bracketedBinder* : $ctorType)
 where
+  toTerms (as : TSyntaxArray `Lean.binderIdent) : CommandElabM (Array Term) :=
+    as.mapM fun
+      | `(Lean.binderIdent| $h:hole) => `(term| $h:hole)
+      | `(Lean.binderIdent| $i:ident) => `(term| $i:ident)
+      | _ => throwUnsupportedSyntax
+
   foldrArrow (args : Array Term) (init : Term) : CommandElabM Term :=
     args.foldrM (init := init) fun arg acc => ``($arg → $acc)
 
@@ -175,18 +185,23 @@ where
     else
       ``(True)
 
-  go (irs : Array (IR × IR)) (patAcc propAcc : Array Term := #[])
-    : CommandElabM (Array Term × Array Term) := do
+  go (irs : Array (IR × IR)) (patAcc : TSyntaxArray `Lean.binderIdent := #[])
+    (propAcc : Array Term := #[])
+    : CommandElabM (TSyntaxArray `Lean.binderIdent × Array Term) := do
     let some (mk l' ir, mk l pir) := irs[0]? | return (patAcc, propAcc)
     let irs' := irs.extract 1 irs.size
+
+    let lbi ← `(Lean.binderIdent| $l:ident)
+    let l'bi ← `(Lean.binderIdent| $l':ident)
+    let hole ← `(Lean.binderIdent| _)
 
     match ir, pir with
     | .category n, .category np => do
       if n == np then
-        return ← go irs' (patAcc.push <| ← `(_)) propAcc
+        return ← go irs' (patAcc.push hole) propAcc
 
       if n == qualified && np == pqualified then
-        return ← go irs' (patAcc.push l) <| propAcc.push <| ← `($isIdent $l)
+        return ← go irs' (patAcc.push lbi) <| propAcc.push <| ← `($isIdent $l)
 
       throwErrorAt prodIdent "couldn't find parent/child relationship between {pqualified} and {qualified}"
     | .atom s, .atom sp => do
@@ -207,9 +222,11 @@ where
       | (#[], #[]) => go irs' patAcc propAcc
       -- In this case, there is a list with stuff in it, but it doesn't contain anything for us to
       -- check, so we can just add an underscore pattern argument and proceed.
-      | (_, #[]) => go irs' (patAcc.push <| ← `(_)) propAcc
-      | (patArgs, props) => go irs' (patAcc.push l) <| propAcc.push <| ←
-          ``(∀ $l':ident ∈ $l, let $(← foldrProd patArgs):term := $l'; $(← foldlAnd props))
+      | (_, #[]) => go irs' (patAcc.push hole) propAcc
+      | (#[patArg], props) => go irs' (patAcc.push lbi) <| propAcc.push <| ←
+          ``(∀ $patArg ∈ $l, $(← foldlAnd props))
+      | (patArgs, props) => go irs' (patAcc.push lbi) <| propAcc.push <| ←
+          ``(∀ $l'bi ∈ $l, let $(← foldrProd <| ← toTerms patArgs):term := $l'; $(← foldlAnd props))
     | .optional ir, .optional pir => do
       if ir.size != pir.size then
         throwErrorAt prodIdent "length of child optional ({ir.size}) doesn't match length of parent optional ({pir.size})"
@@ -220,9 +237,11 @@ where
       | (#[], #[]) => go irs' patAcc propAcc
       -- In this case, there is a list with stuff in it, but it doesn't contain anything for us to
       -- check, so we can just add an underscore pattern argument and proceed.
-      | (_, #[]) => go irs' (patAcc.push <| ← `(_)) propAcc
-      | (patArgs, props) => go irs' (patAcc.push l) <| propAcc.push <| ←
-          ``(∀ $l':ident ∈ $l, let $(← foldrProd patArgs):term := $l'; $(← foldlAnd props))
+      | (_, #[]) => go irs' (patAcc.push hole) propAcc
+      | (#[patArg], props) => go irs' (patAcc.push lbi) <| propAcc.push <| ←
+          ``(∀ $patArg:binderIdent ∈ $l, $(← foldlAnd props))
+      | (patArgs, props) => go irs' (patAcc.push lbi) <| propAcc.push <| ←
+          ``(∀ $l'bi ∈ $l, let $(← foldrProd <| ← toTerms patArgs):term := $l'; $(← foldlAnd props))
     | _, _ => throwErrorAt prodIdent "mismatched syntax"
 
 end IR
