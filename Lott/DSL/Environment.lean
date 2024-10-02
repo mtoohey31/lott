@@ -34,11 +34,22 @@ initialize aliasExt : PersistentEnvExtension Alias Alias AliasState ←
   exportEntriesFn := fun { byAlias, .. } => byAlias.values
 }
 
+initialize metaVarExt : PersistentEnvExtension Name Name NameSet ←
+  registerPersistentEnvExtension {
+  mkInitial := return default
+  addImportedFn := fun metaVarss => return metaVarss.flatten.foldl NameSet.insert .empty
+  addEntryFn := NameSet.insert
+  exportEntriesFn :=
+    RBTree.fold (cmp := Name.quickCmp) (init := #[]) fun acc metaVar => acc.push metaVar
+}
+
 structure Symbol where
   qualified : Name
   normalProds : NameMap (Array IR)
+  substitutions : Array (Name × Name)
 
-instance : Inhabited Symbol where default := { qualified := default, normalProds := default }
+instance : Inhabited Symbol where
+  default := { qualified := default, normalProds := default, substitutions := default }
 
 abbrev SymbolState := NameMap Symbol
 

@@ -8,8 +8,8 @@ open Lean.Elab
 @[lott_term_elab Lott.DSL.judgementComprehension]
 private
 def judgementComprehensionTermElab : TermElab := fun stx => do
-  let `(Lott.Judgement| </ $«judgement»:Lott.Judgement // $i ∈ $c />) := stx |
-    throwUnsupportedSyntax
+  let `(Lott.Judgement| </ $«judgement»:Lott.Judgement // $i ∈ $c />) := stx
+    | throwUnsupportedSyntax
   Lean.Elab.Term.elabTerm (← ``(∀ $i:ident ∈ $c, [[$«judgement»:Lott.Judgement]])) none
 
 end Lott.DSL.Elab
