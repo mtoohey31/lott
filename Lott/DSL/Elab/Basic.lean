@@ -633,6 +633,8 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
           | Lean.Syntax.node _ $(quote <| ← nt.catName) #[$patternArgs,*] => do
             $seqItems*
             $rest:term)
+
+    let substName (varName : Name) := varName.replacePrefix ns .anonymous |>.appendAfter "_subst"
     let termSubstMatchAlts ← if parent?.isSome then pure #[] else
       substitutions.getD #[]|>.mapM fun (varName, valName) => do
         `(matchAltExpr|
@@ -647,7 +649,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
               let baseExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ ns ++ canonName) base
               let varExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ varName) var
               let valExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ valName) val
-              return Lean.mkApp3 (Expr.const $(quote <| ns ++ canonName ++ varName.replacePrefix ns .anonymous |>.appendAfter "_subst") []) baseExpr varExpr valExpr)
+              return Lean.mkApp3 (Expr.const $(quote <| ns ++ canonName ++ substName varName) []) baseExpr varExpr valExpr)
 
     let termElabIdent := mkIdentFrom canon <| canonName.appendAfter "TermElab"
     elabCommand <| ←
@@ -765,7 +767,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
                 return none
               | .sepBy ..
               | .optional _ =>
-                throwError "bind configuration for productions with sepBy or optional syntax are not allowed"
+                throwError "bind configuration for productions with sepBy or optional syntax are not supported"
 
           if let #[mk l (.category n)] := ir then
             if some l != binderId? && n == varTypeName then
@@ -779,7 +781,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
             | .category n =>
               if let some { substitutions, .. } := symbolExt.getState (← getEnv) |>.find? n then
                 if substitutions.contains subst then
-                  return some (l, ← `($(mkIdent <| n ++ varTypeName.replacePrefix ns .anonymous |>.appendAfter "_subst"):ident $l $varId $valId))
+                  return some (l, ← `($(mkIdent <| n ++ substName varTypeName):ident $l $varId $valId))
 
               return some (l, l)
             | .atom _ =>
@@ -788,8 +790,22 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
                   throwErrorAt ref "atoms shouldn't be referenced by binders"
 
               return none
+            | .sepBy #[mk _ (.category n)] _ =>
+              if let some bindConfig := bindConfig? then
+                if let some ref := bindConfig.find? l.getId then
+                  throwErrorAt ref "sepBys shouldn't be referenced by binders"
+
+              let mapId ← mkFreshIdent l
+
+              return some (
+                l,
+                ← `(let rec $mapId:ident
+                      | [] => []
+                      | x :: xs => $(mkIdent <| n ++ substName varTypeName):ident x $varId $valId :: $mapId xs;
+                    $mapId $l))
             | .sepBy ..
-            | .optional _ => throwError "substitution for productions with sepBy or optional syntax are not allowed"
+            | .optional _ =>
+              throwError "substitution for productions with non-trivial sepBy or optional syntax are not supported"
           let (patternArgs, rhsArgs) := patternArgAndRhsArgs.unzip
 
           if let some binderId := binderId? then
@@ -798,7 +814,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
             `(matchAltExpr| | $prodId $patternArgs* => $prodId $rhsArgs*)
 
         elabCommand <| ←
-          `(def $(mkIdentFrom canon <| canon.getId ++ varTypeName.replacePrefix ns .anonymous |>.appendAfter "_subst")
+          `(def $(mkIdentFrom canon <| canon.getId ++ substName varTypeName)
               (x : $canon) ($varId : $varTypeId) ($valId : $valTypeId) : $canon := match x with
               $matchAlts:matchAlt*)
 
