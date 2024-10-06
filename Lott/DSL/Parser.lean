@@ -122,7 +122,7 @@ def lottSymbolParser := incQuotDepth (parserOfStack 1)
 
 syntax (name := lott_symbol_embed) "[[" ident "|" lottSymbolParser "]]" : term
 
-syntax "[[" Lott.Symbol "]]" : term
+syntax "[[" withPosition(Lott.Symbol) "]]" : term
 
 syntax "[[" withPosition(Lott.Judgement) "]]" : term
 
