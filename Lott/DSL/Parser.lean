@@ -38,24 +38,36 @@ def identPrefix (prefix' : String) : Parser := {
 
 /- Metavariable syntax. -/
 
-syntax "metavar " ident,+ : command
+syntax "locally_nameless"? "metavar " ident,+ : command
 
 /- Non-terminal syntax. -/
 
 declare_syntax_cat Lott.Symbol
 declare_syntax_cat Lott.DSL.BindConfig
+declare_syntax_cat Lott.DSL.IdConfig
 declare_syntax_cat Lott.DSL.DesugarConfig
 declare_syntax_cat Lott.DSL.ElabConfig
 declare_syntax_cat Lott.DSL.Production
 declare_syntax_cat Lott.DSL.NonTerminal
 
-syntax "(" "bind" ident " in " ident,+ ")" : Lott.DSL.BindConfig
+private
+def bind := nonReservedSymbol "bind"
 
-syntax "(" "desugar" " := " term ")" : Lott.DSL.DesugarConfig
+syntax "(" bind ident (" in " ident,+)? ")" : Lott.DSL.BindConfig
+
+private
+def id := nonReservedSymbol "id"
+
+syntax "(" id ident,+ ")" : Lott.DSL.IdConfig
+
+private
+def desugar := nonReservedSymbol "desugar"
+
+syntax "(" desugar " := " term ")" : Lott.DSL.DesugarConfig
 
 syntax "(" "elab" " := " term ")" : Lott.DSL.ElabConfig
 
-syntax " | " stx+ " : " ident atomic(Lott.DSL.BindConfig)? atomic(Lott.DSL.DesugarConfig)? (Lott.DSL.ElabConfig)? : Lott.DSL.Production
+syntax " | " stx+ " : " ident atomic(Lott.DSL.BindConfig)? atomic(Lott.DSL.IdConfig)? atomic(Lott.DSL.DesugarConfig)? (Lott.DSL.ElabConfig)? : Lott.DSL.Production
 
 syntax "nosubst"? "nonterminal " ("(" "parent" " := " ident ")")? ident,+ " := " Lott.DSL.Production* : Lott.DSL.NonTerminal
 
@@ -67,7 +79,7 @@ declare_syntax_cat Lott.Judgement
 declare_syntax_cat Lott.DSL.InferenceRule
 declare_syntax_cat Lott.DSL.JudgementDecl
 
-syntax "judgement_syntax " stx+ " : " ident : command
+syntax "judgement_syntax " stx+ " : " ident (Lott.DSL.IdConfig)? : command
 
 syntax withPosition(Lott.Judgement)* "─"+ ident withPosition(Lott.Judgement) : Lott.DSL.InferenceRule
 

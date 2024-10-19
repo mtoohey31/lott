@@ -1,4 +1,5 @@
 import Lean
+import Lott.DSL.Environment.MetaVar
 
 namespace Lott.DSL
 
@@ -36,6 +37,14 @@ deriving Inhabited, BEq
 end
 
 namespace IR
+
+partial
+def containsName (ir : Array IR) (name : Name) : Bool :=
+  ir.any fun (mk l ir) =>
+    l.getId == name ||
+      match ir with
+      | .sepBy ir _ | .optional ir => containsName ir name
+      | _ => false
 
 mutual
 private partial
@@ -100,19 +109,26 @@ end
 
 mutual
 partial
-def toType : IR → CommandElabM (Option Term)
-  | IR.mk _ (.category n) => return some <| mkIdent n
+def toType (ids binders : Array Name) : IR → CommandElabM (Option Term)
+  | IR.mk l (.category n) => do
+    for binder in binders do
+      if l.getId == binder && (metaVarExt.getState (← getEnv)).find! n then
+        return none
+    for id in ids do
+      if l.getId == id && (metaVarExt.getState (← getEnv)).find! n then
+        return some <| mkIdent <| n.appendAfter "Id"
+    return some <| mkIdent n
   | IR.mk _ (.atom _) => return none
   | IR.mk _ (.sepBy ir _) => do
-    let some type' ← toTypeProdSeq ir | return none
+    let some type' ← toTypeProdSeq ids binders ir | return none
     ``(List $type')
   | IR.mk _ (.optional ir) => do
-    let some type' ← toTypeProdSeq ir | return none
+    let some type' ← toTypeProdSeq ids binders ir | return none
     return some <| ← ``(Option $type')
 
 partial
-def toTypeProdSeq (ir : Array IR) : CommandElabM (Option Term) := do
-  let types ← ir.filterMapM IR.toType
+def toTypeProdSeq (ids binders : Array Name) (ir : Array IR) : CommandElabM (Option Term) := do
+  let types ← ir.filterMapM <| IR.toType ids binders
   let some (type' : Term) := types[0]? | return none
   return some <| ← types.foldlM (start := 1) (init := type') fun acc t => ``($acc × $t)
 end
@@ -137,8 +153,11 @@ def toMkTypeProdSeqExpr (ir : Array IR) : CommandElabM (Option Term) := do
     ``(mkApp2 (Expr.const `Prod [levelOne, levelOne]) $t $acc)
 end
 
-def toTypeArrSeq (ir : Array IR) (init : Term) : CommandElabM Term := do
-  (← ir.filterMapM IR.toType) |>.foldrM (init := init) fun t acc => ``($t → $acc)
+def foldrArrow (args : Array Term) (init : Term) : CommandElabM Term :=
+  args.foldrM (init := init) fun arg acc => ``($arg → $acc)
+
+def toTypeArrSeq (ir : Array IR) (init : Term) (ids binders : Array Name) : CommandElabM Term := do
+  (← ir.filterMapM <| IR.toType ids binders) |> foldrArrow (init := init)
 
 private
 def toPatternArg : IR → CommandElabM Term
@@ -152,9 +171,19 @@ def toPatternArgs (ir : Array IR) : CommandElabM (TSepArray `term ",") :=
 
 def toJoinArgs (ir : Array IR) : TSepArray `term "," := ir.map (β := Term) fun | mk l _ => l
 
+def foldrProd (as : Array Term) : CommandElabM Term := if let some a := as.back? then
+    as.foldrM (init := a) (start := as.size - 1) fun a acc => `(($acc, $a))
+  else
+    ``(())
+
+def foldlAnd (as : Array Term) : CommandElabM Term := if let some a := as[0]? then
+    as.foldlM (init := a) (start := 1) fun acc a => `($acc ∧ $a)
+  else
+    ``(True)
+
 partial
 def toIsChildCtor (prodIdent isIdent : Ident) (qualified pqualified : Name) (ir pir : Array IR)
-  : CommandElabM (TSyntax `Lean.Parser.Command.ctor) := do
+  (binders : Array Name) : CommandElabM (TSyntax `Lean.Parser.Command.ctor) := do
   if ir.size != pir.size then
     throwErrorAt prodIdent "length of child production ({ir.size}) doesn't match length of parent production ({pir.size})"
 
@@ -172,24 +201,14 @@ where
       | `(Lean.binderIdent| $i:ident) => `(term| $i:ident)
       | _ => throwUnsupportedSyntax
 
-  foldrArrow (args : Array Term) (init : Term) : CommandElabM Term :=
-    args.foldrM (init := init) fun arg acc => ``($arg → $acc)
-
-  foldrProd (as : Array Term) : CommandElabM Term := if let some a := as.back? then
-      as.foldrM (init := a) (start := as.size - 1) fun a acc => `(($acc, $a))
-    else
-      ``(())
-
-  foldlAnd (as : Array Term) : CommandElabM Term := if let some a := as[0]? then
-      as.foldlM (init := a) (start := 1) fun acc a => `($acc ∧ $a)
-    else
-      ``(True)
-
   go (irs : Array (IR × IR)) (patAcc : TSyntaxArray `Lean.binderIdent := #[])
     (propAcc : Array Term := #[])
     : CommandElabM (TSyntaxArray `Lean.binderIdent × Array Term) := do
     let some (mk l' ir, mk l pir) := irs[0]? | return (patAcc, propAcc)
     let irs' := irs.extract 1 irs.size
+
+    if binders.contains l'.getId then
+        return ← go irs' patAcc propAcc
 
     let lbi ← `(Lean.binderIdent| $l:ident)
     let l'bi ← `(Lean.binderIdent| $l':ident)

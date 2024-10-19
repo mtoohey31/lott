@@ -22,11 +22,11 @@ def nat.term_parser : Parser :=
 
 @[lott_term_elab Lott.Symbol.Nat]
 def natTermElab : TermElab
-  | .node _ `Lott.Symbol.Nat #[n@(.ident ..)]
-  | .node _ `Lott.Symbol.Nat #[n@(.node _ `num _)]
-  | .node _ `Lott.Symbol.Nat #[.atom _ "(", n, .atom _ ")"] =>
+  | _, .node _ `Lott.Symbol.Nat #[n@(.ident ..)]
+  | _, .node _ `Lott.Symbol.Nat #[n@(.node _ `num _)]
+  | _, .node _ `Lott.Symbol.Nat #[.atom _ "(", n, .atom _ ")"] =>
     Term.elabTerm n <| .some (.const `Nat [])
-  | _ => throwUnsupportedSyntax
+  | _, _ => throwUnsupportedSyntax
 
 @[lott_tex_elab Lott.Symbol.Nat]
 def natTexElab : TexElab
