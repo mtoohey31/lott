@@ -112,9 +112,8 @@ theorem Type'.TypeVarLocallyClosed.TypeVar_open_drop {A : Type'} (h : m < n)
     let .forall' A'lc := Alc
     exact forall' <| A'lc.TypeVar_open_drop <| Nat.add_lt_add_iff_right.mpr h
 
-theorem Type'.TypeVarLocallyClosed.TypeVar_open_eq {A : Type'}
-  (h : A.TypeVarLocallyClosed m) (mlen : m ≤ n)
-  : A.TypeVar_open x n = A := by match A, h with
+theorem Type'.TypeVarLocallyClosed.TypeVar_open_eq {A : Type'} (h : A.TypeVarLocallyClosed m)
+  (mlen : m ≤ n) : A.TypeVar_open x n = A := by match A, h with
   | var (.free _), var_free => rw [TypeVar_open, if_neg (nomatch ·)]
   | var (.bound _), var_bound lt =>
     have := Nat.ne_of_lt <| Nat.lt_of_lt_of_le lt mlen
@@ -126,9 +125,8 @@ theorem Type'.TypeVarLocallyClosed.TypeVar_open_eq {A : Type'}
     simp only
     rw [A'lc.TypeVar_open_eq (Nat.add_le_add_iff_right.mpr mlen)]
 
-theorem Type'.TypeVarLocallyClosed.Type'_open_eq {A : Type'}
-  (h : A.TypeVarLocallyClosed m) (mlen : m ≤ n)
-  : A.Type'_open B n = A := by match A, h with
+theorem Type'.TypeVarLocallyClosed.Type'_open_eq {A : Type'} (h : A.TypeVarLocallyClosed m)
+  (mlen : m ≤ n) : A.Type'_open B n = A := by match A, h with
   | var (.free _), var_free => rw [Type'_open, if_neg (nomatch ·)]
   | var (.bound _), var_bound lt =>
     have := Nat.ne_of_lt <| Nat.lt_of_lt_of_le lt mlen
@@ -167,10 +165,8 @@ theorem Type'.Type'_open_comm (A : Type') {B A': Type'} (mnen : m ≠ n)
     rw [A'.Type'_open_comm (mnen <| Nat.succ_inj'.mp ·) (Blc.weaken (n := 1))
           (A'lc.weaken (n := 1)), ← Type'_open, ← Type'_open]
 
-theorem Type'.TypeVar_open_Type'_open_eq {A B : Type'}
-  (Blc : B.TypeVarLocallyClosed m) (mnen : m ≠ n)
-  : (A.TypeVar_open a m).Type'_open B n =
-    (A.Type'_open B n).TypeVar_open a m := by
+theorem Type'.TypeVar_open_Type'_open_eq {A B : Type'} (Blc : B.TypeVarLocallyClosed m)
+  (mnen : m ≠ n) : (A.TypeVar_open a m).Type'_open B n = (A.Type'_open B n).TypeVar_open a m := by
   match A with
   | var (.free _) =>
     rw [TypeVar_open, if_neg (nomatch ·), Type'_open, if_neg (nomatch ·), TypeVar_open,
@@ -195,10 +191,8 @@ theorem Type'.TypeVar_open_Type'_open_eq {A B : Type'}
     rw [TypeVar_open_Type'_open_eq Blc.weaken
           (by exact mnen <| Nat.succ_inj'.mp ·), ← TypeVar_open, ← Type'_open]
 
-theorem Type'.TypeVar_open_Type'_open_eq' {A B : Type'}
-  (Blc : B.TypeVarLocallyClosed n)
-  : (A.TypeVar_open a n).Type'_open B n =
-    A.TypeVar_open a n := by
+theorem Type'.TypeVar_open_Type'_open_eq' {A B : Type'} (Blc : B.TypeVarLocallyClosed n)
+  : (A.TypeVar_open a n).Type'_open B n = A.TypeVar_open a n := by
   match A with
   | var (.free _) =>
     rw [TypeVar_open, if_neg (nomatch ·), Type'_open, if_neg (nomatch ·)]
@@ -214,6 +208,31 @@ theorem Type'.TypeVar_open_Type'_open_eq' {A B : Type'}
     rw [TypeVar_open, Type'_open]
     simp only
     rw [TypeVar_open_Type'_open_eq' Blc.weaken, ← TypeVar_open]
+
+theorem Type'.TypeVar_subst_TypeVar_open_comm {A B : Type'} (Blc : B.TypeVarLocallyClosed n)
+  (anea' : a ≠ a')
+  : (A.TypeVar_subst a B).TypeVar_open a' n = (A.TypeVar_open a' n).TypeVar_subst a B := by
+  match A with
+  | var (.free _) =>
+    rw [TypeVar_subst]
+    split
+    · case isTrue h =>
+      rw [TypeVar_open, if_neg (nomatch ·), TypeVar_subst, if_pos h,
+          Blc.TypeVar_open_eq <| Nat.le_refl _]
+    · case isFalse h => rw [TypeVar_open, if_neg (nomatch ·), TypeVar_subst, if_neg h]
+  | var (.bound _) =>
+    rw [TypeVar_subst, if_neg (nomatch ·), TypeVar_open]
+    split
+    · case isTrue h =>
+      rw [TypeVar_subst, if_neg fun freeaeqfreea' => anea' <| TypeVar.free.inj freeaeqfreea']
+    · case isFalse h => rw [TypeVar_subst, if_neg (nomatch ·)]
+  | arr A' B' =>
+    rw [TypeVar_subst, TypeVar_open, TypeVar_subst_TypeVar_open_comm Blc anea',
+        TypeVar_subst_TypeVar_open_comm Blc anea', ← TypeVar_subst, ← TypeVar_open]
+  | forall' A' =>
+    rw [TypeVar_subst, TypeVar_open]
+    simp only
+    rw [TypeVar_subst_TypeVar_open_comm Blc.weaken anea', ← TypeVar_subst, ← TypeVar_open]
 
 nonterminal Term, E, F :=
   | x                     : var
@@ -491,10 +510,8 @@ theorem Term.TermVar_open_TermVar_subst_eq {E F : Term} (xnex' : x ≠ x')
     rw [TermVar_open, TermVar_subst, TermVar_subst, TermVar_open,
         E'.TermVar_open_TermVar_subst_eq xnex' Flc]
 
-theorem Term.TermVar_open_Term_open_eq {E F : Term}
-  (Flc : F.TermVarLocallyClosed m) (mnen : m ≠ n)
-  : (E.TermVar_open x m).Term_open F n =
-    (E.Term_open F n).TermVar_open x m := by
+theorem Term.TermVar_open_Term_open_eq {E F : Term} (Flc : F.TermVarLocallyClosed m) (mnen : m ≠ n)
+  : (E.TermVar_open x m).Term_open F n = (E.Term_open F n).TermVar_open x m := by
   match E with
   | var (.free _) =>
     rw [TermVar_open, if_neg (nomatch ·), Term_open, if_neg (nomatch ·), TermVar_open,
@@ -524,8 +541,7 @@ theorem Term.TermVar_open_Term_open_eq {E F : Term}
     rw [TermVar_open, Term_open, TermVar_open_Term_open_eq Flc mnen, ← TermVar_open, ← Term_open]
 
 theorem Term.TermVar_open_TypeVar_open_eq (E : Term)
-  : (E.TermVar_open x m).TypeVar_open a n =
-    (E.TypeVar_open a n).TermVar_open x m := by match E with
+  : (E.TermVar_open x m).TypeVar_open a n = (E.TypeVar_open a n).TermVar_open x m := by match E with
   | var (.free _) =>
     rw [TermVar_open, if_neg (nomatch ·), TypeVar_open, TermVar_open, if_neg (nomatch ·)]
   | var (.bound _) =>
@@ -545,10 +561,8 @@ theorem Term.TermVar_open_TypeVar_open_eq (E : Term)
   | typeApp E' A =>
     rw [TermVar_open, TypeVar_open, TermVar_open_TypeVar_open_eq, ← TermVar_open, ← TypeVar_open]
 
-theorem Term.TypeVar_open_Type'_open_eq {E : Term} {A : Type'}
-  (Alc : A.TypeVarLocallyClosed m) (mnen : m ≠ n)
-  : (E.TypeVar_open a m).Type'_open A n =
-    (E.Type'_open A n).TypeVar_open a m := by
+theorem Term.TypeVar_open_Type'_open_eq {E : Term} {A : Type'} (Alc : A.TypeVarLocallyClosed m)
+  (mnen : m ≠ n) : (E.TypeVar_open a m).Type'_open A n = (E.Type'_open A n).TypeVar_open a m := by
   match E with
   | var _ => rw [TypeVar_open, Type'_open, TypeVar_open]
   | lam A E' =>
@@ -663,10 +677,8 @@ theorem Term.TypeVar_open_TermVar_subst_eq {E F : Term} (Flc : F.TypeVarLocallyC
     rw [TypeVar_open, TermVar_subst, TermVar_subst, TypeVar_open,
         E'.TypeVar_open_TermVar_subst_eq Flc]
 
-theorem Term.TypeVar_open_Term_open_eq {E F : Term}
-  (Flc : F.TypeVarLocallyClosed n)
-  : (E.TypeVar_open x n).Term_open F m = (E.Term_open F m).TypeVar_open x n :=
-  by match E with
+theorem Term.TypeVar_open_Term_open_eq {E F : Term} (Flc : F.TypeVarLocallyClosed n)
+  : (E.TypeVar_open x n).Term_open F m = (E.Term_open F m).TypeVar_open x n := by match E with
   | var (.free _) => rw [TypeVar_open, Term_open, if_neg (nomatch ·), TypeVar_open]
   | var (.bound _) =>
     rw [TypeVar_open, Term_open]
@@ -685,20 +697,21 @@ theorem Term.TypeVar_open_Term_open_eq {E F : Term}
   | typeApp E' A =>
     rw [TypeVar_open, Term_open, TypeVar_open_Term_open_eq Flc, ← TypeVar_open, Term_open]
 
+private
+def Environment.appendExpr : Expr := .const `LottExamples.SystemF.Environment.append []
+
+private
+def Environment.TypeVar_substExpr : Expr :=
+  .const `LottExamples.SystemF.Environment.TypeVar_subst []
+
 nosubst
 nonterminal Environment, G, D :=
   | "ε"                  : empty
   | G ", " x " : " A     : termVarExt (id x)
   | G ", " a             : typeVarExt (id a)
-  | G ", " D             : append
-    (elab := return mkAppN (.const `LottExamples.SystemF.Environment.append []) #[G, D])
+  | G ", " D             : append (elab := return mkApp2 Environment.appendExpr G D)
   | "(" G ")"            : paren (desugar := return G)
-  | G "^" a              : typeVarOpen (id a)
-    (elab := return mkAppN (.const `LottExamples.SystemF.Environment.TypeVar_open [])
-               #[G, a, .const `Nat.zero [] ])
-  | G "^^" A             : typeOpen
-    (elab := return mkAppN (.const `LottExamples.SystemF.Environment.Type'_open [])
-               #[G, A, .const `Nat.zero [] ])
+  | G " [" A " / " a "]" : subst (id a) (elab := return mkApp3 Environment.TypeVar_substExpr G a A)
 
 namespace Environment
 
@@ -711,11 +724,15 @@ theorem append_termVarExt : [[(G, G', x : A)]] = [[((G, G'), x : A)]] := rfl
 
 theorem append_typeVarExt : [[(G, G', a)]] = [[((G, G'), a)]] := rfl
 
-theorem empty_append (G : Environment) : empty.append G = G :=
-  match G with
+theorem empty_append (G : Environment) : empty.append G = G := match G with
   | empty => rfl
   | termVarExt G' x A => by rw [append_termVarExt, empty_append G']
   | typeVarExt G' a => by rw [append_typeVarExt, empty_append G']
+
+theorem append_empty (G : Environment) : G.append empty = G := by match G with
+  | empty => rfl
+  | termVarExt G' x A => rw [append]
+  | typeVarExt G' a => rw [append]
 
 theorem append_assoc : [[(G, G', G'')]] = [[((G, G'), G'')]] := match G'' with
   | empty => rfl
@@ -724,19 +741,10 @@ theorem append_assoc : [[(G, G', G'')]] = [[((G, G'), G'')]] := match G'' with
   | typeVarExt G''' a => by
     rw [append_typeVarExt, append_typeVarExt, G.append_assoc, append_typeVarExt]
 
-def Type'_open (G : Environment) (A : Type') (n : Nat) : Environment :=
-  match G, n with
-  | empty, _ => empty
-  | termVarExt G' x A', _ => G'.Type'_open A n |>.termVarExt x <| A'.Type'_open A n
-  | G@(typeVarExt ..), 0 => G
-  | typeVarExt G' a, n' + 1 => G'.Type'_open A n' |>.typeVarExt a
-
-def TypeVar_open (G : Environment) (a : TypeVarId) (n : Nat) : Environment :=
-  match G, n with
-  | empty, _ => empty
-  | termVarExt G' x A', _ => G'.TypeVar_open a n |>.termVarExt x <| A'.TypeVar_open a n
-  | G@(typeVarExt ..), 0 => G
-  | typeVarExt G' a', n' + 1 => G'.TypeVar_open a n' |>.typeVarExt a'
+def TypeVar_subst (G : Environment) (a : TypeVarId) (A : Type') := match G with
+  | empty => empty
+  | termVarExt G' x A' => G'.TypeVar_subst a A |>.termVarExt x <| A'.TypeVar_subst a A
+  | typeVarExt G' a' => G'.TypeVar_subst a A |>.typeVarExt a'
 
 def termVar_count : Environment → Nat
   | empty => 0
@@ -747,6 +755,32 @@ def typeVar_count : Environment → Nat
   | empty => 0
   | termVarExt G _ _ => G.typeVar_count
   | typeVarExt G _ => 1 + G.typeVar_count
+
+def termVar_domain : Environment → List TermVarId
+  | empty => []
+  | termVarExt G x _ => x :: G.termVar_domain
+  | typeVarExt G _ => G.termVar_domain
+
+theorem termVar_domain_append
+  : [[(G, G')]].termVar_domain = G'.termVar_domain ++ G.termVar_domain := by match G' with
+  | empty => rw [termVar_domain, append_empty, List.nil_append]
+  | termVarExt G'' x A =>
+    rw [append_termVarExt, termVar_domain, termVar_domain, termVar_domain_append, List.cons_append]
+  | typeVarExt G'' a =>
+    rw [append_typeVarExt, termVar_domain, termVar_domain, termVar_domain_append]
+
+def typeVar_domain : Environment → List TypeVarId
+  | empty => []
+  | termVarExt G _ _ => G.typeVar_domain
+  | typeVarExt G a => a :: G.typeVar_domain
+
+theorem typeVar_domain_append
+  : [[(G, G')]].typeVar_domain = G'.typeVar_domain ++ G.typeVar_domain := by match G' with
+  | empty => rw [typeVar_domain, append_empty, List.nil_append]
+  | termVarExt G'' x A =>
+    rw [append_termVarExt, typeVar_domain, typeVar_domain, typeVar_domain_append]
+  | typeVarExt G'' a =>
+    rw [append_typeVarExt, typeVar_domain, typeVar_domain, typeVar_domain_append, List.cons_append]
 
 end Environment
 
@@ -828,22 +862,16 @@ theorem append_inr : [[a ∈ GG]] → [[a ∈ G, GG]]
   | termVarExt ainGG' => ainGG'.append_inr |>.termVarExt
   | typeVarExt ainGG' anea' => ainGG'.append_inr |>.typeVarExt anea'
 
-theorem Type'_open {G : Environment}
-  : TypeVarInEnvironment a (G.TypeVar_open a' n) →
-    TypeVarInEnvironment a (G.Type'_open B n) := fun ainG => by
-  match G, n with
-  | .termVarExt .., _ =>
-    rw [Environment.Type'_open]
-    let .termVarExt ainG' := ainG
-    exact termVarExt ainG'.Type'_open
-  | .typeVarExt .., 0 =>
-    rw [Environment.Type'_open]
-    exact ainG
-  | .typeVarExt G' a', n' + 1 =>
-    rw [Environment.Type'_open]
-    match ainG with
-    | head => exact head
-    | typeVarExt ainG' anea' => exact typeVarExt ainG'.Type'_open anea'
+theorem TypeVar_subst : [[a ∈ G]] → [[a ∈ G [A / a'] ]]
+  | termVarExt ainG' => by
+    rw [Environment.TypeVar_subst]
+    exact termVarExt <| ainG'.TypeVar_subst
+  | typeVarExt ainG' anea'' => by
+    rw [Environment.TypeVar_subst]
+    exact typeVarExt (ainG'.TypeVar_subst) anea''
+  | head => by
+    rw [Environment.TypeVar_subst]
+    exact head
 
 end TypeVarInEnvironment
 
@@ -938,8 +966,7 @@ theorem append_elim (xAinGappGG : [[x : A ∈ G, GG]])
       | .inr xAinGG' =>
         exact xAninGG xAinGG'.typeVarExt |>.elim
 
-theorem append_inl (xAinG : [[x : A ∈ G]]) (xninGG : [[x ∉ GG]])
-  : [[x : A ∈ G, GG]] := by
+theorem append_inl (xAinG : [[x : A ∈ G]]) (xninGG : [[x ∉ GG]]) : [[x : A ∈ G, GG]] := by
   match GG with
   | .empty => exact xAinG
   | .termVarExt GG' x' A' =>
@@ -965,10 +992,6 @@ theorem append_inr : [[x : A ∈ GG]] → [[x : A ∈ G, GG]]
   | head => head
   | termVarExt xAinGG' xnex' => xAinGG'.append_inr |>.termVarExt xnex'
   | typeVarExt xAinGG' => xAinGG'.append_inr |>.typeVarExt
-
-theorem Type'_open {A : Type'} {G : Environment}
-  : TermVarInEnvironment x (A.TypeVar_open a n) (G.TypeVar_open a n) →
-    TermVarInEnvironment x (A.Type'_open B n) (G.Type'_open B n) := sorry
 
 end TermVarInEnvironment
 
@@ -1034,8 +1057,7 @@ theorem of_TypeVar_open {A : Type'} (h : a ≠ a')
     let .forall' ainA'op := ainAop
     exact .forall' <| ainA'op.of_TypeVar_open h
 
-theorem exists_gt (A : Type') : ∃ a : Nat, ∀ a' : Nat, [[a' ∈ ftv(A)]] → a' < a :=
-  match A with
+theorem exists_gt (A : Type') : ∃ a : Nat, ∀ a' : Nat, [[a' ∈ ftv(A)]] → a' < a := match A with
   | .var (.free (x : Nat)) =>
     .intro (x + 1) fun | x', .var => Nat.lt_succ_self _
   | .var (.bound _) => .intro 0 fun _ x'in => nomatch x'in
@@ -1059,12 +1081,11 @@ def NotInTypeFreeTypeVars a A := ¬[[a ∈ ftv(A)]]
 
 namespace NotInTypeFreeTypeVars
 
-theorem arr : [[a ∉ ftv(A → B)]] ↔ [[a ∉ ftv(A)]] ∧ [[a ∉ ftv(B)]] := ⟨
-    fun anin => ⟨(anin <| .arrl ·), (anin <| .arrr ·)⟩,
-    fun
-      | ⟨aninA, _⟩, .arrl ainA => aninA ainA
-      | ⟨_, aninB⟩, .arrr ainB => aninB ainB
-  ⟩
+theorem arr : [[a ∉ ftv(A → B)]] ↔ [[a ∉ ftv(A)]] ∧ [[a ∉ ftv(B)]] where
+  mp anin := ⟨(anin <| .arrl ·), (anin <| .arrr ·)⟩
+  mpr
+    | ⟨aninA, _⟩, .arrl ainA => aninA ainA
+    | ⟨_, aninB⟩, .arrr ainB => aninB ainB
 
 theorem forall' : [[a ∉ ftv(∀ b. A)]] → [[a ∉ ftv(A)]] := (· <| .forall' ·)
 
@@ -1072,8 +1093,7 @@ theorem TypeVar_open_of_ne (h : a ≠ a') : [[a ∉ ftv(A)]] → [[a ∉ ftv(A^a
   (· <| ·.of_TypeVar_open h)
 
 theorem TypeVar_open_inj_of {A B : Type'} (aninftvA : [[a ∉ ftv(A)]]) (aninftvB : [[a ∉ ftv(B)]])
-  : A.TypeVar_open a n = B.TypeVar_open a n → A = B := by
-  intro AopeqBop
+  : A.TypeVar_open a n = B.TypeVar_open a n → A = B := fun AopeqBop => by
   match A, B with
   | .var (.free _), .var (.free _) =>
     rw [Type'.TypeVar_open, if_neg (nomatch ·), Type'.TypeVar_open, if_neg (nomatch ·)] at AopeqBop
@@ -1118,7 +1138,89 @@ theorem TypeVar_open_inj_of {A B : Type'} (aninftvA : [[a ∉ ftv(A)]]) (aninftv
     rw [Type'.TypeVar_open, Type'.TypeVar_open] at AopeqBop
     rw [aninftvA.forall'.TypeVar_open_inj_of aninftvB.forall' <| Type'.forall'.inj AopeqBop]
 
+theorem Type'_open_inj_of {A B : Type'} (aninftvA : [[a ∉ ftv(A)]]) (aninftvB : [[a ∉ ftv(B)]])
+  : A.TypeVar_open a n = B.TypeVar_open a n → A = B := fun AopeqBop => by
+  match A, B with
+  | .var (.free _), .var (.free _) =>
+    rw [Type'.TypeVar_open, if_neg (nomatch ·), Type'.TypeVar_open, if_neg (nomatch ·)] at AopeqBop
+    exact AopeqBop
+  | .var (.free _), .var (.bound _) =>
+    rw [Type'.TypeVar_open, if_neg (nomatch ·), Type'.TypeVar_open] at AopeqBop
+    split at AopeqBop
+    · case isTrue h =>
+      rw [Type'.var.inj AopeqBop] at aninftvA
+      exact aninftvA .var |>.elim
+    · case isFalse h => nomatch AopeqBop
+  | .var (.bound _), .var (.free _) =>
+    rw [Type'.TypeVar_open] at AopeqBop
+    split at AopeqBop
+    · case isTrue h =>
+      rw [Type'.TypeVar_open, if_neg (nomatch ·)] at AopeqBop
+      rw [← Type'.var.inj AopeqBop] at aninftvB
+      exact aninftvB .var |>.elim
+    · case isFalse h => nomatch AopeqBop
+  | .var (.bound _), .var (.bound _) =>
+    rw [Type'.TypeVar_open] at AopeqBop
+    split at AopeqBop
+    · case isTrue h =>
+      rw [← h]
+      rw [Type'.TypeVar_open] at AopeqBop
+      split at AopeqBop
+      · case isTrue h' => rw [← h']
+      · case isFalse h' => nomatch AopeqBop
+    · case isFalse h =>
+      rw [Type'.TypeVar_open] at AopeqBop
+      split at AopeqBop
+      · case isTrue h' => nomatch AopeqBop
+      · case isFalse h' => exact AopeqBop
+  | .arr A' B', .arr A'' B'' =>
+    rw [Type'.TypeVar_open, Type'.TypeVar_open] at AopeqBop
+    let ⟨A'opeqA''op, B'opeqB''op⟩ := Type'.arr.inj AopeqBop
+    rw [(NotInTypeFreeTypeVars.arr.mp aninftvA).left.TypeVar_open_inj_of
+          (NotInTypeFreeTypeVars.arr.mp aninftvB).left A'opeqA''op,
+        (NotInTypeFreeTypeVars.arr.mp aninftvA).right.TypeVar_open_inj_of
+          (NotInTypeFreeTypeVars.arr.mp aninftvB).right B'opeqB''op]
+  | .forall' A', .forall' A'' =>
+    rw [Type'.TypeVar_open, Type'.TypeVar_open] at AopeqBop
+    rw [aninftvA.forall'.TypeVar_open_inj_of aninftvB.forall' <| Type'.forall'.inj AopeqBop]
+
+theorem TypeVar_open_TypeVar_subst_eq_Type'_open_of
+  : [[a ∉ ftv(A)]] → (A.TypeVar_open a n).TypeVar_subst a B = A.Type'_open B n := fun aninftvA => by
+  match A with
+  | .var (.free _) =>
+    rw [Type'.TypeVar_open, if_neg (nomatch ·), Type'.TypeVar_subst]
+    split
+    · case isTrue h =>
+      rw [← h] at aninftvA
+      exact aninftvA .var |>.elim
+    · case isFalse h => rw [Type'.Type'_open, if_neg (nomatch ·)]
+  | .var (.bound _) =>
+    rw [Type'.TypeVar_open]
+    split
+    · case isTrue h => rw [Type'.TypeVar_subst, if_pos rfl, Type'.Type'_open, if_pos h]
+    · case isFalse h => rw [Type'.TypeVar_subst, if_neg (nomatch ·), Type'.Type'_open, if_neg h]
+  | .arr A' B' =>
+    rw [Type'.TypeVar_open, Type'.TypeVar_subst,
+        NotInTypeFreeTypeVars.arr.mp aninftvA |>.left.TypeVar_open_TypeVar_subst_eq_Type'_open_of,
+        NotInTypeFreeTypeVars.arr.mp aninftvA |>.right.TypeVar_open_TypeVar_subst_eq_Type'_open_of,
+        ← Type'.Type'_open]
+  | .forall' A' =>
+    rw [Type'.TypeVar_open, Type'.TypeVar_subst,
+        aninftvA.forall'.TypeVar_open_TypeVar_subst_eq_Type'_open_of, ← Type'.Type'_open]
+
 end NotInTypeFreeTypeVars
+
+theorem TermVarInEnvironment.TypeVar_subst {A : Type'} (aninftvA : [[a ∉ ftv(A)]])
+  : TermVarInEnvironment x (A.TypeVar_open a n) [[ε, a, G]] →
+    TermVarInEnvironment x (A.Type'_open B n) [[(G [B / a])]] := fun xAopinεaG =>
+  match G, xAopinεaG with
+  | .empty, xAopinεaG => nomatch xAopinεaG
+  | .termVarExt .., head => by
+    rw [Environment.TypeVar_subst, aninftvA.TypeVar_open_TypeVar_subst_eq_Type'_open_of]
+    exact head
+  | .termVarExt G' x' A', termVarExt xAopinεaG' xnex' =>
+    xAopinεaG'.TypeVar_subst aninftvA |>.termVarExt xnex'
+  | .typeVarExt G' a', typeVarExt xAopinεaG' => xAopinεaG'.TypeVar_subst aninftvA |>.typeVarExt
 
 judgement_syntax x " ∈ " "fv" "(" E ")" : InFreeTermVars (id x)
 
@@ -1207,8 +1309,7 @@ theorem of_TypeVar_open {E : Term}
     let .typeApp xinE'op := xinEop
     exact .typeApp xinE'op.of_TypeVar_open
 
-theorem exists_gt (E : Term) : ∃ x : Nat, ∀ x' : Nat, [[x' ∈ fv(E)]] → x' < x :=
-  match E with
+theorem exists_gt (E : Term) : ∃ x : Nat, ∀ x' : Nat, [[x' ∈ fv(E)]] → x' < x := match E with
   | .var (.free (x : Nat)) =>
     .intro (x + 1) fun | x', .var => Nat.lt_succ_self _
   | .var (.bound _) => .intro 0 fun _ x'in => nomatch x'in
@@ -1345,8 +1446,7 @@ theorem of_TypeVar_open {E : Term} (h : a ≠ a')
     | .typeAppl ainE' => exact .typeAppl <| ainE'.of_TypeVar_open h
     | .typeAppr ainA => exact .typeAppr <| ainA.of_TypeVar_open h
 
-theorem exists_gt (E : Term) : ∃ a : Nat, ∀ a' : Nat, [[a' ∈ ftv(E)]] → a' < a :=
-  match E with
+theorem exists_gt (E : Term) : ∃ a : Nat, ∀ a' : Nat, [[a' ∈ ftv(E)]] → a' < a := match E with
   | .var _ => .intro 0 fun _ x'in => nomatch x'in
   | .lam A E' =>
     let ⟨aA, aAgt⟩ := InTypeFreeTypeVars.exists_gt A
@@ -1433,8 +1533,7 @@ G ⊢ ∀ a. A
 
 namespace TypeWellFormedness
 
-theorem TermVar_drop (Bwf : [[G, x : A, G' ⊢ B]]) : [[G, G' ⊢ B]] :=
-  match B, Bwf with
+theorem TermVar_drop (Bwf : [[G, x : A, G' ⊢ B]]) : [[G, G' ⊢ B]] := match B, Bwf with
   | .var _, var ainGxAGG => match ainGxAGG.append_elim with
     | .inl (.termVarExt ainG) => var ainG.append_inl
     | .inr ainGG => var ainGG.append_inr
@@ -1449,8 +1548,7 @@ theorem weakening (Awf : [[G ⊢ A]]) : [[G', G ⊢ A]] := match Awf with
   | arr A'wf Bwf => arr A'wf.weakening Bwf.weakening
   | forall' (I := I) A'wf => forall' (I := I) fun a anin => A'wf a anin |>.weakening
 
-theorem TypeVarLocallyClosed_of : [[G ⊢ A]] → A.TypeVarLocallyClosed G.typeVar_count :=
-  fun Awf =>
+theorem TypeVarLocallyClosed_of : [[G ⊢ A]] → A.TypeVarLocallyClosed G.typeVar_count := fun Awf =>
   match A, Awf with
   | _, .var _ => .var_free
   | .arr _ _, .arr A'wf Bwf => .arr A'wf.TypeVarLocallyClosed_of Bwf.TypeVarLocallyClosed_of
@@ -1463,17 +1561,17 @@ theorem TypeVarLocallyClosed_of : [[G ⊢ A]] → A.TypeVarLocallyClosed G.typeV
 theorem TypeVarLocallyClosed_of_empty : [[ε ⊢ A]] → A.TypeVarLocallyClosed 0 :=
   TypeVarLocallyClosed_of
 
-theorem Type'_open_preservation {A : Type'} {G : Environment} (aninftvA : [[a ∉ ftv(A)]]) (Bwf : [[ε ⊢ B]])
-  : TypeWellFormedness ((Environment.empty.typeVarExt a).append (G.TypeVar_open a n))
-    (A.TypeVar_open a n) →
-    TypeWellFormedness (G.Type'_open B n) (A.Type'_open B n) := fun Aopwf => by
-  match A with
+theorem Type'_open_preservation {A : Type'} {G : Environment} (aninftvA : [[a ∉ ftv(A)]])
+  (Bwf : [[ε ⊢ B]])
+  : TypeWellFormedness [[ε, a, G]] (A.TypeVar_open a n) →
+    TypeWellFormedness [[(G [B / a])]] (A.Type'_open B n) :=
+  fun Aopwf => by match A with
   | .var (.free a') =>
     rw [Type'.TypeVar_open, if_neg (nomatch ·)] at Aopwf
     let .var a'inaG := Aopwf
     match a'inaG.append_elim with
     | .inl .head => exact aninftvA .var |>.elim
-    | .inr a'inG => exact .var a'inG.Type'_open
+    | .inr a'inG => exact .var a'inG.TypeVar_subst
   | .var (.bound _) =>
     rw [Type'.Type'_open]
     split
@@ -1493,19 +1591,216 @@ theorem Type'_open_preservation {A : Type'} {G : Environment} (aninftvA : [[a �
     exact .forall' (I := a :: I) <| fun a' a'nin => by
       have a'nea := List.ne_of_not_mem_cons a'nin
       have := A'wf a' <| List.not_mem_of_not_mem_cons a'nin
-      have Gopeq : (G.TypeVar_open a n).typeVarExt a' = (G.typeVarExt a').TypeVar_open a (n + 1) :=
-        by rw [Environment.TypeVar_open]
-      rw [← A'.TypeVar_open_Type'_open_eq Bwf.TypeVarLocallyClosed_of_empty (Nat.zero_ne_add_one _)]
-      rw [A'.TypeVar_open_comm a'nea.symm (Nat.succ_ne_zero _), ← Environment.append_typeVarExt,
-          Gopeq] at this
+      rw [← A'.TypeVar_open_Type'_open_eq Bwf.TypeVarLocallyClosed_of_empty (Nat.zero_ne_add_one _),
+          ← Environment.TypeVar_subst]
+      rw [A'.TypeVar_open_comm a'nea.symm (Nat.succ_ne_zero _)] at this
       exact Type'_open_preservation (aninftvA.forall'.TypeVar_open_of_ne a'nea.symm) Bwf this
 
+theorem TypeVar_subst_preservation {A : Type'} {G : Environment} (Bwf : [[ε ⊢ B]])
+  : [[ε, a, G ⊢ A]] → [[G [B / a] ⊢ A [B / a] ]] :=
+  fun Aopwf => by match A with
+  | .var (.free a') =>
+    let .var a'inεaG := Aopwf
+    rw [Type'.TypeVar_subst]
+    split
+    · case isTrue h => exact Bwf.weakening
+    · case isFalse h =>
+      match a'inεaG.append_elim with
+      | .inl .head => contradiction
+      | .inr a'inG => exact TypeWellFormedness.var a'inG.TypeVar_subst
+  | .var (.bound _) => nomatch Aopwf
+  | .arr A' B' =>
+    let .arr A'wf B'wf := Aopwf
+    exact .arr (TypeWellFormedness.TypeVar_subst_preservation Bwf A'wf)
+      (TypeWellFormedness.TypeVar_subst_preservation Bwf B'wf)
+  | .forall' A' =>
+    let .forall' A'wf (I := I) := Aopwf
+    rw [Type'.TypeVar_subst]
+    exact .forall' (I := a :: I) fun a' a'nin => by
+      have a'nea := List.ne_of_not_mem_cons a'nin
+      have := A'wf a' <| List.not_mem_of_not_mem_cons a'nin
+      rw [← Environment.TypeVar_subst,
+          Type'.TypeVar_subst_TypeVar_open_comm Bwf.TypeVarLocallyClosed_of_empty a'nea.symm]
+      rw [← Environment.append_typeVarExt] at this
+      exact TypeVar_subst_preservation Bwf this
+
 end TypeWellFormedness
+
+judgement_syntax x " ∈ " "dom" "(" G ")" : TermVarInEnvironmentDomain (id x)
+
+def TermVarInEnvironmentDomain x (G : Environment) := x ∈ G.termVar_domain
+
+judgement_syntax x " ∉ " "dom" "(" G ")" : TermVarNotInEnvironmentDomain (id x)
+
+def TermVarNotInEnvironmentDomain x G := ¬[[x ∈ dom(G)]]
+
+namespace TermVarNotInEnvironmentDomain
+
+theorem TermVar_drop : [[x ∉ dom(ε, x' : A, G)]] → [[x ∉ dom(G)]] :=
+  fun xnindomεxAG => by
+  match G with
+  | .empty => exact (nomatch ·)
+  | .termVarExt G' x'' A' =>
+    dsimp only [TermVarNotInEnvironmentDomain, TermVarInEnvironmentDomain] at xnindomεxAG ⊢
+    rw [Environment.termVar_domain_append] at xnindomεxAG
+    let ⟨xnindomG, _⟩ := List.not_mem_append'.mp xnindomεxAG
+    exact xnindomG
+  | .typeVarExt G' a =>
+    dsimp only [TermVarNotInEnvironmentDomain, TermVarInEnvironmentDomain] at xnindomεxAG ⊢
+    rw [Environment.termVar_domain_append] at xnindomεxAG
+    let ⟨xnindomG, _⟩ := List.not_mem_append'.mp xnindomεxAG
+    exact xnindomG
+
+theorem TypeVar_drop : [[x ∉ dom(ε, a, G)]] → [[x ∉ dom(G)]] := fun xnindomεaG => by
+  match G with
+  | .empty => exact (nomatch ·)
+  | .termVarExt G' x' A' =>
+    dsimp only [TermVarNotInEnvironmentDomain, TermVarInEnvironmentDomain] at xnindomεaG ⊢
+    rw [Environment.termVar_domain_append] at xnindomεaG
+    let ⟨xnindomG, _⟩ := List.not_mem_append'.mp xnindomεaG
+    exact xnindomG
+  | .typeVarExt G' a' =>
+    dsimp only [TermVarNotInEnvironmentDomain, TermVarInEnvironmentDomain] at xnindomεaG ⊢
+    rw [Environment.termVar_domain_append] at xnindomεaG
+    let ⟨xnindomG, _⟩ := List.not_mem_append'.mp xnindomεaG
+    exact xnindomG
+
+theorem TypeVar_subst : [[x ∉ dom(G)]] → [[x ∉ dom(G [A / a])]] := fun xnindom => by
+  match G with
+  | .empty => exact (nomatch ·)
+  | .termVarExt G' x' A' =>
+    dsimp only [TermVarNotInEnvironmentDomain, TermVarInEnvironmentDomain] at xnindom ⊢
+    rw [Environment.TypeVar_subst, Environment.termVar_domain]
+    rw [Environment.termVar_domain] at xnindom
+    let xnex' := List.ne_of_not_mem_cons xnindom
+    let xnindomG' := List.not_mem_of_not_mem_cons xnindom
+    have : [[x ∉ dom(G')]] := by
+      dsimp only [TermVarNotInEnvironmentDomain, TermVarInEnvironmentDomain]
+      exact xnindomG'
+    exact List.not_mem_cons_of_ne_of_not_mem xnex' this.TypeVar_subst
+  | .typeVarExt G' a' =>
+    dsimp only [TermVarNotInEnvironmentDomain, TermVarInEnvironmentDomain] at xnindom ⊢
+    rw [Environment.TypeVar_subst, Environment.termVar_domain]
+    rw [Environment.termVar_domain] at xnindom
+    have : [[x ∉ dom(G')]] := by
+      dsimp only [TermVarNotInEnvironmentDomain, TermVarInEnvironmentDomain]
+      exact xnindom
+    exact this.TypeVar_subst
+
+end TermVarNotInEnvironmentDomain
+
+judgement_syntax a " ∈ " "dom" "(" G ")" : TypeVarInEnvironmentDomain (id a)
+
+def TypeVarInEnvironmentDomain a (G : Environment) := a ∈ G.typeVar_domain
+
+judgement_syntax a " ∉ " "dom" "(" G ")" : TypeVarNotInEnvironmentDomain (id a)
+
+def TypeVarNotInEnvironmentDomain a G := ¬[[a ∈ dom(G)]]
+
+namespace TypeVarNotInEnvironmentDomain
+
+theorem TermVar_drop : [[a ∉ dom(ε, x : A, G)]] → [[a ∉ dom(G)]] :=
+  fun anindomεxAG => by
+  match G with
+  | .empty => exact (nomatch ·)
+  | .termVarExt G' x' A' =>
+    dsimp only [TypeVarNotInEnvironmentDomain, TypeVarInEnvironmentDomain] at anindomεxAG ⊢
+    rw [Environment.typeVar_domain_append] at anindomεxAG
+    let ⟨anindomG, _⟩ := List.not_mem_append'.mp anindomεxAG
+    exact anindomG
+  | .typeVarExt G' a =>
+    dsimp only [TypeVarNotInEnvironmentDomain, TypeVarInEnvironmentDomain] at anindomεxAG ⊢
+    rw [Environment.typeVar_domain_append] at anindomεxAG
+    let ⟨anindomG, _⟩ := List.not_mem_append'.mp anindomεxAG
+    exact anindomG
+
+theorem TypeVar_drop : [[a ∉ dom(ε, a', G)]] → [[a ∉ dom(G)]] := fun anindomεa'G => by
+  match G with
+  | .empty => exact (nomatch ·)
+  | .termVarExt G' x' A' =>
+    dsimp only [TypeVarNotInEnvironmentDomain, TypeVarInEnvironmentDomain] at anindomεa'G ⊢
+    rw [Environment.typeVar_domain_append] at anindomεa'G
+    let ⟨anindomG, _⟩ := List.not_mem_append'.mp anindomεa'G
+    exact anindomG
+  | .typeVarExt G' a'' =>
+    dsimp only [TypeVarNotInEnvironmentDomain, TypeVarInEnvironmentDomain] at anindomεa'G ⊢
+    rw [Environment.typeVar_domain_append] at anindomεa'G
+    let ⟨anindomG, _⟩ := List.not_mem_append'.mp anindomεa'G
+    exact anindomG
+
+theorem TypeVar_subst : [[a ∉ dom(G)]] → [[a ∉ dom(G [A / a'])]] := fun anindom => by
+  match G with
+  | .empty => exact (nomatch ·)
+  | .termVarExt G' x' A' =>
+    dsimp only [TypeVarNotInEnvironmentDomain, TypeVarInEnvironmentDomain] at anindom ⊢
+    rw [Environment.TypeVar_subst, Environment.typeVar_domain]
+    rw [Environment.typeVar_domain] at anindom
+    have : [[a ∉ dom(G')]] := by
+      dsimp only [TypeVarNotInEnvironmentDomain, TypeVarInEnvironmentDomain]
+      exact anindom
+    exact this.TypeVar_subst
+  | .typeVarExt G' a' =>
+    dsimp only [TypeVarNotInEnvironmentDomain, TypeVarInEnvironmentDomain] at anindom ⊢
+    rw [Environment.TypeVar_subst, Environment.typeVar_domain]
+    rw [Environment.typeVar_domain] at anindom
+    let xnex' := List.ne_of_not_mem_cons anindom
+    let anindomG' := List.not_mem_of_not_mem_cons anindom
+    have : [[a ∉ dom(G')]] := by
+      dsimp only [TypeVarNotInEnvironmentDomain, TypeVarInEnvironmentDomain]
+      exact anindomG'
+    exact List.not_mem_cons_of_ne_of_not_mem xnex' this.TypeVar_subst
+
+end TypeVarNotInEnvironmentDomain
+
+judgement_syntax "⊢ " G : EnvironmentWellFormedness
+
+judgement EnvironmentWellFormedness :=
+
+─── empty
+⊢ ε
+
+⊢ G
+G ⊢ A
+x ∉ dom(G)
+────────── termVarExt
+⊢ G, x : A
+
+⊢ G
+a ∉ dom(G)
+────────── typeVarExt
+⊢ G, a
+
+namespace EnvironmentWellFormedness
+
+theorem TermVar_drop : [[⊢ ε, x : A, G]] → [[⊢ G]] := fun εxAGwf => by match G, εxAGwf with
+  | .empty, _ => exact empty
+  | .termVarExt G' x' A', termVarExt G'wf A'wf x'nindom =>
+    have := A'wf.TermVar_drop (G := .empty)
+    rw [Environment.empty_append] at this
+    exact termVarExt G'wf.TermVar_drop this x'nindom.TermVar_drop
+  | .typeVarExt G' a, typeVarExt G'wf anindom => exact typeVarExt G'wf.TermVar_drop anindom.TermVar_drop
+
+theorem TypeVar_subst_preservation (Awf : [[ε ⊢ A]]) : [[⊢ ε, a, G]] → [[⊢ G [A / a] ]] :=
+  fun εaGwf => by
+  match G, εaGwf with
+  | .empty, _ =>
+    rw [Environment.TypeVar_subst]
+    exact .empty
+  | .termVarExt G' x' A', termVarExt εaG'wf A'wf x'nindom =>
+    rw [Environment.TypeVar_subst]
+    exact termVarExt (εaG'wf.TypeVar_subst_preservation Awf) (.TypeVar_subst_preservation Awf A'wf)
+      x'nindom.TypeVar_drop.TypeVar_subst
+  | .typeVarExt G' a', typeVarExt εaG'wf a'nindom =>
+    rw [Environment.TypeVar_subst]
+    exact typeVarExt (εaG'wf.TypeVar_subst_preservation Awf) a'nindom.TypeVar_drop.TypeVar_subst
+
+end EnvironmentWellFormedness
 
 judgement_syntax G " ⊢ " E " : " A : Typing
 
 judgement Typing :=
 
+⊢ G
 x : A ∈ G
 ───────── var
 G ⊢ x : A
@@ -1535,7 +1830,7 @@ theorem TermVarLocallyClosed_of_empty : [[ε ⊢ E : A]] → E.TermVarLocallyClo
 where
   go {G : Environment} {E : Term} {A : Type'}
     : [[G ⊢ E : A]] → E.TermVarLocallyClosed G.termVar_count := fun EtyA => match E, EtyA with
-    | _, .var _ => .var_free
+    | _, .var .. => .var_free
     | .lam A' E', .lam _ E'ty (I := I) => by
       let ⟨x, xnin⟩ := I.exists_fresh
       have := go <| E'ty x xnin
@@ -1551,7 +1846,7 @@ theorem TypeVarLocallyClosed_of_empty : [[ε ⊢ E : A]] → E.TypeVarLocallyClo
 where
   go {G : Environment} {E : Term} {A : Type'}
     : [[G ⊢ E : A]] → E.TypeVarLocallyClosed G.typeVar_count := fun EtyA => match E, EtyA with
-    | _, .var _ => .var
+    | _, .var .. => .var
     | .lam A' E', .lam A'ty E'ty (I := I) => by
       let ⟨x, xnin⟩ := I.exists_fresh
       have := go <| E'ty x xnin
@@ -1566,33 +1861,37 @@ where
       exact this.TypeVar_open_drop <| Nat.zero_lt_succ _
     | .typeApp E' A', .typeApp E'ty A'ty => .typeApp (go E'ty) A'ty.TypeVarLocallyClosed_of
 
-theorem weakening (EtyA : [[G ⊢ E : A]]) : [[G', G ⊢ E : A]] := by
-  induction EtyA with
-  | var xin => exact .var xin.append_inr
-  | lam Awf _ ih => exact .lam Awf.weakening ih
-  | app _ _ ihE ihF => exact .app ihE ihF
-  | typeGen _ ih => exact .typeGen ih
-  | typeApp _ Bwf ih => exact .typeApp ih Bwf.weakening
+theorem weakening (EtyA : [[G ⊢ E : A]]) (G'Gwf : [[⊢ G', G]]) : [[G', G ⊢ E : A]] :=
+  match EtyA with
+  | var _ xin => var G'Gwf xin.append_inr
+  | lam Awf E'ty (I := I) =>
+    lam Awf.weakening (I := [[(G', G)]].termVar_domain ++ I) fun x xnin =>
+      let ⟨xnindom, xninI⟩ := List.not_mem_append'.mp xnin
+      E'ty x xninI |>.weakening <| G'Gwf.termVarExt Awf.weakening xnindom
+  | app E'ty Fty => app (E'ty.weakening G'Gwf) (Fty.weakening G'Gwf)
+  | typeGen E'ty (I := I) => typeGen (I := [[(G', G)]].typeVar_domain ++ I) fun a anin =>
+      let ⟨anindom, aninI⟩ := List.not_mem_append'.mp anin
+      E'ty a aninI |>.weakening <| G'Gwf.typeVarExt anindom
+  | typeApp E'ty Bwf => typeApp (E'ty.weakening G'Gwf) Bwf.weakening
 
-theorem Term_open_preservation {E : Term}
-  (EtyB : Typing ((Environment.empty.termVarExt x A).append G) (E.TermVar_open x n) B)
+theorem Term_open_preservation {E : Term} (EtyB : Typing [[ε, x : A, G]] (E.TermVar_open x n) B)
   (xninG : [[x ∉ G]]) (xninfvE : [[x ∉ fv(E)]]) (FtyA : [[ε ⊢ F : A]])
   : Typing G (E.Term_open F n) B := by
   match E with
   | .var (.free _) =>
     rw [Term.Term_open, if_neg (nomatch ·)]
-    let .var x'BinεxAG := EtyB
+    let .var εxAGwf x'BinεxAG := EtyB
     match x'BinεxAG.append_elim with
     | .inl ⟨.head, _⟩ => exact xninfvE .var |>.elim
-    | .inr xBinG => exact var xBinG
+    | .inr xBinG => exact var εxAGwf.TermVar_drop xBinG
   | .var (.bound _) =>
     rw [Term.Term_open]
     split
     · case isTrue h =>
       rw [← h, Term.TermVar_open, if_pos rfl] at EtyB
-      let .var xBinxAG := EtyB
+      let .var εxAGwf xBinxAG := EtyB
       match xBinxAG.append_elim with
-      | .inl ⟨.head, _⟩ => exact FtyA.weakening
+      | .inl ⟨.head, _⟩ => exact FtyA.weakening εxAGwf.TermVar_drop
       | .inr xBinG => exact xninG _ xBinG |>.elim
     · case isFalse h =>
       rw [Term.TermVar_open, if_neg h] at EtyB
@@ -1633,18 +1932,16 @@ theorem Term_open_preservation {E : Term}
     exact typeApp (E'ty.Term_open_preservation xninG xninfvE.typeApp FtyA) this
 
 theorem Type'_open_preservation {E : Term} {A : Type'}
-  (EtyA : Typing ((Environment.empty.typeVarExt a).append (G.TypeVar_open a n))
-    (E.TypeVar_open a n) (A.TypeVar_open a n)) (aninG : [[a ∉ G]]) (aninftvE : [[a ∉ ftv(E)]])
-  (aninftvA : [[a ∉ ftv(A)]]) (Bwf : [[ε ⊢ B]])
-  : Typing (G.Type'_open B n) (E.Type'_open B n) (A.Type'_open B n) := by
+  (EtyA : Typing [[ε, a, G]] (E.TypeVar_open a n) (A.TypeVar_open a n)) (aninG : [[a ∉ G]])
+  (aninftvE : [[a ∉ ftv(E)]]) (aninftvA : [[a ∉ ftv(A)]]) (Bwf : [[ε ⊢ B]])
+  : Typing [[(G [B / a])]] (E.Type'_open B n) (A.Type'_open B n) := by
   generalize E'eq : E.TypeVar_open a n = E', A'eq : A.TypeVar_open a n = A' at *
   match E, A, EtyA with
-  | .var (.free x), A, .var xAopinεaG =>
+  | .var (.free x), A, .var εaGwf xAopinεaG =>
     rw [Term.Type'_open]
     cases E'eq
     cases A'eq
-    let .inr xAopinG := xAopinεaG.append_elim
-    exact var xAopinG.Type'_open
+    exact var (εaGwf.TypeVar_subst_preservation Bwf) <| xAopinεaG.TypeVar_subst aninftvA
   | .lam A'' E'', .arr A''' B', .lam A''wf E''ty (A := A'''') (B := B'') =>
     rw [Term.Type'_open, Type'.Type'_open]
     cases E'eq
@@ -1656,10 +1953,13 @@ theorem Type'_open_preservation {E : Term} {A : Type'}
     exact Typing.lam (TypeWellFormedness.Type'_open_preservation aninftvE.lam.left Bwf A''wf)
       fun x' x'nin => by
         have := E''ty x' x'nin
-        rw [← Environment.Type'_open, ← E''.TermVar_open_Type'_open_comm]
+        rw [← E''.TermVar_open_Type'_open_comm]
         rw [← Environment.append_termVarExt, ← Term.TermVar_open_TypeVar_open_eq] at this
-        exact this.Type'_open_preservation aninG.termVarExt aninftvE.lam.right.TermVar_open
+        have := this.Type'_open_preservation aninG.termVarExt aninftvE.lam.right.TermVar_open
           (NotInTypeFreeTypeVars.arr.mp aninftvA).right Bwf
+        rw [Environment.TypeVar_subst,
+            aninftvE.lam.left.TypeVar_open_TypeVar_subst_eq_Type'_open_of] at this
+        exact this
   | .app E'' F, A, .app E''ty Fty (A := A'') =>
     rw [Term.Type'_open]
     cases E'eq
@@ -1673,15 +1973,13 @@ theorem Type'_open_preservation {E : Term} {A : Type'}
       have := E'ty a' <| List.not_mem_of_not_mem_cons a'nin
       rw [← E'.TypeVar_open_Type'_open_eq Bwf.TypeVarLocallyClosed_of_empty (Nat.zero_ne_add_one _),
           ← A'.TypeVar_open_Type'_open_eq Bwf.TypeVarLocallyClosed_of_empty (Nat.zero_ne_add_one _)]
-      have Gopeq : (G.TypeVar_open a n).typeVarExt a' = (G.typeVarExt a').TypeVar_open a (n + 1) :=
-        by rw [Environment.TypeVar_open]
       rw [← Environment.append_typeVarExt, E'.TypeVar_open_comm a'nea.symm (Nat.succ_ne_zero _),
-          A'.TypeVar_open_comm a'nea.symm (Nat.succ_ne_zero _), Gopeq] at this
+          A'.TypeVar_open_comm a'nea.symm (Nat.succ_ne_zero _)] at this
       exact this.Type'_open_preservation (G := G.typeVarExt a')
         (aninG.typeVarExt a'nea.symm)
         (aninftvE.typeGen.TypeVar_open_of_ne a'nea.symm)
         (aninftvA.forall'.TypeVar_open_of_ne a'nea.symm) Bwf
-  | .typeApp E' B', A, .typeApp E'ty B'wf (A := A') =>
+  | .typeApp E' B', A, .typeApp E'ty B'wf (A := A'') =>
     rw [Term.Type'_open]
     cases E'eq
     sorry
