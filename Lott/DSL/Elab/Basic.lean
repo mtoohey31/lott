@@ -720,6 +720,13 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
               trailingNode $(quote <| ← nt.catName) Parser.maxPrec 0 <|
                 "^^" >> categoryParser $(quote <| symbolPrefix ++ valName) 0)
 
+        let parserIdent := mkIdent <| canonName ++ varName |>.appendAfter "_close_parser"
+        elabCommand <| ←
+          `(@[Lott.Symbol_parser, $attrIdent:ident] def $parserIdent : Parser :=
+              leadingNode $(quote <| ← nt.catName) Parser.maxPrec <|
+                "\\" >> categoryParser $(quote <| symbolPrefix ++ varName) 0 >> "^" >>
+                  categoryParser $(quote <| ← nt.catName) 0)
+
     -- Define variable parsers, plus variable category parser in symbol category.
     let varAttrIdent := mkIdent <| ← nt.varParserAttrName
     for alias in aliases do
@@ -825,6 +832,23 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
               let valExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ valName) false val
               return Lean.mkApp3 (Expr.const $(quote <| ns ++ canonName ++ openName valName) []) baseExpr valExpr <| Expr.lit <| Literal.natVal 0)
 
+    let closeName (varName : Name) := varName.replacePrefix ns .anonymous |>.appendAfter "_close"
+    let termCloseMatchAlts ← if parent?.isSome then pure #[] else
+      substitutions.getD #[] |>.filterMapM fun (varName, _) => do
+        if !(← isLocallyNameless varName) then return none
+
+        return some <| ←
+          `(matchAltExpr|
+            | _, Lean.Syntax.node _ $(quote <| ← nt.catName) #[
+                Lean.Syntax.atom _ "\\",
+                var@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ varName) _),
+                Lean.Syntax.atom _ "^",
+                base@(Lean.Syntax.node _ $(quote <| ← nt.catName) _)
+              ] => do
+              let varExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ varName) true var
+              let baseExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ ns ++ canonName) false base
+              return Lean.mkApp3 (Expr.const $(quote <| ns ++ canonName ++ closeName varName) []) baseExpr varExpr <| Expr.lit <| Literal.natVal 0)
+
     let termElabIdent := mkIdentFrom canon <| canonName.appendAfter "TermElab"
     elabCommand <| ←
       `(@[lott_term_elab $catIdent] def $termElabIdent : Lott.DSL.Elab.TermElab
@@ -832,6 +856,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
           $termSubstMatchAlts:matchAlt*
           $termOpenMatchAlts:matchAlt*
           $termOpen'MatchAlts:matchAlt*
+          $termCloseMatchAlts:matchAlt*
           | _, Lean.Syntax.node _ $(quote <| ← nt.catName) #[
               Lean.Syntax.node _ $(quote <| ← nt.varCatName) #[ident@(Lean.Syntax.ident ..)],
               Lean.Syntax.node _ `null #[]
@@ -1169,13 +1194,73 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
             (x : $canon) ($valId : $valTypeId) ($idxId : Nat := 0) : $canon := match x with
             $matchAlts:matchAlt*)
 
-      /- let ctors ← prods.mapM fun prod@{ name, ir, type, .. } => match type with
-        | .sugar ref | .customElab ref =>
-          throwErrorAt ref "nonterminal containing locally nameless variable can only contain normal productions"
-        | .normal => IR.toIsLocallyClosedCtor name isIdent (← nt.qualified) ir prod.binders
+      let matchAlts ← prods.filterMapM fun { name, ir, type, bindConfig?, .. } => do
+        let .normal := type | return none
+        let prodId := mkIdent <| canon.getId ++ name.getId
+
+        let binderId? ← bindConfig?.bindM fun bindConfig@{ of, .. } =>
+          ir.findSomeM? fun (mk l ir) => do
+            match ir with
+            | .category n => return if n == varTypeName && l == of then some l else none
+            | .atom _ =>
+              if let some ref := bindConfig.find? l.getId then
+                throwErrorAt ref "atoms shouldn't be referenced by binders"
+
+              return none
+            | .sepBy ..
+            | .optional _ =>
+              throwError "bind configuration for productions with sepBy or optional syntax are not supported"
+
+        let patternArgAndRhsArgs ← ir.filterMapM fun (mk l ir) => do
+          if some l == bindConfig?.map fun { of, .. } => of then
+            return none
+
+          match ir with
+          | .category n =>
+            if some l != binderId? && n == varTypeName then
+              return some (l, ← `(if .free $varId = $l then .bound $idxId else $l))
+
+            if let some { substitutions, .. } := symbolExt.getState (← getEnv) |>.find? n then
+              if substitutions.contains subst then
+                return some (l, ← `($(mkIdent <| n ++ closeName varTypeName):ident $l $varId $idxId))
+
+            return some (l, l)
+          | .atom _ =>
+            if let some bindConfig := bindConfig? then
+              if let some ref := bindConfig.find? l.getId then
+                throwErrorAt ref "atoms shouldn't be referenced by binders"
+
+            return none
+          | .sepBy #[mk _ (.category n)] _ =>
+            if let some bindConfig := bindConfig? then
+              if let some ref := bindConfig.find? l.getId then
+                throwErrorAt ref "sepBys shouldn't be referenced by binders"
+
+            let mapId ← mkFreshIdent l
+
+            return some (
+              l,
+              ← `(let rec $mapId:ident
+                    | [] => []
+                    | x :: xs => $(mkIdent <| n ++ closeName varTypeName):ident x $varId $idxId :: $mapId xs;
+                  $mapId $l))
+          | .sepBy ..
+          | .optional _ =>
+            throwError "closing for productions with non-trivial sepBy or optional syntax are not supported"
+        let (patternArgs, rhsArgs) := patternArgAndRhsArgs.unzip
+
+        if binderId?.isSome then
+          `(matchAltExpr|
+              | x@($prodId $patternArgs*) => let $idxId := $idxId + 1; $prodId $rhsArgs*)
+        else
+          `(matchAltExpr| | $prodId $patternArgs* => $prodId $rhsArgs*)
+
       elabCommand <| ←
-        `(inductive $(mkIdentFrom isIdent <| varTypeName.appendAfter "LocallyClosed") : $canon → Prop where
-            $ctors*) -/
+        `(def $(mkIdentFrom canon <| canon.getId ++ closeName varTypeName)
+            (x : $canon) ($varId : $varTypeId) ($idxId : Nat := 0) : $canon := match x with
+            $matchAlts:matchAlt*)
+
+      -- TODO: Generate locally closed and in free variables inductives automatically.
 
 elab_rules : command
   | `($nt:Lott.DSL.NonTerminal) => elabNonTerminals #[nt]
