@@ -4,6 +4,7 @@ import Lott.DSL.IR
 
 -- TODO: Remove unnecessary qualifications from names.
 -- TODO: Delab to embeddings when possible.
+-- TODO: Make hover in non-terminal work right.
 
 namespace Lott.DSL.Elab
 
@@ -314,70 +315,94 @@ def _root_.Lott.DSL.IR.toTexSeqItems (ir : Array IR) (canon : Name) : CommandEla
           $seqItems*
           return String.join [$joinArgs,*])
 
-partial
-def toIsLocallyClosedCtor (prodIdent lcIdent : Ident) (qualified : Name) (ir : Array IR)
-  (subst : Name × Name) (binders : Array Name) : CommandElabM (TSyntax `Lean.Parser.Command.ctor) :=
-  do
-  let (ctorTypeRetArgs, ctorTypeArgs) ← go ir
-  let binders ← ctorTypeRetArgs.filterMapM fun
-    | `(Lean.binderIdent| $_:hole) => return none
-    | `(Lean.binderIdent| $i:ident) => `(bracketedBinder| {$i})
-    | _ => throwUnsupportedSyntax
-  let ctorType ← foldrArrow ctorTypeArgs <| ← ``($lcIdent ($(mkIdent <| qualified ++ prodIdent.getId) $(← toTerms ctorTypeRetArgs)*))
-  return ← `(ctor| | $prodIdent:ident $binders:bracketedBinder* : $ctorType)
-where
-  toTerms (as : TSyntaxArray `Lean.binderIdent) : CommandElabM (Array Term) :=
-    as.mapM fun
-      | `(Lean.binderIdent| $h:hole) => `(term| $h:hole)
-      | `(Lean.binderIdent| $i:ident) => `(term| $i:ident)
-      | _ => throwUnsupportedSyntax
+def inFreeName (varName : Name) (typeName : Name) : CommandElabM Name := do
+  let ns ← getCurrNamespace
+  let typeName := typeName.replacePrefix ns .anonymous
+  match varName.replacePrefix ns .anonymous with
+  | .str .anonymous s => return typeName ++ Name.appendAfter `InFree s |>.appendAfter "s"
+  | n => return typeName ++ `InFree ++ n.appendAfter "s"
 
-  go (ir : Array IR) (patAcc : TSyntaxArray `Lean.binderIdent := #[])
-    (propAcc : Array Term := #[])
-    : CommandElabM (TSyntaxArray `Lean.binderIdent × Array Term) := do
-    let some (mk l irt) := ir[0]? | return (patAcc, propAcc)
-    let ir' := ir.extract 1 ir.size
+def Nat.toSubscriptString : Nat → String
+  | 0 => "₀"
+  | 1 => "₁"
+  | 2 => "₂"
+  | 3 => "₃"
+  | 4 => "₄"
+  | 5 => "₅"
+  | 6 => "₆"
+  | 7 => "₇"
+  | 8 => "₈"
+  | 9 => "₉"
+  | n => (n / 10).toSubscriptString ++ (n % 10).toSubscriptString
+
+partial
+def toInFreeCtors (prodId inFreeId varId : Ident) (qualified : Name) (ir : Array IR)
+  (subst : Name × Name) (ids binders : Array Name)
+  : CommandElabM (Array (TSyntax `Lean.Parser.Command.ctor)) := do
+  let mut i := 0
+  let mut ctors := #[]
+  let (ctorInfo, _) ← go ir
+  let mkCtorId (i : Nat) := mkIdentFrom prodId <| prodId.getId.appendAfter <|
+    if ctorInfo.size > 1 then i.toSubscriptString else ""
+  for (ctorArg?, patArgs) in ctorInfo do
+    let ctorId := mkCtorId i
+    i := i + 1
+    let ctorRetType ← ``($inFreeId $varId ($fullProdId $patArgs*))
+    let ctorType ← if let some ctorArg := ctorArg? then
+        ``($ctorArg → $ctorRetType)
+      else
+        pure ctorRetType
+    ctors := ctors.push <| ← `(ctor| | $ctorId:ident : $ctorType)
+  return ctors
+where
+  fullProdId := mkIdent <| qualified ++ prodId.getId
+  go (remainingIR : Array IR) (seenEntries := 0) (acc : Array (Option Term × Array Term) := #[])
+    : CommandElabM (Array (Option Term × Array Term) × Bool) := do
+    let some (mk l ir) := remainingIR[0]? | return (acc, seenEntries != 0)
+    let remainingIR := remainingIR.extract 1 remainingIR.size
 
     if binders.contains l.getId then
-        return ← go ir' patAcc propAcc
+      return ← go remainingIR seenEntries acc
 
-    let lbi ← `(Lean.binderIdent| $l:ident)
-    let hole ← `(Lean.binderIdent| _)
-
-    match irt with
-    | .category n => do
-      if let some { substitutions, .. } := symbolExt.getState (← getEnv) |>.find? n then
-        if substitutions.contains subst then
-          go ir' (patAcc.push lbi) (propAcc.push <| ← `($(mkIdent <| n ++ subst.snd):ident $l))
-        else
-          go ir' patAcc propAcc
+    let hole ← ``(_)
+    let preHoles : Array Term := Array.ofFn fun (_ : Fin seenEntries) => hole
+    let postHoles ← remainingIR.filterMapM fun ir => do
+      if (← IR.toType ids binders ir).isNone then
+        return none
       else
-        go ir' patAcc propAcc
-    | .atom _ => go ir' patAcc propAcc
-    | .sepBy ir _ => do
-      match ← go ir with
-      -- In this case, the sepBy doesn't actually contain anything stored in the datatype so we can
-      -- just skip it.
-      | (#[], #[]) => go ir' patAcc propAcc
-      -- In this case, there is a list with stuff in it, but it doesn't contain anything for us to
-      -- check, so we can just add an underscore pattern argument and proceed.
-      | (_, #[]) => go ir' (patAcc.push hole) propAcc
-      | (#[patArg], props) => go ir' (patAcc.push lbi) <| propAcc.push <| ←
-          ``(∀ $patArg ∈ $l, $(← foldlAnd props))
-      | (patArgs, props) => go ir' (patAcc.push lbi) <| propAcc.push <| ←
-          ``(∀ $lbi ∈ $l, let $(← foldrProd <| ← toTerms patArgs):term := $l; $(← foldlAnd props))
-    | .optional ir => do
-      match ← go ir with
-      -- In this case, the optional doesn't actually contain anything stored in the datatype so we can
-      -- just skip it.
-      | (#[], #[]) => go ir' patAcc propAcc
-      -- In this case, there is a list with stuff in it, but it doesn't contain anything for us to
-      -- check, so we can just add an underscore pattern argument and proceed.
-      | (_, #[]) => go ir' (patAcc.push hole) propAcc
-      | (#[patArg], props) => go ir' (patAcc.push lbi) <| propAcc.push <| ←
-          ``(∀ $patArg:binderIdent ∈ $l, $(← foldlAnd props))
-      | (patArgs, props) => go ir' (patAcc.push lbi) <| propAcc.push <| ←
-          ``(∀ $lbi ∈ $l, let $(← foldrProd <| ← toTerms patArgs):term := $l; $(← foldlAnd props))
+        return hole
+
+    match ir with
+    | .category n => do
+      if n == subst.fst then
+        go remainingIR seenEntries.succ <|
+          acc.push (none, preHoles ++ #[← ``($varId)] ++ postHoles)
+      else if let some { substitutions, .. } := symbolExt.getState (← getEnv) |>.find? n then
+        if substitutions.contains subst then
+          let inFreeId := mkIdent <| ← inFreeName subst.fst n
+          go remainingIR seenEntries.succ <| acc.push
+            (some <| ← ``($inFreeId $varId $l), preHoles ++ #[← ``($l)] ++ postHoles)
+        else
+          go remainingIR seenEntries.succ acc
+      else
+        go remainingIR seenEntries.succ acc
+    | .atom _ => go remainingIR seenEntries acc
+    | .sepBy ir _ => match ← go ir with
+      | (_, false) => go remainingIR seenEntries acc
+      | (#[], true) => go remainingIR seenEntries.succ acc
+      | (ctorInfo, true) => do
+        let acc' ← ctorInfo.mapM
+          fun | (ctorArg?, patArgs) =>
+              return (ctorArg?, preHoles ++ #[← ``($(← foldrProd patArgs) :: _)] ++ postHoles)
+        go remainingIR seenEntries.succ <| acc ++ acc'
+    | .optional ir => match ← go ir with
+      | (_, false) => go remainingIR seenEntries acc
+      | (#[], true) => go remainingIR seenEntries.succ acc
+      | (ctorInfo, true) => do
+        let acc' ← ctorInfo.mapM
+          fun | (ctorArg?, patArgs) =>
+              return (ctorArg?, preHoles ++ #[← ``(some $(← foldrProd patArgs))] ++ postHoles)
+        go remainingIR seenEntries.succ <| acc ++ acc'
 
 /- Metavariable syntax. -/
 
@@ -1260,7 +1285,13 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
             (x : $canon) ($varId : $varTypeId) ($idxId : Nat := 0) : $canon := match x with
             $matchAlts:matchAlt*)
 
-      -- TODO: Generate locally closed and in free variables inductives automatically.
+      let inFreeName ← inFreeName varTypeName <| ← nt.qualified
+      let inFreeId := mkIdent inFreeName
+      let ctors ← prods.mapM fun prod@{ name, ir, type, ids, .. } => do
+        let .normal := type | return #[]
+        toInFreeCtors name inFreeId varId (← nt.qualified) ir subst ids prod.binders
+      elabCommand <| ←
+        `(inductive $inFreeId ($varId : $varTypeId) : $canon → Prop where $ctors.flatten*)
 
 elab_rules : command
   | `($nt:Lott.DSL.NonTerminal) => elabNonTerminals #[nt]
