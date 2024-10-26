@@ -181,6 +181,12 @@ def foldlAnd (as : Array Term) : CommandElabM Term := if let some a := as[0]? th
   else
     ``(True)
 
+def toTerms (as : TSyntaxArray `Lean.binderIdent) : CommandElabM (Array Term) :=
+  as.mapM fun
+    | `(Lean.binderIdent| $h:hole) => `(term| $h:hole)
+    | `(Lean.binderIdent| $i:ident) => `(term| $i:ident)
+    | _ => throwUnsupportedSyntax
+
 partial
 def toIsChildCtor (prodIdent isIdent : Ident) (qualified pqualified : Name) (ir pir : Array IR)
   (binders : Array Name) : CommandElabM (TSyntax `Lean.Parser.Command.ctor) := do
@@ -195,12 +201,6 @@ def toIsChildCtor (prodIdent isIdent : Ident) (qualified pqualified : Name) (ir 
   let ctorType ← foldrArrow ctorTypeArgs <| ← ``($isIdent ($(mkIdent <| pqualified ++ prodIdent.getId) $(← toTerms ctorTypeRetArgs)*))
   return ← `(ctor| | $prodIdent:ident $binders:bracketedBinder* : $ctorType)
 where
-  toTerms (as : TSyntaxArray `Lean.binderIdent) : CommandElabM (Array Term) :=
-    as.mapM fun
-      | `(Lean.binderIdent| $h:hole) => `(term| $h:hole)
-      | `(Lean.binderIdent| $i:ident) => `(term| $i:ident)
-      | _ => throwUnsupportedSyntax
-
   go (irs : Array (IR × IR)) (patAcc : TSyntaxArray `Lean.binderIdent := #[])
     (propAcc : Array Term := #[])
     : CommandElabM (TSyntaxArray `Lean.binderIdent × Array Term) := do
@@ -251,8 +251,8 @@ where
         throwErrorAt prodIdent "length of child optional ({ir.size}) doesn't match length of parent optional ({pir.size})"
 
       match ← go (ir.zip pir) with
-      -- In this case, the optional doesn't actually contain anything stored in the datatype so we can
-      -- just skip it.
+      -- In this case, the optional doesn't actually contain anything stored in the datatype so we
+      -- can just skip it.
       | (#[], #[]) => go irs' patAcc propAcc
       -- In this case, there is a list with stuff in it, but it doesn't contain anything for us to
       -- check, so we can just add an underscore pattern argument and proceed.

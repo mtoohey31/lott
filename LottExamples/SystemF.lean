@@ -78,13 +78,6 @@ theorem TypeVar_open_comm (A : Type') (anea' : a ≠ a') (mnen : m ≠ n)
     simp only
     rw [A'.TypeVar_open_comm anea' (mnen <| Nat.succ_inj'.mp ·), ← TypeVar_open, ← TypeVar_open]
 
-inductive TypeVarLocallyClosed : Type' → Nat → Prop where
-  | var_free : TypeVarLocallyClosed (.var (.free _)) n
-  | var_bound : m < n → TypeVarLocallyClosed (.var (.bound m)) n
-  | arr {A B : Type'}
-    : A.TypeVarLocallyClosed n → B.TypeVarLocallyClosed n → (A.arr B).TypeVarLocallyClosed n
-  | forall' {A : Type'} : A.TypeVarLocallyClosed (n + 1) → A.forall'.TypeVarLocallyClosed n
-
 namespace TypeVarLocallyClosed
 
 theorem weaken {A : Type'} : A.TypeVarLocallyClosed m → A.TypeVarLocallyClosed (m + n)
@@ -445,15 +438,6 @@ theorem TermVar_open_Type'_open_comm (E : Term)
   | typeApp E' A' =>
     rw [TermVar_open, Type'_open, E'.TermVar_open_Type'_open_comm, ← TermVar_open, ← Type'_open]
 
-inductive TermVarLocallyClosed : Term → Nat → Prop where
-  | var_free : TermVarLocallyClosed (var (.free _)) n
-  | var_bound : m < n → TermVarLocallyClosed (var (.bound m)) n
-  | lam : E.TermVarLocallyClosed (n + 1) → (lam A E).TermVarLocallyClosed n
-  | app {E F : Term}
-    : E.TermVarLocallyClosed n → F.TermVarLocallyClosed n → (E.app F).TermVarLocallyClosed n
-  | typeGen {E : Term} : E.TermVarLocallyClosed n → E.typeGen.TermVarLocallyClosed n
-  | typeApp {E : Term} : E.TermVarLocallyClosed n → (E.typeApp A).TermVarLocallyClosed n
-
 namespace TermVarLocallyClosed
 
 theorem weaken {E : Term} : E.TermVarLocallyClosed m → E.TermVarLocallyClosed (m + n)
@@ -602,15 +586,6 @@ theorem TypeVar_open_Type'_open_eq {E : Term} {A : Type'} (Alc : A.TypeVarLocall
   | typeApp E' A =>
     rw [TypeVar_open, Type'_open, TypeVar_open_Type'_open_eq Alc mnen,
         Type'.TypeVar_open_Type'_open_eq Alc mnen, ← TypeVar_open, ← Type'_open]
-
-inductive TypeVarLocallyClosed : Term → Nat → Prop where
-  | var : TypeVarLocallyClosed (.var _) n
-  | lam : A.TypeVarLocallyClosed n → E.TypeVarLocallyClosed n → TypeVarLocallyClosed (lam A E) n
-  | app {E F : Term}
-    : E.TypeVarLocallyClosed n → F.TypeVarLocallyClosed n → TypeVarLocallyClosed (E.app F) n
-  | typeGen {E : Term} : E.TypeVarLocallyClosed (n + 1) → TypeVarLocallyClosed E.typeGen n
-  | typeApp {E : Term}
-    : E.TypeVarLocallyClosed n → A.TypeVarLocallyClosed n → TypeVarLocallyClosed (E.typeApp A) n
 
 namespace TypeVarLocallyClosed
 
