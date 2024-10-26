@@ -440,7 +440,8 @@ def toLocallyClosedCtors (prodId locallyClosedId idxId : Ident) (qualified : Nam
       | `(Lean.binderIdent| $_:hole) => return none
       | `(Lean.binderIdent| $i:ident) => `(bracketedBinder| {$i})
       | _ => throwUnsupportedSyntax
-    let ctorType ← foldrArrow ctorTypeArgs <| ← ``($locallyClosedId ($fullProdId $(← toTerms ctorTypeRetArgs)*) $idxId)
+    let ctorType ← foldrArrow ctorTypeArgs <| ←
+      ``($locallyClosedId ($fullProdId $(← toTerms ctorTypeRetArgs)*) $idxId)
     return #[← `(ctor| | $prodId:ident {$idxId} $binders:bracketedBinder* : $ctorType)]
 where
   fullProdId := mkIdent <| qualified ++ prodId.getId
@@ -453,7 +454,7 @@ where
     let irs := irs.extract 1 irs.size
 
     if binders.contains l.getId then
-        return ← go irs patAcc propAcc
+      return ← go irs patAcc propAcc
 
     let lbi ← `(Lean.binderIdent| $l:ident)
     let hole ← `(Lean.binderIdent| _)
@@ -545,26 +546,46 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $names,*) => do
     elabCommand <| ←
       `(@[$(mkIdent parserAttrName):ident] def $parserIdent : Parser :=
           leadingNode $(quote catName) Parser.maxPrec <| Lott.DSL.identPrefix $(quote nameStr))
+    if locallyNameless then
+      let parserIdent := mkIdentFrom alias <| canon.getId ++ aliasName.appendAfter "_bound_parser"
+      elabCommand <| ←
+        `(@[$(mkIdent parserAttrName):ident] def $parserIdent : Parser :=
+            leadingNode $(quote catName) Parser.maxPrec <|
+              Lott.DSL.identPrefix $(quote nameStr) >> "$" >> num)
 
   -- Define elaboration.
   let catIdent := mkIdent catName
   let termElabName := mkIdentFrom canon <| canon.getId.appendAfter "TermElab"
-  let rhs ← if locallyNameless then
-      `(do
+  let (rhs, bound) ← if locallyNameless then
+      pure (
+        ← `(do
           if isBinder then
               let type ← Lean.Elab.Term.elabType <| mkIdent $(quote <| canonQualified.appendAfter "Id")
               Lean.Elab.Term.elabTerm ident type
             else
               let type ← Lean.Elab.Term.elabType <| mkIdent $(quote canonQualified)
               let expr ← Lean.Elab.Term.elabTerm (Syntax.mkCApp `Coe.coe #[.mk ident]) type
-              Meta.liftMetaM <| Meta.reduce expr)
+              Meta.liftMetaM <| Meta.reduce expr),
+        #[← `(matchAltExpr|
+              | isBinder, Lean.Syntax.node _ $(quote catName) #[
+                  ident@(Lean.Syntax.ident ..),
+                  Lean.Syntax.atom _ "$",
+                  num@(Lean.Syntax.node _ `num _)
+                ] => do
+                if isBinder then
+                  throwUnsupportedSyntax
+                else
+                  let num ← Lean.Elab.Term.elabNumLit num <| some (.const `Nat [])
+                  return (Lean.Expr.const $(quote <| canonQualified ++ `bound) []).app num)]
+      )
     else
-      `(do
+      pure (← `(do
           let type ← Lean.Elab.Term.elabType <| mkIdent $(quote canonQualified)
-          Lean.Elab.Term.elabTerm ident type)
+          Lean.Elab.Term.elabTerm ident type), #[])
   elabCommand <| ←
     `(@[lott_term_elab $catIdent] def $termElabName : Lott.DSL.Elab.TermElab
         | isBinder, Lean.Syntax.node _ $(quote catName) #[ident@(Lean.Syntax.ident ..)] => $rhs
+        $bound:matchAlt*
         | _, _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
   let texElabName := mkIdentFrom canon <| canon.getId.appendAfter "TexElab"
   elabCommand <| ←
