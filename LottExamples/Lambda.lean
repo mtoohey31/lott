@@ -1,36 +1,35 @@
 import Lott
-import Lott.DSL.Elab.UniversalJudgement
 
 namespace LottExamples.Lambda
 
 locally_nameless
 metavar Var, x
 
-nonterminal Term, M, N :=
+nonterminal Term, e :=
   | x             : var
-  | "λ " x ". " M : lam (bind x in M)
-  | M N           : app
-  | "(" M ")"     : paren (desugar := return M)
+  | "λ " x ". " e : lam (bind x in e)
+  | e₀ e₁         : app
+  | "(" e ")"     : paren (desugar := return e)
 
 -- Alpha reduction is not included since locally nameless representation makes it meaningless.
 
-judgement_syntax M " ->ᵦ " N : BetaReduction
+judgement_syntax e " ->ᵦ " e' : BetaReduction
 
 judgement BetaReduction :=
 
 ─────────────────── mk
-(λ x. M) N ->ᵦ M^^N
+(λ x. e₀) e₁ ->ᵦ e₀^^e₁
 
-judgement_syntax "lc" "(" M ")" : Term.VarLocallyClosed₀
+judgement_syntax "lc" "(" e ")" : Term.VarLocallyClosed₀
 
-abbrev Term.VarLocallyClosed₀ M := Term.VarLocallyClosed M
+abbrev Term.VarLocallyClosed₀ e := Term.VarLocallyClosed e
 
-judgement_syntax M " ->η " N : EtaReduction
+judgement_syntax e " ->η " e' : EtaReduction
 
 judgement EtaReduction :=
 
-lc(M)
+lc(e)
 ────────────── mk
-λ x. M x$0 ->η M
+λ x. e x$0 ->η e
 
 end LottExamples.Lambda
