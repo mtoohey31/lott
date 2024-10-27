@@ -2217,7 +2217,7 @@ namespace OperationalSemantics
 
 theorem preservation (EtyA : [[ε ⊢ E : A]]) (EstepF : [[E -> F]]) : [[ε ⊢ F : A]] :=
   match EstepF, EtyA with
-  | appl E'stepE'next, .app E'tyA'arrA FtyA' =>.app (E'stepE'next.preservation E'tyA'arrA) FtyA'
+  | appl E'stepE'next, .app E'tyA'arrA FtyA' => .app (E'stepE'next.preservation E'tyA'arrA) FtyA'
   | appr FstepFnext, .app VtyA'arrA FtyA' => .app VtyA'arrA <| FstepFnext.preservation FtyA'
   | lamApp, .app (.lam _ E'tyA (E := E')) VtyA'' =>
     let ⟨x, xnin, xninfv⟩ := Term.NotInFreeTermVars.exists_fresh
