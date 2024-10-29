@@ -2227,30 +2227,17 @@ theorem preservation (EtyA : [[ε ⊢ E : A]]) (EstepF : [[E -> F]]) : [[ε ⊢ 
     let ⟨a, anin, aninftvE', aninftvA''⟩ := Term.NotInFreeTypeVars.exists_fresh
     .Type'_open_preservation (G := .empty) (E'tyA'' a anin) (nomatch ·) aninftvE' aninftvA'' A'wf
 
-theorem progress (EtyA : [[ε ⊢ E : A]]) : (∃ F, [[E -> F]]) ∨ ∃ V : Value, V.val = E :=
-  match E, EtyA with
-  | .lam .., _ => .inr <| .intro ⟨_, .lam⟩ rfl
+theorem progress (EtyA : [[ε ⊢ E : A]]) : E.IsValue ∨ ∃ F, [[E -> F]] := match E, EtyA with
+  | .lam .., _ => .inl .lam
   | .app E' F', .app E'tyA'arrA F'tyA' => match progress E'tyA'arrA with
-    | .inl ⟨E'_next, E'stepE'_next⟩ => .inl <| .intro _ <| appl E'stepE'_next
-    | .inr ⟨VE', VE'eqE'⟩ => by
-      match progress F'tyA' with
-      | .inl ⟨F'_next, F'stepF'_next⟩ =>
-        rw [← VE'eqE']
-        exact .inl <| .intro _ <| appr F'stepF'_next
-      | .inr ⟨VF', VF'eqF'⟩ =>
-        have E'val := VE'.property
-        rw [VE'eqE'] at E'val
-        let .lam A' E'' := E'
-        rw [← VF'eqF']
-        exact .inl <| .intro _ lamApp
-  | .typeGen _, _ => .inr <| .intro ⟨_, .typeGen⟩ rfl
-  | .typeApp E' A', .typeApp E'ty _ => match progress E'ty with
-    | .inl ⟨E'_next, E'stepE'_next⟩ => .inl <| .intro _ <| typeApp E'stepE'_next
-    | .inr ⟨VE', VE'eqE'⟩ => by
-      have E'val := VE'.property
-      rw [VE'eqE'] at E'val
-      let .typeGen E'' := E'
-      exact .inl <| .intro _ typeGenApp
+    | .inl E'IsValue => match progress F'tyA' with
+      | .inl F'IsValue => let .lam .. := E'; .inr <| .intro _ <| lamApp (V := ⟨F', F'IsValue⟩)
+      | .inr ⟨_, F'stepF'_next⟩ => .inr <| .intro _ <| appr F'stepF'_next (V := ⟨E', E'IsValue⟩)
+    | .inr ⟨_, E'stepE'_next⟩ => .inr <| .intro _ <| appl E'stepE'_next
+  | .typeGen _, _ => .inl .typeGen
+  | .typeApp E' _, .typeApp E'ty _ => match progress E'ty with
+    | .inl _ => let .typeGen .. := E'; .inr <| .intro _ typeGenApp
+    | .inr ⟨_, E'stepE'_next⟩ => .inr <| .intro _ <| typeApp E'stepE'_next
 
 end OperationalSemantics
 
