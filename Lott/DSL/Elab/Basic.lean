@@ -189,17 +189,21 @@ private
 def judgementPrefix := `Lott.Judgement
 
 partial
-def _root_.Lott.DSL.IR.ofStx : TSyntax `stx → CommandElabM IR
-  | `(Lean.Parser.Command.elabArg| $l:ident:$stx:stx) => do
-    let mk _ t ← IR.ofStx stx
-    return mk l t
+def _root_.Lott.DSL.IR.ofStx (stx : TSyntax `stx) (l? : Option Ident := none) : CommandElabM IR := do
+  let l := l?.getD <| ← mkFreshIdent stx
+  match stx with
   | `(stx| $name:ident) => return mk name <| .category (← resolveSymbol name)
-  | ref@`(stx| $s:str) => return mk (← mkFreshIdent ref) <| .atom s.getString
-  | ref@`(stx| sepBy($[$ps]*, $sep)) =>
-    return mk (← mkFreshIdent ref) <| .sepBy (← ps.mapM IR.ofStx) sep.getString
-  | ref@`(stx| optional($[$ps]*)) =>
-    return mk (← mkFreshIdent ref) <| .optional <| ← ps.mapM IR.ofStx
+  | `(stx| $s:str) => return mk l <| .atom s.getString
+  | `(stx| sepBy($[$ps]*, $sep)) =>
+    return mk l <| .sepBy (← ps.mapM ofStx) sep.getString
+  | `(stx| optional($[$ps]*)) =>
+    return mk l <| .optional <| ← ps.mapM ofStx
   | _ => throwUnsupportedSyntax
+
+partial
+def _root_.Lott.DSL.IR.ofProdArg (arg : TSyntax `Lott.DSL.prodArg) : CommandElabM IR := do
+  let `(prodArg| $[$l?:ident:]?$stx:stx) := arg | throwUnsupportedSyntax
+  ofStx stx l?
 
 private
 def mkMkProd (entries : Array (Term × Term)) : CommandElabM (Option (Term × Term)) := do
@@ -207,8 +211,8 @@ def mkMkProd (entries : Array (Term × Term)) : CommandElabM (Option (Term × Te
   let res ← entries.foldrM (start := entries.size - 1) (init := back)
     fun (expr, type) (mkProdAcc, typeAcc) =>
     return (
-      ← ``(mkApp4 (Expr.const `Prod.mk [levelOne, levelOne]) $type $typeAcc $expr $mkProdAcc),
-      ← ``(mkApp2 (Expr.const `Prod [levelOne, levelOne]) $type $typeAcc)
+      ← ``(mkApp4 (Expr.const `Prod.mk [0, 0]) $type $typeAcc $expr $mkProdAcc),
+      ← ``(mkApp2 (Expr.const `Prod [0, 0]) $type $typeAcc)
     )
   return some res
 
@@ -244,7 +248,7 @@ def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binder
       let patternArgs ← IR.toPatternArgs ir
       let seqItems ← IR.toTermSeqItems ir canon ids binders
       let exprArgs ← IR.toExprArgs ir ids binders
-      let exprTypes ← ir.filterMapM IR.toMkTypeExpr
+      let exprTypes ← ir.filterMapM <| IR.toMkTypeExpr ids binders
       let some (mkProd, type) ← mkMkProd (exprArgs.getElems.zip exprTypes) | return none
 
       let termElabIdent := mkIdentFrom l <| canon ++ l.getId.appendAfter "TermElab"
@@ -280,7 +284,7 @@ def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binder
       let patternArgs ← IR.toPatternArgs ir
       let seqItems ← IR.toTermSeqItems ir canon ids binders
       let exprArgs ← IR.toExprArgs ir ids binders
-      let exprTypes ← ir.filterMapM IR.toMkTypeExpr
+      let exprTypes ← ir.filterMapM <| IR.toMkTypeExpr ids binders
       let some (mkProd, type) ← mkMkProd (exprArgs.getElems.zip exprTypes) | return none
 
       `(doSeqItem| let $l ← match (Syntax.getArgs $l)[0]? with
@@ -546,6 +550,11 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $names,*) => do
     elabCommand <| ←
       `(@[$(mkIdent parserAttrName):ident] def $parserIdent : Parser :=
           leadingNode $(quote catName) Parser.maxPrec <| Lott.DSL.identPrefix $(quote nameStr))
+    let parserIdent := mkIdentFrom alias <| canon.getId ++ aliasName.appendAfter "_idx_parser"
+    elabCommand <| ←
+      `(@[$(mkIdent parserAttrName):ident] def $parserIdent : TrailingParser :=
+          trailingNode $(quote catName) Parser.maxPrec 0 <|
+            checkLineEq >> "@" >> checkLineEq >> (Parser.ident <|> Parser.numLit))
     if locallyNameless then
       let parserIdent := mkIdentFrom alias <| canon.getId ++ aliasName.appendAfter "_bound_parser"
       elabCommand <| ←
@@ -585,8 +594,23 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $names,*) => do
   elabCommand <| ←
     `(@[lott_term_elab $catIdent] def $termElabName : Lott.DSL.Elab.TermElab
         | isBinder, Lean.Syntax.node _ $(quote catName) #[ident@(Lean.Syntax.ident ..)] => $rhs
+        | isBinder, Lean.Syntax.node _ $(quote catName) #[
+            Lean.Syntax.node _ $(quote catName) #[fun'@(Lean.Syntax.ident ..)],
+            Lean.Syntax.atom _ "@",
+            idx
+          ] => do
+          let typeName := if isBinder then
+              $(quote <| canonQualified.appendAfter "Id")
+            else
+              $(quote canonQualified)
+          let type ← Lean.Elab.Term.elabType <| mkIdent typeName
+          let natType := Expr.const `Nat []
+          let funType := Expr.forallE `x natType type .default
+          let funExpr ← Lean.Elab.Term.elabTerm fun' funType
+          let idxExpr ← Lean.Elab.Term.elabTerm idx natType
+          return Expr.app funExpr idxExpr
         $bound:matchAlt*
-        | _, _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
+        | _, stx => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
   let texElabName := mkIdentFrom canon <| canon.getId.appendAfter "TexElab"
   elabCommand <| ←
     `(@[lott_tex_elab $catIdent] def $texElabName : Lott.DSL.Elab.TexElab
@@ -715,7 +739,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         | throwUnsupportedSyntax
       let ids := ids?.getD (.mk #[]) |>.getElems
 
-      let ir ← ps.mapM IR.ofStx
+      let ir ← ps.mapM IR.ofProdArg
       let subst ← match ir with
         | #[mk _ (.category n)] =>
           if metaVarExt.getState (← getEnv) |>.contains n then
@@ -871,7 +895,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       `(@[$attrIdent:ident] def $varParserIdent : Parser :=
           leadingNode $(quote <| ← nt.catName) Parser.maxPrec <|
             categoryParser $(quote <| ← nt.varCatName) Parser.maxPrec >>
-            Parser.optional (checkLineEq >> "@" >> checkLineEq >> Parser.ident))
+            Parser.optional (checkLineEq >> "@" >> checkLineEq >> (Parser.ident <|> Parser.numLit)))
 
     -- Define parser in parent.
     if let some parent' := parent? then
@@ -994,13 +1018,13 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
             Lean.Elab.Term.elabTerm ident type
           | _, Lean.Syntax.node _ $(quote <| ← nt.catName) #[
               Lean.Syntax.node _ $(quote <| ← nt.varCatName) #[fun'@(Lean.Syntax.ident ..)],
-              Lean.Syntax.node _ `null #[Lean.Syntax.atom _ "@", i@(Lean.Syntax.ident ..)]
+              Lean.Syntax.node _ `null #[Lean.Syntax.atom _ "@", idx]
             ] => do
             let type ← Lean.Elab.Term.elabType <| mkIdent $(quote <| ns ++ canonName)
             let natType := Expr.const `Nat []
             let funType := Expr.forallE `x natType type .default
             let funExpr ← Lean.Elab.Term.elabTerm fun' funType
-            let idxExpr ← Lean.Elab.Term.elabTerm i natType
+            let idxExpr ← Lean.Elab.Term.elabTerm idx natType
             return Expr.app funExpr idxExpr
           | _, _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 

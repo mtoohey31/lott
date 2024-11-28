@@ -135,19 +135,26 @@ end
 
 mutual
 partial
-def toMkTypeExpr : IR → CommandElabM (Option Term)
-  | IR.mk _ (.category n) => ``(Expr.const $(quote n) [])
+def toMkTypeExpr (ids binders : Array Name) : IR → CommandElabM (Option Term)
+  | IR.mk l (.category n) => do
+    for binder in binders do
+      if l.getId == binder && (metaVarExt.getState (← getEnv)).find! n then
+        return none
+    for id in ids do
+      if l.getId == id && (metaVarExt.getState (← getEnv)).find! n then
+        return some <| ← ``(Expr.const $(quote <| n.appendAfter "Id") [])
+    ``(Expr.const $(quote n) [])
   | IR.mk _ (.atom _) => return none
   | IR.mk _ (.sepBy ir _) => do
-    let some type' ← toMkTypeProdSeqExpr ir | return none
+    let some type' ← toMkTypeProdSeqExpr ir ids binders | return none
     ``(mkApp (Expr.const `List [levelOne]) $type')
   | IR.mk _ (.optional ir) => do
-    let some type' ← toMkTypeProdSeqExpr ir | return none
+    let some type' ← toMkTypeProdSeqExpr ir ids binders | return none
     ``(mkApp (Expr.const `Option [levelOne]) $type')
 
 partial
-def toMkTypeProdSeqExpr (ir : Array IR) : CommandElabM (Option Term) := do
-  let types ← ir.filterMapM IR.toMkTypeExpr
+def toMkTypeProdSeqExpr (ir : Array IR) (ids binders : Array Name) : CommandElabM (Option Term) := do
+  let types ← ir.filterMapM <| IR.toMkTypeExpr ids binders
   let some back := types.back? | return none
   types.foldrM (start := types.size - 1) (β := Term) (init := back) fun t acc =>
     ``(mkApp2 (Expr.const `Prod [levelOne, levelOne]) $t $acc)
