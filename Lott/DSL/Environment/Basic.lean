@@ -78,4 +78,18 @@ initialize judgementExt : PersistentEnvExtension Judgement Judgement JudgementSt
     byName.fold (cmp := Name.quickCmp) (init := #[]) fun acc _ jd => acc.push jd
 }
 
+structure Child where
+  canon : Name
+  parent' : Name
+
+abbrev ChildState := NameMap Child
+
+initialize childExt : PersistentEnvExtension Child Child ChildState ← registerPersistentEnvExtension {
+  mkInitial := return default
+  addImportedFn := fun children =>
+    return children.flatten.foldl (init := mkNameMap _) fun acc child => acc.insert child.canon child
+  addEntryFn := fun st child => st.insert child.canon child
+  exportEntriesFn := RBMap.fold (cmp := Name.quickCmp) (init := #[]) fun acc _ child => acc.push child
+}
+
 end Lott.DSL

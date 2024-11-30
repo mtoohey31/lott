@@ -320,6 +320,84 @@ def _root_.Lott.DSL.IR.toTexSeqItems (ir : Array IR) (canon : Name) : CommandEla
           $seqItems*
           return String.join [$joinArgs,*])
 
+partial
+def _root_.Lott.DSL.IR.toIsChildCtor (prodIdent isIdent : Ident) (qualified pqualified : Name) (ir pir : Array IR)
+  (binders : Array Name) : CommandElabM (TSyntax `Lean.Parser.Command.ctor) := do
+  if ir.size != pir.size then
+    throwErrorAt prodIdent "length of child production ({ir.size}) doesn't match length of parent production ({pir.size})"
+
+  let (ctorTypeRetArgs, ctorTypeArgs) ← go (ir.zip pir)
+  let binders ← ctorTypeRetArgs.filterMapM fun
+    | `(Lean.binderIdent| $_:hole) => return none
+    | `(Lean.binderIdent| $i:ident) => `(bracketedBinder| {$i})
+    | _ => throwUnsupportedSyntax
+  let ctorType ← foldrArrow ctorTypeArgs <| ← ``($isIdent ($(mkIdent <| pqualified ++ prodIdent.getId) $(← toTerms ctorTypeRetArgs)*))
+  return ← `(ctor| | $prodIdent:ident $binders:bracketedBinder* : $ctorType)
+where
+  go (irs : Array (IR × IR)) (patAcc : TSyntaxArray `Lean.binderIdent := #[])
+    (propAcc : Array Term := #[])
+    : CommandElabM (TSyntaxArray `Lean.binderIdent × Array Term) := do
+    let some (mk l' ir, mk l pir) := irs[0]? | return (patAcc, propAcc)
+    let irs' := irs.extract 1 irs.size
+
+    if binders.contains l'.getId then
+        return ← go irs' patAcc propAcc
+
+    let lbi ← `(Lean.binderIdent| $l:ident)
+    let l'bi ← `(Lean.binderIdent| $l':ident)
+    let hole ← `(Lean.binderIdent| _)
+
+    match ir, pir with
+    | .category n, .category np => do
+      if n == np then
+        return ← go irs' (patAcc.push hole) propAcc
+
+      if some np == ((childExt.getState (← getEnv)).find? n).map (·.parent') then
+        let .str _ nStr := n | throwUnsupportedSyntax
+        let isName := np ++ Name.str .anonymous nStr |>.appendBefore "Is"
+        return ← go irs' (patAcc.push lbi) <| propAcc.push <| ← `($(mkIdent isName) $l)
+
+      throwErrorAt prodIdent "couldn't find parent/child relationship between {pqualified} and {qualified}"
+    | .atom s, .atom sp => do
+      if s != sp then
+        throwErrorAt prodIdent "mismatched atoms \"{s}\" and \"{sp}\""
+
+      go irs' patAcc propAcc
+    | .sepBy ir sep, .sepBy pir psep => do
+      if sep != psep then
+        throwErrorAt prodIdent "mismatched separators \"{sep}\" and \"{psep}\""
+
+      if ir.size != pir.size then
+        throwErrorAt prodIdent "length of child sepBy ({ir.size}) doesn't match length of parent sepBy ({pir.size})"
+
+      match ← go (ir.zip pir) with
+      -- In this case, the sepBy doesn't actually contain anything stored in the datatype so we can
+      -- just skip it.
+      | (#[], #[]) => go irs' patAcc propAcc
+      -- In this case, there is a list with stuff in it, but it doesn't contain anything for us to
+      -- check, so we can just add an underscore pattern argument and proceed.
+      | (_, #[]) => go irs' (patAcc.push hole) propAcc
+      | (#[patArg], props) => go irs' (patAcc.push lbi) <| propAcc.push <| ←
+          ``(∀ $patArg ∈ $l, $(← foldlAnd props))
+      | (patArgs, props) => go irs' (patAcc.push lbi) <| propAcc.push <| ←
+          ``(∀ $l'bi ∈ $l, let $(← foldrProd <| ← toTerms patArgs):term := $l'; $(← foldlAnd props))
+    | .optional ir, .optional pir => do
+      if ir.size != pir.size then
+        throwErrorAt prodIdent "length of child optional ({ir.size}) doesn't match length of parent optional ({pir.size})"
+
+      match ← go (ir.zip pir) with
+      -- In this case, the optional doesn't actually contain anything stored in the datatype so we
+      -- can just skip it.
+      | (#[], #[]) => go irs' patAcc propAcc
+      -- In this case, there is a list with stuff in it, but it doesn't contain anything for us to
+      -- check, so we can just add an underscore pattern argument and proceed.
+      | (_, #[]) => go irs' (patAcc.push hole) propAcc
+      | (#[patArg], props) => go irs' (patAcc.push lbi) <| propAcc.push <| ←
+          ``(∀ $patArg:binderIdent ∈ $l, $(← foldlAnd props))
+      | (patArgs, props) => go irs' (patAcc.push lbi) <| propAcc.push <| ←
+          ``(∀ $l'bi ∈ $l, let $(← foldrProd <| ← toTerms patArgs):term := $l'; $(← foldlAnd props))
+    | _, _ => throwErrorAt prodIdent "mismatched syntax"
+
 private
 def Nat.toSubscriptString : Nat → String
   | 0 => "₀"
@@ -720,12 +798,16 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
   -- following steps.
   let ns ← getCurrNamespace
   for nt in nts do
-    let `(NonTerminal| $[nosubst]? nonterminal $[(parent := $_)]? $[$names],* := $_*) := nt
+    let `(NonTerminal| $[nosubst]? nonterminal $[(parent := $parent?)]? $[$names],* := $_*) := nt
       | throwUnsupportedSyntax
     let names@(canonName :: _) := names.toList | throwUnsupportedSyntax
+    let canon := ns ++ canonName.getId
     for name in names do
-      setEnv <| aliasExt.addEntry (← getEnv)
-        { canon := ns ++ canonName.getId, alias := ns ++ name.getId }
+      setEnv <| aliasExt.addEntry (← getEnv) { canon, alias := ns ++ name.getId }
+
+    if let some parent' := parent? then
+      let parent' ← resolveSymbol parent' (allowSuffix := false)
+      setEnv <| childExt.addEntry (← getEnv) { canon, parent' }
 
   -- Transform syntax into non-terminal structure.
   let nts ← nts.mapM fun nt => do
@@ -776,41 +858,43 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
     return { canon, aliases, prods, parent?, substitutions : NonTerminal }
 
   -- Define mutual inductives and parser categories.
-  let inductives ← nts.mapM fun nt@{ canon, prods, parent?, .. } => do
+  let defsAndInductives ← nts.mapM fun nt@{ canon, prods, parent?, .. } => do
     setEnv <| ← registerParserCategory (← getEnv) (← nt.parserAttrName) (← nt.catName) .symbol
     setEnv <| ← registerParserCategory (← getEnv) (← nt.varParserAttrName) (← nt.varCatName) .symbol
 
-    if let some parent' := parent? then
-      if nts.size != 1 then
-        throwErrorAt parent' "nonterminal with parent can't appear in a mutual block"
+    let some parent' := parent? |
+      let ctors ← prods.filterMapM fun prod@{ name, ir, type, ids, .. } => do
+        let .normal := type | return none
+        let ctorType ← IR.toTypeArrSeq ir canon ids prod.binders
+        `(ctor| | $name:ident : $ctorType)
+      let inductive' ← `(inductive $canon where $ctors*)
+      return (none, inductive')
+    let some { normalProds, .. } := symbolExt.getState (← getEnv) |>.find? parent'.getId
+      | throwErrorAt parent' "unknown parent {parent'.getId}"
 
-      let some { normalProds, .. } := symbolExt.getState (← getEnv) |>.find? parent'.getId
-        | throwErrorAt parent' "unknown parent {parent'.getId}"
+    let isIdent := mkIdentFrom canon <| parent'.getId ++ canon.getId.appendBefore "Is"
+    let ctors ← prods.mapM fun prod@{ name, ir, type, .. } => match type with
+      | .sugar ref | .customElab ref =>
+        throwErrorAt ref "nonterminal with parent can only contain normal productions"
+      | .normal => do
+        let some pir := normalProds.find? name.getId
+          | throwErrorAt name "normal production with matching name not found in parent"
 
-      let isIdent := mkIdentFrom canon <| parent'.getId ++ canon.getId.appendBefore "Is"
-      let ctors ← prods.mapM fun prod@{ name, ir, type, .. } => match type with
-        | .sugar ref | .customElab ref =>
-          throwErrorAt ref "nonterminal with parent can only contain normal productions"
-        | .normal => do
-          let some pir := normalProds.find? name.getId
-            | throwErrorAt name "normal production with matching name not found in parent"
+        IR.toIsChildCtor name isIdent (← nt.qualified) parent'.getId ir pir prod.binders
+    let inductive' ←
+      `(inductive $(mkIdentFrom isIdent <| `_root_ ++ isIdent.getId) : $parent' → Prop where
+          $ctors*)
 
-          IR.toIsChildCtor name isIdent (← nt.qualified) parent'.getId ir pir prod.binders
-      elabCommand <| ←
-        `(inductive $(mkIdentFrom isIdent <| `_root_ ++ isIdent.getId) : $parent' → Prop where
-            $ctors*)
-
-      return ← `(def $canon := { x : $parent' // $isIdent x })
-
-    let ctors ← prods.filterMapM fun prod@{ name, ir, type, ids, .. } => do
-      let .normal := type | return none
-      let ctorType ← IR.toTypeArrSeq ir canon ids prod.binders
-      `(ctor| | $name:ident : $ctorType)
-    `(inductive $canon where $ctors*)
+    return (some <| ← `(def $canon := { x : $parent' // $isIdent x }), inductive')
+  let (defs, inductives) := defsAndInductives.unzip
   if let ⟨[i]⟩ := inductives then
     elabCommand i.raw
   else
     elabCommand <| ← `(mutual $inductives* end)
+  match defs.filterMap id with
+  | ⟨[]⟩ => pure ()
+  | ⟨[d]⟩ => elabCommand d.raw
+  | defs => elabCommand <| ← `(mutual $defs* end)
 
   let ntsMap ← nts.foldlM (init := mkNameMap _) fun acc nt => return acc.insert (← nt.qualified) nt
   let namePairCmp | (a₁, a₂), (b₁, b₂) => Name.quickCmp a₁ b₁ |>.«then» <| Name.quickCmp a₂ b₂
