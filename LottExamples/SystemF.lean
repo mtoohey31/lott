@@ -34,9 +34,7 @@ theorem TypeVar_open_sizeOf (A : Type') : sizeOf (A.TypeVar_open a n) = sizeOf A
     · case isFalse => rfl
   | var (.free _) =>
     rw [TypeVar_open]
-    split
-    · case isTrue => rw [if_neg id]
-    · case isFalse => rfl
+    split <;> rfl
   | arr A' B =>
     dsimp only [sizeOf]
     rw [TypeVar_open, _sizeOf_1, _sizeOf_1]
@@ -74,9 +72,8 @@ theorem TypeVar_open_comm (A : Type') (anea' : a ≠ a') (mnen : m ≠ n)
     rw [TypeVar_open, TypeVar_open, A'.TypeVar_open_comm anea' mnen, B.TypeVar_open_comm anea' mnen,
         TypeVar_open, TypeVar_open]
   | forall' A' =>
-    rw [TypeVar_open, TypeVar_open]
-    simp only
-    rw [A'.TypeVar_open_comm anea' (mnen <| Nat.succ_inj'.mp ·), ← TypeVar_open, ← TypeVar_open]
+    rw [TypeVar_open, TypeVar_open, A'.TypeVar_open_comm anea' (mnen <| Nat.succ_inj'.mp ·),
+        ← TypeVar_open, ← TypeVar_open]
 
 namespace TypeVarLocallyClosed
 
@@ -117,9 +114,7 @@ theorem TypeVar_open_eq {A : Type'} (Alc : A.TypeVarLocallyClosed m) (mlen : m �
   | .arr A' B, arr A'lc Blc =>
     rw [TypeVar_open, A'lc.TypeVar_open_eq mlen, Blc.TypeVar_open_eq mlen]
   | .forall' A, forall' A'lc =>
-    rw [TypeVar_open]
-    simp only
-    rw [A'lc.TypeVar_open_eq (Nat.add_le_add_iff_right.mpr mlen)]
+    rw [TypeVar_open, A'lc.TypeVar_open_eq (Nat.add_le_add_iff_right.mpr mlen)]
 
 theorem Type'_open_eq {A : Type'} (Alc : A.TypeVarLocallyClosed m) (mlen : m ≤ n)
   : A.Type'_open B n = A := by match A, Alc with
@@ -130,9 +125,7 @@ theorem Type'_open_eq {A : Type'} (Alc : A.TypeVarLocallyClosed m) (mlen : m ≤
   | .arr A' B, arr A'lc Blc =>
     rw [Type'_open, A'lc.Type'_open_eq mlen, Blc.Type'_open_eq mlen]
   | .forall' A, forall' A'lc =>
-    rw [Type'_open]
-    simp only
-    rw [A'lc.Type'_open_eq (Nat.add_le_add_iff_right.mpr mlen)]
+    rw [Type'_open, A'lc.Type'_open_eq (Nat.add_le_add_iff_right.mpr mlen)]
 
 theorem TypeVar_open_TypeVar_close {A : Type'} (Alc : A.TypeVarLocallyClosed n)
   : (A.TypeVar_close a n).TypeVar_open a n = A := by match A with
@@ -148,9 +141,7 @@ theorem TypeVar_open_TypeVar_close {A : Type'} (Alc : A.TypeVarLocallyClosed n)
         Blc.TypeVar_open_TypeVar_close]
   | .forall' A' =>
     let .forall' A'lc := Alc
-    rw [TypeVar_close, TypeVar_open]
-    simp only
-    rw [A'lc.TypeVar_open_TypeVar_close]
+    rw [TypeVar_close, TypeVar_open, A'lc.TypeVar_open_TypeVar_close]
 
 theorem TypeVar_close_Type'_open_eq_TypeVar_subst {A B : Type'} (Alc : A.TypeVarLocallyClosed n)
   : (A.TypeVar_close a n).Type'_open B n = A.TypeVar_subst a B := by match A with
@@ -175,9 +166,7 @@ theorem TypeVar_close_Type'_open_eq_TypeVar_subst {A B : Type'} (Alc : A.TypeVar
         B'lc.TypeVar_close_Type'_open_eq_TypeVar_subst, TypeVar_subst]
   | .forall' A' =>
     let .forall' A'lc := Alc
-    rw [TypeVar_close, Type'_open]
-    simp only
-    rw [A'lc.TypeVar_close_Type'_open_eq_TypeVar_subst, TypeVar_subst]
+    rw [TypeVar_close, Type'_open, A'lc.TypeVar_close_Type'_open_eq_TypeVar_subst, TypeVar_subst]
 
 end TypeVarLocallyClosed
 
@@ -202,10 +191,8 @@ theorem Type'_open_comm (A : Type') {B A': Type'} (mnen : m ≠ n) (Blc : B.Type
     rw [Type'_open, Type'_open, A'.Type'_open_comm mnen Blc A'lc, B.Type'_open_comm mnen Blc A'lc,
         ← Type'_open, ← Type'_open]
   | forall' A' =>
-    rw [Type'_open, Type'_open]
-    simp only
-    rw [A'.Type'_open_comm (mnen <| Nat.succ_inj'.mp ·) (Blc.weaken (n := 1))
-          (A'lc.weaken (n := 1)), ← Type'_open, ← Type'_open]
+    rw [Type'_open, Type'_open, A'.Type'_open_comm (mnen <| Nat.succ_inj'.mp ·)
+          (Blc.weaken (n := 1)) (A'lc.weaken (n := 1)), ← Type'_open, ← Type'_open]
 
 theorem TypeVar_open_Type'_open_eq {A B : Type'} (Blc : B.TypeVarLocallyClosed m) (mnen : m ≠ n)
   : (A.TypeVar_open a m).Type'_open B n = (A.Type'_open B n).TypeVar_open a m := by match A with
@@ -227,9 +214,7 @@ theorem TypeVar_open_Type'_open_eq {A B : Type'} (Blc : B.TypeVarLocallyClosed m
     rw [TypeVar_open, Type'_open, TypeVar_open_Type'_open_eq Blc mnen,
         TypeVar_open_Type'_open_eq Blc mnen, ← TypeVar_open, ← Type'_open]
   | forall' A' =>
-    rw [TypeVar_open, Type'_open]
-    simp only
-    rw [TypeVar_open_Type'_open_eq Blc.weaken
+    rw [TypeVar_open, Type'_open, TypeVar_open_Type'_open_eq Blc.weaken
           (by exact mnen <| Nat.succ_inj'.mp ·), ← TypeVar_open, ← Type'_open]
 
 theorem TypeVar_open_Type'_open_eq' {A B : Type'} (Blc : B.TypeVarLocallyClosed n)
@@ -245,9 +230,7 @@ theorem TypeVar_open_Type'_open_eq' {A B : Type'} (Blc : B.TypeVarLocallyClosed 
     rw [TypeVar_open, Type'_open, TypeVar_open_Type'_open_eq' Blc, TypeVar_open_Type'_open_eq' Blc,
         ← TypeVar_open]
   | forall' A' =>
-    rw [TypeVar_open, Type'_open]
-    simp only
-    rw [TypeVar_open_Type'_open_eq' Blc.weaken, ← TypeVar_open]
+    rw [TypeVar_open, Type'_open, TypeVar_open_Type'_open_eq' Blc.weaken, ← TypeVar_open]
 
 theorem TypeVar_subst_TypeVar_open_comm {A B : Type'} (Blc : B.TypeVarLocallyClosed n)
   (anea' : a ≠ a')
@@ -270,9 +253,8 @@ theorem TypeVar_subst_TypeVar_open_comm {A B : Type'} (Blc : B.TypeVarLocallyClo
     rw [TypeVar_subst, TypeVar_open, TypeVar_subst_TypeVar_open_comm Blc anea',
         TypeVar_subst_TypeVar_open_comm Blc anea', ← TypeVar_subst, ← TypeVar_open]
   | forall' A' =>
-    rw [TypeVar_subst, TypeVar_open]
-    simp only
-    rw [TypeVar_subst_TypeVar_open_comm Blc.weaken anea', ← TypeVar_subst, ← TypeVar_open]
+    rw [TypeVar_subst, TypeVar_open, TypeVar_subst_TypeVar_open_comm Blc.weaken anea',
+        ← TypeVar_subst, ← TypeVar_open]
 
 end Type'
 
@@ -299,9 +281,7 @@ theorem TermVar_open_sizeOf (E : Term) : sizeOf (E.TermVar_open x n) = sizeOf E 
     · case isFalse => rfl
   | var (.free _) =>
     rw [TermVar_open]
-    split
-    · case isTrue => rw [if_neg id]
-    · case isFalse => rfl
+    split <;> rfl
   | lam A E' =>
     dsimp [sizeOf]
     rw [TermVar_open, _sizeOf_1, _sizeOf_1]
@@ -390,9 +370,8 @@ theorem TermVar_open_comm (E : Term) (xnex' : x ≠ x') (mnen : m ≠ n)
       · case isTrue h' => rw [TermVar_open, if_neg (nomatch ·)]
       · case isFalse h' => rw [TermVar_open, if_neg h]
   | lam A E' =>
-    rw [TermVar_open, TermVar_open]
-    simp only
-    rw [E'.TermVar_open_comm xnex' (mnen <| Nat.succ_inj'.mp ·), ← TermVar_open, ← TermVar_open]
+    rw [TermVar_open, TermVar_open, E'.TermVar_open_comm xnex' (mnen <| Nat.succ_inj'.mp ·),
+        ← TermVar_open, ← TermVar_open]
   | app E' F =>
     rw [TermVar_open, TermVar_open, E'.TermVar_open_comm xnex' mnen, F.TermVar_open_comm xnex' mnen,
         ← TermVar_open, ← TermVar_open]
@@ -412,9 +391,8 @@ theorem TypeVar_open_comm (E : Term) (anea' : a ≠ a') (mnen : m ≠ n)
     rw [TypeVar_open, TypeVar_open, E'.TypeVar_open_comm anea' mnen, F.TypeVar_open_comm anea' mnen,
         ← TypeVar_open, ← TypeVar_open]
   | typeGen E' =>
-    rw [TypeVar_open, TypeVar_open]
-    simp only
-    rw [E'.TypeVar_open_comm anea' (mnen <| Nat.succ_inj'.mp ·), ← TypeVar_open, ← TypeVar_open]
+    rw [TypeVar_open, TypeVar_open, E'.TypeVar_open_comm anea' (mnen <| Nat.succ_inj'.mp ·),
+        ← TypeVar_open, ← TypeVar_open]
   | typeApp E' A =>
     rw [TypeVar_open, TypeVar_open, E'.TypeVar_open_comm anea' mnen, A.TypeVar_open_comm anea' mnen,
         ← TypeVar_open, ← TypeVar_open]
@@ -432,9 +410,7 @@ theorem TermVar_open_Type'_open_comm (E : Term)
     rw [TermVar_open, Type'_open, E'.TermVar_open_Type'_open_comm, F.TermVar_open_Type'_open_comm,
         ← TermVar_open, ← Type'_open]
   | typeGen E' =>
-    rw [TermVar_open, Type'_open]
-    simp only
-    rw [E'.TermVar_open_Type'_open_comm, ← TermVar_open, ← Type'_open]
+    rw [TermVar_open, Type'_open, E'.TermVar_open_Type'_open_comm, ← TermVar_open, ← Type'_open]
   | typeApp E' A' =>
     rw [TermVar_open, Type'_open, E'.TermVar_open_Type'_open_comm, ← TermVar_open, ← Type'_open]
 
@@ -508,9 +484,7 @@ theorem TermVar_open_eq {E : Term} (h : E.TermVarLocallyClosed m) (mlen : m ≤ 
     have := Nat.ne_of_lt <| Nat.lt_of_lt_of_le lt mlen
     rw [TermVar_open, if_neg fun x => this.symm <| TermVar.bound.inj x]
   | .lam A E', lam E'lc =>
-    rw [TermVar_open]
-    simp only
-    rw [E'lc.TermVar_open_eq (Nat.add_le_add_iff_right.mpr mlen)]
+    rw [TermVar_open, E'lc.TermVar_open_eq (Nat.add_le_add_iff_right.mpr mlen)]
   | .app E' F, app E'lc Flc =>
     rw [TermVar_open, E'lc.TermVar_open_eq mlen, Flc.TermVar_open_eq mlen]
   | .typeGen E', typeGen E'lc => rw [TermVar_open, E'lc.TermVar_open_eq mlen]
@@ -535,10 +509,8 @@ theorem TermVar_open_Term_open_eq {E F : Term} (Flc : F.TermVarLocallyClosed m) 
       · case isTrue h' => rw [Flc.TermVar_open_eq (Nat.le_refl _)]
       · case isFalse h' => rw [TermVar_open, if_neg h]
   | lam A E' =>
-    rw [TermVar_open, Term_open]
-    simp only
-    rw [TermVar_open_Term_open_eq Flc.weaken (by exact mnen <| Nat.succ_inj'.mp ·), ← TermVar_open,
-        ← Term_open]
+    rw [TermVar_open, Term_open, TermVar_open_Term_open_eq Flc.weaken
+          (by exact mnen <| Nat.succ_inj'.mp ·), ← TermVar_open, ← Term_open]
   | app E' F =>
     rw [TermVar_open, Term_open, TermVar_open_Term_open_eq Flc mnen,
         TermVar_open_Term_open_eq Flc mnen, ← TermVar_open, ← Term_open]
@@ -562,9 +534,7 @@ theorem TermVar_open_TypeVar_open_eq (E : Term)
     rw [TermVar_open, TypeVar_open, TermVar_open_TypeVar_open_eq, TermVar_open_TypeVar_open_eq,
         ← TermVar_open, ← TypeVar_open]
   | typeGen E' =>
-    rw [TermVar_open, TypeVar_open]
-    simp only
-    rw [TermVar_open_TypeVar_open_eq, ← TermVar_open, ← TypeVar_open]
+    rw [TermVar_open, TypeVar_open, TermVar_open_TypeVar_open_eq, ← TermVar_open, ← TypeVar_open]
   | typeApp E' A =>
     rw [TermVar_open, TypeVar_open, TermVar_open_TypeVar_open_eq, ← TermVar_open, ← TypeVar_open]
 
@@ -579,10 +549,8 @@ theorem TypeVar_open_Type'_open_eq {E : Term} {A : Type'} (Alc : A.TypeVarLocall
     rw [TypeVar_open, Type'_open, TypeVar_open_Type'_open_eq Alc mnen,
         TypeVar_open_Type'_open_eq Alc mnen, ← TypeVar_open, ← Type'_open]
   | typeGen E' =>
-    rw [TypeVar_open, Type'_open]
-    simp only
-    rw [TypeVar_open_Type'_open_eq Alc.weaken (by exact mnen <| Nat.succ_inj'.mp ·), ← TypeVar_open,
-        ← Type'_open]
+    rw [TypeVar_open, Type'_open, TypeVar_open_Type'_open_eq Alc.weaken
+          (by exact mnen <| Nat.succ_inj'.mp ·), ← TypeVar_open, ← Type'_open]
   | typeApp E' A =>
     rw [TypeVar_open, Type'_open, TypeVar_open_Type'_open_eq Alc mnen,
         Type'.TypeVar_open_Type'_open_eq Alc mnen, ← TypeVar_open, ← Type'_open]
@@ -649,9 +617,7 @@ theorem TypeVar_open_eq {E : Term} (h : E.TypeVarLocallyClosed m) (mlen : m ≤ 
   | .app E' F, app E'lc Flc =>
     rw [TypeVar_open, E'lc.TypeVar_open_eq mlen, Flc.TypeVar_open_eq mlen]
   | .typeGen E', typeGen E'lc =>
-    rw [TypeVar_open]
-    simp only
-    rw [E'lc.TypeVar_open_eq (Nat.add_le_add_iff_right.mpr mlen)]
+    rw [TypeVar_open, E'lc.TypeVar_open_eq (Nat.add_le_add_iff_right.mpr mlen)]
   | .typeApp E' A, typeApp E'lc Alc =>
     rw [TypeVar_open, E'lc.TypeVar_open_eq mlen, Alc.TypeVar_open_eq mlen]
 
@@ -666,9 +632,7 @@ theorem TypeVar_open_Term_open_eq {E F : Term} (Flc : F.TypeVarLocallyClosed n)
     · case isTrue h => rw [Flc.TypeVar_open_eq (Nat.le_refl _)]
     · case isFalse h => rw [TypeVar_open]
   | lam A E' =>
-    rw [TypeVar_open, Term_open]
-    simp only
-    rw [TypeVar_open_Term_open_eq Flc, Term_open, TypeVar_open]
+    rw [TypeVar_open, Term_open, TypeVar_open_Term_open_eq Flc, Term_open, TypeVar_open]
   | app E' F =>
     rw [TypeVar_open, Term_open, TypeVar_open_Term_open_eq Flc, TypeVar_open_Term_open_eq Flc,
         ← TypeVar_open, ← Term_open]
@@ -1116,9 +1080,7 @@ theorem TypeVar_close_eq_of {A : Type'} : [[a ∉ ftv(A)]] → A.TypeVar_close a
     rw [Type'.TypeVar_close, arr.mp aninftvA |>.left.TypeVar_close_eq_of,
         arr.mp aninftvA |>.right.TypeVar_close_eq_of]
   | .forall' A' =>
-    rw [Type'.TypeVar_close]
-    simp only
-    rw [aninftvA.forall'.TypeVar_close_eq_of]
+    rw [Type'.TypeVar_close, aninftvA.forall'.TypeVar_close_eq_of]
 
 theorem TypeVar_close_TypeVar_open_of {A : Type'}
   : [[a ∉ ftv(A)]] → (A.TypeVar_open a n).TypeVar_close a n = A := fun aninftvA => by match A with
@@ -1133,9 +1095,7 @@ theorem TypeVar_close_TypeVar_open_of {A : Type'}
         arr.mp aninftvA |>.left.TypeVar_close_TypeVar_open_of,
         arr.mp aninftvA |>.right.TypeVar_close_TypeVar_open_of]
   | .forall' A' =>
-    rw [Type'.TypeVar_open, Type'.TypeVar_close]
-    simp only
-    rw [aninftvA.forall'.TypeVar_close_TypeVar_open_of]
+    rw [Type'.TypeVar_open, Type'.TypeVar_close, aninftvA.forall'.TypeVar_close_TypeVar_open_of]
 
 theorem of_TypeVar_close {A : Type'} : NotInFreeTypeVars a (A.TypeVar_close a n) := by
   match A with
@@ -1155,7 +1115,6 @@ theorem of_TypeVar_close {A : Type'} : NotInFreeTypeVars a (A.TypeVar_close a n)
     exact arr.mpr ⟨of_TypeVar_close, of_TypeVar_close⟩
   | .forall' A' =>
     rw [Type'.TypeVar_close]
-    simp only
     intro ain
     let .forall' ain' := ain
     exact of_TypeVar_close ain'
@@ -1246,9 +1205,8 @@ theorem Type'_open_eq_of_TypeVar_open_eq {A A' B : Type'}
         Type'_open_eq_of_TypeVar_open_eq h'' aninftvB'' aninftvB''' Blc]
   | forall' A'', forall' A''' =>
     rw [TypeVar_open, TypeVar_open] at h
-    rw [Type'_open, Type'_open]
-    simp only at *
-    rw [Type'_open_eq_of_TypeVar_open_eq (forall'.inj h) aninftvA.forall' aninftvA'.forall' Blc]
+    rw [Type'_open, Type'_open, Type'_open_eq_of_TypeVar_open_eq (forall'.inj h) aninftvA.forall'
+          aninftvA'.forall' Blc]
 
 theorem Type'_open_TypeVar_subst_eq_of_TypeVar_open_eq {A A' B B' : Type'}
   (h : A.TypeVar_open a n = A'.Type'_open (B'.TypeVar_open a l) o) (Blc : B.TypeVarLocallyClosed o)
@@ -1350,10 +1308,8 @@ theorem Type'_open_TypeVar_subst_eq_of_TypeVar_open_eq {A A' B B' : Type'}
         Type'_open]
   | forall' A'', forall' A''' =>
     rw [TypeVar_open, Type'_open] at h
-    rw [Type'_open]
-    simp only at *
-    rw [Type'_open_TypeVar_subst_eq_of_TypeVar_open_eq (forall'.inj h) Blc.weaken aninftvA.forall'
-          aninftvB', TypeVar_subst, Type'_open]
+    rw [Type'_open, Type'_open_TypeVar_subst_eq_of_TypeVar_open_eq (forall'.inj h) Blc.weaken
+          aninftvA.forall' aninftvB', TypeVar_subst, Type'_open]
   | arr A'' B'', var (.bound _) =>
     rw [TypeVar_open, Type'_open] at h
     split at h
@@ -1366,7 +1322,6 @@ theorem Type'_open_TypeVar_subst_eq_of_TypeVar_open_eq {A A' B B' : Type'}
     · case isFalse h' => nomatch h
   | forall' A'', var (.bound _) =>
     rw [TypeVar_open, Type'_open] at h
-    simp only at h
     split at h
     · case isTrue h' =>
       cases h'
@@ -1722,7 +1677,6 @@ theorem Type'_open_preservation {A : Type'} {G : Environment} (aninftvA : [[a �
       (Type'_open_preservation (Type'.NotInFreeTypeVars.arr.mp aninftvA).right Bwf B'wf)
   | .forall' A' =>
     rw [Type'.TypeVar_open] at Aopwf
-    simp only at Aopwf
     let .forall' A'wf (I := I) := Aopwf
     exact .forall' (I := a :: I) <| fun a' a'nin => by
       have a'nea := List.ne_of_not_mem_cons a'nin
@@ -2085,7 +2039,6 @@ theorem Term_open_preservation {E : Term} (EtyB : Typing [[ε, x : A, G]] (E.Ter
       nomatch EtyB
   | .lam A' E' =>
     rw [Term.Term_open]
-    simp only
     let .lam A'wf E'ty (I := I) := EtyB
     rw [← G.empty_append]
     exact lam (I := x :: I) A'wf.TermVar_drop fun x' x'nin => by
@@ -2182,9 +2135,8 @@ theorem Type'_open_preservation {E : Term} {A : Type'}
     let B'wf' := TypeWellFormedness.Type'_open_preservation aninftvE.typeApp.right Bwf B'wf
     rw [Environment.empty_append] at B'wf'
     let .forall' A''lc' := A''folc'
-    rw [Type'.TypeVar_close, Type'.Type'_open] at E'ty'
-    simp only at E'ty'
-    rw [A''lc'.TypeVar_close_Type'_open_eq_TypeVar_subst] at E'ty'
+    rw [Type'.TypeVar_close, Type'.Type'_open,
+        A''lc'.TypeVar_close_Type'_open_eq_TypeVar_subst] at E'ty'
     rw [Type'.Type'_open_TypeVar_subst_eq_of_TypeVar_open_eq A'eq Bwf.TypeVarLocallyClosed_of
           aninftvA aninftvE.typeApp.right]
     exact Typing.typeApp E'ty' B'wf'

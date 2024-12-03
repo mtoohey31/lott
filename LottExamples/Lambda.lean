@@ -17,7 +17,7 @@ judgement_syntax e " ->ᵦ " e' : BetaReduction
 
 judgement BetaReduction :=
 
-─────────────────── mk
+─────────────────────── mk
 (λ x. e₀) e₁ ->ᵦ e₀^^e₁
 
 judgement_syntax "lc" "(" e ")" : Term.VarLocallyClosed₀
@@ -29,7 +29,7 @@ judgement_syntax e " ->η " e' : EtaReduction
 judgement EtaReduction :=
 
 lc(e)
-────────────── mk
+──────────────── mk
 λ x. e x$0 ->η e
 
 end LottExamples.Lambda

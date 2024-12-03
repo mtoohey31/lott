@@ -121,7 +121,7 @@ open PrettyPrinter Formatter in
 private
 def parserOfStack.formatter (offset : Nat) (_prec : Nat := 0) : Formatter := do
   let st ← get
-  let stx := st.stxTrav.parents.back.getArg (st.stxTrav.idxs.back - offset)
+  let stx := st.stxTrav.parents.back!.getArg (st.stxTrav.idxs.back! - offset)
   formatterForKind stx.getKind
 
 open PrettyPrinter Parenthesizer in
@@ -129,7 +129,7 @@ open PrettyPrinter Parenthesizer in
 private
 def parserOfStack.parenthesizer (offset : Nat) (_prec : Nat := 0) : Parenthesizer := do
   let st ← get
-  let stx := st.stxTrav.parents.back.getArg (st.stxTrav.idxs.back - offset)
+  let stx := st.stxTrav.parents.back!.getArg (st.stxTrav.idxs.back! - offset)
   parenthesizerForKind stx.getKind
 
 private

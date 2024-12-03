@@ -228,7 +228,7 @@ def _root_.Lott.DSL.IR.toExprArgs (ir : Array IR) (ids binders : Array Name)
 private
 def elabSymbolComprehension (symbol : TSyntax `Lott.Symbol) (i : Ident) (collection : Term)
   (type : Expr) : TermElabM Expr := do
-  let stx ← `(Coe.coe (β := List Nat) $collection |>.map (fun $i => [[$symbol:Lott.Symbol]]) |>.join)
+  let stx ← `(Coe.coe (β := List Nat) $collection |>.map (fun $i => [[$symbol:Lott.Symbol]]) |>.flatten)
   Term.elabTerm stx (Expr.app (.const `List [levelOne]) type)
 
 private partial

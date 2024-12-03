@@ -45,14 +45,12 @@ theorem map_eq_of_eq_of_mem {f g : Nat → α} (h : ∀ i ∈ [m:n], f i = g i)
     contradiction
   · case isFalse =>
     split
-    · case isTrue => contradiction
-    · case isFalse =>
-      split
-      · case isTrue h' =>
-        simp only [List.map] at *
-        let h'' i (mem : i ∈ [m + 1:n]) := h i ⟨Nat.le_of_succ_le mem.lower, mem.upper⟩
-        rw [h m ⟨Nat.le_refl _, h'⟩, map_eq_of_eq_of_mem (m := m + 1) h'']
-      · case isFalse h => rfl
+    · case isTrue h' =>
+      simp only [List.map]
+      apply List.cons_eq_cons.mpr
+      let h'' i (mem : i ∈ [m + 1:n]) := h i ⟨Nat.le_of_succ_le mem.lower, mem.upper⟩
+      exact ⟨h m ⟨Nat.le_refl _, h'⟩, map_eq_of_eq_of_mem h''⟩
+    · case isFalse => rfl
 termination_by n - m
 decreasing_by
   all_goals simp_wf

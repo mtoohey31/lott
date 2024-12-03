@@ -1,9 +1,9 @@
 namespace List
 
-theorem map_singleton_join (xs : List α) : (xs.map fun x => [f x]).join = xs.map f :=
+theorem map_singleton_join (xs : List α) : (xs.map fun x => [f x]).flatten = xs.map f :=
   match xs with
   | [] => rfl
-  | x :: xs' => by rw [List.map, List.map, List.join, List.singleton_append, xs'.map_singleton_join]
+  | x :: xs' => by rw [List.map, List.map, List.flatten, List.singleton_append, xs'.map_singleton_join]
 
 theorem not_mem_append' {xs ys : List α} : z ∉ xs ++ ys ↔ z ∉ xs ∧ z ∉ ys where
   mp zninxsys := ⟨(zninxsys <| mem_append.mpr <| .inl ·), (zninxsys <| mem_append.mpr <| .inr ·)⟩

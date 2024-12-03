@@ -70,13 +70,13 @@ theorem Var_open_comm (e : Term) (mnen : m ≠ n)
 
 namespace VarLocallyClosed
 
-theorem weakening (e : Term) (mlen : m ≤ n) : e.VarLocallyClosed m → e.VarLocallyClosed n
+theorem weakening {e : Term} (mlen : m ≤ n) : e.VarLocallyClosed m → e.VarLocallyClosed n
   | var_free => var_free
   | var_bound h => var_bound <| Nat.lt_of_lt_of_le h mlen
   | lam e'lc => lam <| e'lc.weakening <| Nat.succ_le_succ_iff.mpr mlen
   | app e₀lc e₁lc => app (e₀lc.weakening mlen) (e₁lc.weakening mlen)
 
-theorem Var_open_drop (e : Term) (mltn : m < n)
+theorem Var_open_drop {e : Term} (mltn : m < n)
   : (e.Var_open x m).VarLocallyClosed n → e.VarLocallyClosed n := fun eoplc => by match e with
   | var (.free _) => exact var_free
   | var (.bound _) =>
@@ -88,7 +88,6 @@ theorem Var_open_drop (e : Term) (mltn : m < n)
     · case isFalse h => exact eoplc
   | .lam e' =>
     rw [Var_open] at eoplc
-    simp only at eoplc
     let .lam e'oplc := eoplc
     exact lam <| e'oplc.Var_open_drop <| Nat.succ_lt_succ_iff.mpr mltn
   | .app e₀ e₁ =>
@@ -132,9 +131,7 @@ theorem Var_open_Term_open_comm {e e' : Term} (e'lc : e'.VarLocallyClosed) (mnen
         rw [Term_open, if_neg (nomatch ·)]
       · case isFalse h' => rw [Term_open, if_neg h]
   | .lam e' =>
-    rw [Term_open, Var_open, Var_open, Term_open]
-    simp only
-    rw [e'lc.Var_open_Term_open_comm]
+    rw [Term_open, Var_open, Var_open, Term_open, e'lc.Var_open_Term_open_comm]
     exact (mnen <| Nat.succ_inj'.mp ·)
   | .app e₀ e₁ =>
     simp [Term_open, Var_open, e'lc.Var_open_Term_open_comm mnen, e'lc.Var_open_Term_open_comm mnen]
@@ -177,7 +174,6 @@ theorem Var_open : InFreeVars x (e.Var_open x' n) → x ≠ x' → [[x ∈ fv(e)
       · case isFalse h => exact xinfveop
     | .lam e' =>
       rw [Term.Var_open] at xinfveop
-      simp only at xinfveop
       let .lam xinfve'op := xinfveop
       exact lam <| xinfve'op.Var_open xnex'
     | .app e₀ e₁ =>
@@ -276,8 +272,8 @@ theorem append_elim : [[x : τ ∈ Γ₀, Γ₁]] → [[x : τ ∈ Γ₀]] ∧ [
     | .empty => .inl ⟨xinΓ₀Γ₁, fun _ => (nomatch ·)⟩
     | .ext .. =>
       match xinΓ₀Γ₁ with
-      | head => .inr head
-      | ext xinΓ₀Γ₁' xnex' => match xinΓ₀Γ₁'.append_elim with
+      | .head => .inr head
+      | .ext xinΓ₀Γ₁' xnex' => match xinΓ₀Γ₁'.append_elim with
         | .inl ⟨xinΓ₀, xninΓ₁'⟩ => .inl ⟨xinΓ₀, VarNotIn.ext.mpr ⟨xnex', xninΓ₁'⟩⟩
         | .inr xinΓ₁' => .inr <| xinΓ₁'.ext xnex'
 
@@ -438,7 +434,7 @@ end WellFormedness
 
 theorem VarIn.exchange
   : [[x : τ ∈ Γ₀, x' : τ', Γ₁, Γ₂]] → [[⊢ Γ₀, x' : τ', Γ₁, Γ₂]] → [[x : τ ∈ Γ₀, Γ₁, x' : τ', Γ₂]] :=
-  fun xinΓ₀x'Γ₁Γ₂ Γ₀x'Γ₁Γ₂wf =>
+  fun xinΓ₀x'Γ₁Γ₂ _ =>
     match xinΓ₀x'Γ₁Γ₂.append_elim with
     | .inl ⟨xinΓ₀x', xninΓ₁Γ₂⟩ =>
       let ⟨xninΓ₁, xninΓ₂⟩ := VarNotIn.append.mp xninΓ₁Γ₂
@@ -450,33 +446,6 @@ theorem VarIn.exchange
       | .inl ⟨xinΓ₁, xninΓ₂⟩ =>
         let f xeqx' :=
           let .refl _ := xeqx'
-          let .refl _ : τ = τ' := by
-            rw [Environment.append_assoc] at Γ₀x'Γ₁Γ₂wf
-            induction Γ₂ with
-            | empty =>
-              simp [Environment.append] at *
-              induction Γ₁ with
-              | empty => nomatch xinΓ₁
-              | ext Γ₁' x'' τ'' ih =>
-                let .ext Γ₀xΓ₁'wf x'''nindomΓ₀xΓ₁' := Γ₀x'Γ₁Γ₂wf
-                match xinΓ₁ with
-                | .head =>
-                  let ⟨x''nindomΓ₀x, _⟩ := VarNotInDom.append.mp x'''nindomΓ₀xΓ₁'
-                  nomatch VarNotInDom.ext.mp x''nindomΓ₀x
-                | .ext xinΓ₁' xnex'' =>
-                  match xinΓ₀x'Γ₁Γ₂ with
-                  | .head => nomatch xnex''
-                  | .ext xinΓ₀xΓ₁' _ => exact ih xinΓ₁' xinΓ₁' xinΓ₀xΓ₁' Γ₀xΓ₁'wf
-            | ext Γ₂' x'' τ'' ih =>
-              match xinΓ₁Γ₂ with
-              | .head => exact xninΓ₂ _ .head |>.elim
-              | .ext xinΓ₁Γ₂' xnex'' =>
-                let ⟨_, xninΓ₂'⟩ := VarNotIn.ext.mp xninΓ₂
-                match xinΓ₀x'Γ₁Γ₂ with
-                | .head => nomatch xnex''
-                | .ext xinΓ₀x'Γ₁Γ₂' _ =>
-                  let .ext Γ₀x'Γ₁Γ₂'wf _ := Γ₀x'Γ₁Γ₂wf
-                  exact ih xinΓ₁Γ₂' xninΓ₂' xinΓ₀x'Γ₁Γ₂' Γ₀x'Γ₁Γ₂'wf
           VarIn.head.append_inl xninΓ₂
         Classical.byCases (p := x = x') f (xinΓ₁.ext · |>.append_inl xninΓ₂) |>.append_inr
       | .inr xinΓ₂ => xinΓ₂.append_inr.append_inr
