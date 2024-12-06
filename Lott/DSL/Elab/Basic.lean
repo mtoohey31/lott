@@ -103,58 +103,39 @@ where
 
 /- Utility stuff. -/
 
-private partial
-def _root_.Lean.Data.Trie.findCommonPrefix (t : Trie α) (s : String) : Array α :=
-  go t 0
-where
-  go (t : Trie α) (i : Nat) : Array α :=
-    if h : i < s.utf8ByteSize then
-      let c := s.getUtf8Byte i h
-      match t with
-      | .leaf (some val) => if i != 0 then #[val] else .empty
-      | .leaf none => .empty
-      | .node1 _ c' t' =>
-        if c == c' then
-          go t' (i + 1)
-        else if i != 0 then
-          t.values
-        else
-          .empty
-      | .node _ cs ts =>
-        match cs.findIdx? (· == c) with
-        | none => if i != 0 then t.values else .empty
-        | some idx => go (ts.get! idx) (i + 1)
-    else
-      t.values
-
 def resolveSymbol (symbolName : Ident) (allowSuffix := true) : CommandElabM Name := do
   let name := symbolName.getId
   let state := aliasExt.getState (← getEnv)
 
-  let find s := if allowSuffix then
-      state.byAlias.findCommonPrefix s
+  let find (n : Name) := if allowSuffix then
+      state.byAlias.matchPrefix n.toString 0
     else
-      state.byAlias.find? s |>.toArray
+      state.byAlias.find? n.toString
 
   -- First check if the name itself is present in the state.
-  match find name.toString with
+  match find name with
     -- If not, check if it's present when prepending the current namespace.
-  | #[] => match find <| (← getCurrNamespace) ++ name |>.toString with
+  | none => match find <| (← getCurrNamespace) ++ name with
     -- Otherwise, check the namespaces we've opened.
-    | #[] => do
-      let names ← resolveOpensNames name state #[] (← getOpenDecls)
-      let aliases := names.map find |>.flatten
+    | none =>
+      let names ← resolveOpensNames name state #[] <| ← getOpenDecls
+      let aliases := names.filterMap find
       match aliases.foldl (fun acc a => acc.insert a.canon a) (mkNameMap _) |>.toList with
       | [] => throwErrorAt symbolName "unknown lott symbol {symbolName}"
       | [(canon, _)] => pure canon
-      | results => disambiguate <| results.toArray.map Prod.snd
-    | #[{ canon, .. }] => pure canon
-    | results => disambiguate results
-  | #[{ canon, .. }] => pure canon
-  | results => disambiguate results
+      | results =>
+        let results := results.toArray.map Prod.snd
+        let sortedResults := results.qsort (·.alias.toString.length < ·.alias.toString.length)
+        match sortedResults.filter (·.alias.toString.length == sortedResults[0]!.alias.toString.length) with
+        | #[] => unreachable!
+        | #[{ canon, .. }] => pure canon
+        | results => throwErrorAt symbolName
+            "ambiguous lott symbol {symbolName}; found multiple matches: {results.map (·.alias)}"
+    | some { canon, .. } => pure canon
+  | some { canon, .. } => pure canon
 where
   resolveOpensNames name state acc
-    | [] => pure #[]
+    | [] => pure acc
     | .simple ns except :: decls => do
       let mut acc := acc
       if !except.contains name then
@@ -165,14 +146,6 @@ where
       if id = name then
         acc := acc.push declName
       resolveOpensNames name state acc decls
-
-  disambiguate results := do
-    let sortedResults := results.qsort (·.alias.toString.length < ·.alias.toString.length)
-    match sortedResults.filter (·.alias.toString.length == sortedResults[0]!.alias.toString.length) with
-    | #[] => unreachable!
-    | #[{ canon, .. }] => pure canon
-    | results => throwErrorAt symbolName
-        "ambiguous lott symbol {symbolName}; found multiple matches: {results.map (·.alias)}"
 
 def texEscape (s : String) : String :=
   String.join <| s.data.map fun c => match c with
