@@ -177,9 +177,9 @@ where
 def texEscape (s : String) : String :=
   String.join <| s.data.map fun c => match c with
     | '&' | '%' | '$' | '#' | '_' | '{' | '}' => "\\" ++ c.toString
-    | '~' => "\textasciitilde"
-    | '^' => "\textasciicircum"
-    | '\\' => "\textbackslash"
+    | '~' => "\\textasciitilde"
+    | '^' => "\\textasciicircum"
+    | '\\' => "\\textbackslash"
     | _ => c.toString
 
 private
