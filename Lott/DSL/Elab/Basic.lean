@@ -1556,7 +1556,7 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
 
     let type ← IR.toTypeArrSeq ir (← `(term| Prop)) ids #[]
     let ctors ← rules.mapM fun rule => do
-      let `(InferenceRule| $jms:Lott.Judgement* $[─]* $name $conclusion:Lott.Judgement) := rule
+      let `(InferenceRule| $jms:Lott.Judgement* $[─]* $name $binders* $conclusion:Lott.Judgement) := rule
         | throwUnsupportedSyntax
       let conclusionKind := conclusion.raw.getKind
       let expectedKind := judgementPrefix ++ catName
@@ -1564,7 +1564,7 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
         throwErrorAt conclusion "found conclusion judgement syntax kind{indentD conclusionKind}\nexpected to find kind{indentD expectedKind}\nall conclusions of inference rules in a judgement declaration must be the judgement which is being defined"
       let ctorType ← jms.foldrM (init := ← `(term| [[$conclusion:Lott.Judgement]]))
         fun «judgement» acc => `([[$«judgement»:Lott.Judgement]] → $acc)
-      `(ctor| | $name:ident : $ctorType)
+      `(ctor| | $name:ident $binders* : $ctorType)
     `(inductive $name : $type where $ctors*)
   if let ⟨[i]⟩ := inductives then
     elabCommand i.raw

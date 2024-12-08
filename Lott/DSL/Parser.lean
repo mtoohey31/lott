@@ -84,7 +84,10 @@ declare_syntax_cat Lott.DSL.JudgementDecl
 
 syntax "judgement_syntax " stx+ " : " ident (Lott.DSL.IdConfig)? : command
 
-syntax withPosition(Lott.Judgement)* "─"+ ident withPosition(Lott.Judgement) : Lott.DSL.InferenceRule
+private
+def bracketedBinder := Term.bracketedBinder
+
+syntax withPosition(Lott.Judgement)* "─"+ withPosition(ident (lineEq bracketedBinder)*) withPosition(Lott.Judgement) : Lott.DSL.InferenceRule
 
 syntax "judgement " ident " := " Lott.DSL.InferenceRule* : Lott.DSL.JudgementDecl
 
