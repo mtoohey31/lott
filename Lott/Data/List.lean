@@ -1,9 +1,17 @@
 namespace List
 
-theorem map_singleton_join (xs : List α) : (xs.map fun x => [f x]).flatten = xs.map f :=
+/-
+As suggested by Joachim Breitner on Zulip: https://leanprover.zulipchat.com/#narrow/channel/113488-general/topic/Internalizing.20congruence.20lemmas/near/398694086
+-/
+@[specialize]
+def mapMem (as : List α) (f : (a : α) → a ∈ as → β) : List β := match as with
+  | [] => []
+  | a :: as' => f a (.head _) :: as'.mapMem (f · <| ·.tail _)
+
+theorem map_singleton_flatten (xs : List α) : (xs.map fun x => [f x]).flatten = xs.map f :=
   match xs with
   | [] => rfl
-  | x :: xs' => by rw [List.map, List.map, List.flatten, List.singleton_append, xs'.map_singleton_join]
+  | x :: xs' => by rw [List.map, List.map, List.flatten, List.singleton_append, xs'.map_singleton_flatten]
 
 theorem not_mem_append' {xs ys : List α} : z ∉ xs ++ ys ↔ z ∉ xs ∧ z ∉ ys where
   mp zninxsys := ⟨(zninxsys <| mem_append.mpr <| .inl ·), (zninxsys <| mem_append.mpr <| .inr ·)⟩

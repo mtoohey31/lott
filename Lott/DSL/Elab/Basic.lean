@@ -1,3 +1,4 @@
+import Lott.Data.List
 import Lott.DSL.Environment
 import Lott.DSL.Parser
 import Lott.DSL.IR
@@ -1254,14 +1255,8 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
               if let some ref := bindConfig.find? l.getId then
                 throwErrorAt ref "sepBys shouldn't be referenced by binders"
 
-            let mapId ← mkFreshIdent l
-
-            return some (
-              l,
-              ← `(let rec $mapId:ident
-                    | [] => []
-                    | x :: xs => $(mkIdent <| n ++ substName varTypeName):ident x $varId $valId :: $mapId xs;
-                  $mapId $l))
+            let substId := mkIdent <| n ++ substName varTypeName
+            return some (l, ← `(List.mapMem $l fun x _ => $substId:ident x $varId $valId))
           | .sepBy ..
           | .optional _ =>
             throwError "substitution for productions with non-trivial sepBy or optional syntax are not supported"
@@ -1323,12 +1318,8 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
             let mapId ← mkFreshIdent l
 
-            return some (
-              l,
-              ← `(let rec $mapId:ident
-                    | [] => []
-                    | x :: xs => $(mkIdent <| n ++ openName varTypeName):ident x $varId $idxId :: $mapId xs;
-                  $mapId $l))
+            let openId := mkIdent <| n ++ openName varTypeName
+            return some (l, ← `(List.mapMem $l fun x _ => $openId:ident x $varId $idxId))
           | .sepBy ..
           | .optional _ =>
             throwError "opening for productions with non-trivial sepBy or optional syntax are not supported"
@@ -1390,15 +1381,11 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
             let mapId ← mkFreshIdent l
 
-            return some (
-              l,
-              ← `(let rec $mapId:ident
-                    | [] => []
-                    | x :: xs => $(mkIdent <| n ++ openName valTypeName):ident x $valId $idxId :: $mapId xs;
-                  $mapId $l))
+            let openId := mkIdent <| n ++ openName valTypeName
+            return some (l, ← `(List.mapMem $l fun x _ => $openId:ident x $valId $idxId))
           | .sepBy ..
           | .optional _ =>
-            throwError "substitution for productions with non-trivial sepBy or optional syntax are not supported"
+            throwError "opening for productions with non-trivial sepBy or optional syntax are not supported"
         let (patternArgs, rhsArgs) := patternArgAndRhsArgs.unzip
 
         if binderId?.isSome then
@@ -1456,12 +1443,8 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
             let mapId ← mkFreshIdent l
 
-            return some (
-              l,
-              ← `(let rec $mapId:ident
-                    | [] => []
-                    | x :: xs => $(mkIdent <| n ++ closeName varTypeName):ident x $varId $idxId :: $mapId xs;
-                  $mapId $l))
+            let closeId := mkIdent <| n ++ closeName varTypeName
+            return some (l, ← `(List.mapMem $l fun x _ => $closeId:ident x $varId $idxId))
           | .sepBy ..
           | .optional _ =>
             throwError "closing for productions with non-trivial sepBy or optional syntax are not supported"
