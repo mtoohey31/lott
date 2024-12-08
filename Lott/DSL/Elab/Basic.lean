@@ -161,11 +161,19 @@ def variablePrefix := `Lott.Variable
 private
 def judgementPrefix := `Lott.Judgement
 
+private
+def _root_.Lean.Name.getFinal : Name → Name
+  | .anonymous => .anonymous
+  | .str _ s => .str .anonymous s
+  | .num _ n => .num .anonymous n
+
 partial
 def _root_.Lott.DSL.IR.ofStx (stx : TSyntax `stx) (l? : Option Ident := none) : CommandElabM IR := do
   let l := l?.getD <| ← mkFreshIdent stx
   match stx with
-  | `(stx| $name:ident) => return mk name <| .category (← resolveSymbol name)
+  | `(stx| $name:ident) => do
+    let name' := mkIdentFrom name <| name.getId.getFinal
+    return mk name' <| .category (← resolveSymbol name)
   | `(stx| $s:str) => return mk l <| .atom s.getString
   | `(stx| sepBy($[$ps]*, $sep)) =>
     return mk l <| .sepBy (← ps.mapM ofStx) sep.getString
