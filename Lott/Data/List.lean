@@ -8,6 +8,11 @@ def mapMem (as : List α) (f : (a : α) → a ∈ as → β) : List β := match 
   | [] => []
   | a :: as' => f a (.head _) :: as'.mapMem (f · <| ·.tail _)
 
+theorem mapMem_eq_map {as : List α} : as.mapMem (fun a _ => f a) = as.map f := by
+  match as with
+  | [] => rfl
+  | a :: as' => rw [mapMem, map, as'.mapMem_eq_map]
+
 theorem map_singleton_flatten (xs : List α) : (xs.map fun x => [f x]).flatten = xs.map f :=
   match xs with
   | [] => rfl
