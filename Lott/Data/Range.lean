@@ -108,4 +108,18 @@ theorem map_append {f : Nat → α} (h₁ : l ≤ m) (h₂ : m ≤ n)
   : List.map f [l:m] ++ List.map f [m:n] = List.map f [l:n] := by
   rw [← List.map_append, toList_append h₁ h₂]
 
+theorem length_toList : [m:n].toList.length = n - m := by
+  rw [toList, if_neg (nomatch ·)]
+  split
+  · case isTrue h =>
+    simp only
+    rw [List.length_cons, length_toList, Nat.sub_add_eq, Nat.sub_add_cancel]
+    exact Nat.succ_le_of_lt <| Nat.sub_pos_iff_lt.mpr h
+  · case isFalse h => rw [List.length_nil, Nat.sub_eq_zero_of_le <| Nat.le_of_not_lt h]
+termination_by n - m
+decreasing_by
+  all_goals simp_arith
+  apply Nat.sub_succ_lt_self
+  assumption
+
 end Std.Range
