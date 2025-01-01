@@ -409,10 +409,10 @@ def toInFreeCtors (prodId inFreeId varId : Ident) (qualified : Name) (ir : Array
   : CommandElabM (Array (TSyntax `Lean.Parser.Command.ctor)) := do
   let mut i := 0
   let mut ctors := #[]
-  let (ctorInfo, _) ← go ir
+  let (ctorInfo, _) ← go ir true
   let mkCtorId (i : Nat) := mkIdentFrom prodId <| prodId.getId.appendAfter <|
     if ctorInfo.size > 1 then i.toSubscriptString else ""
-  for (ctorArg?, patArgs) in ctorInfo do
+  for (ctorArg?, patArgs, binderIds) in ctorInfo do
     let ctorId := mkCtorId i
     i := i + 1
     let ctorRetType ← ``($inFreeId $varId ($fullProdId $patArgs*))
@@ -420,57 +420,75 @@ def toInFreeCtors (prodId inFreeId varId : Ident) (qualified : Name) (ir : Array
         ``($ctorArg → $ctorRetType)
       else
         pure ctorRetType
-    ctors := ctors.push <| ← `(ctor| | $ctorId:ident : $ctorType)
+    let binders ← binderIds.mapM fun bi => `(bracketedBinder| {$bi})
+    ctors := ctors.push <| ← `(ctor| | $ctorId:ident $binders* : $ctorType)
   return ctors
 where
   fullProdId := mkIdent <| qualified ++ prodId.getId
-  go (remainingIR : Array IR) (seenEntries := 0) (acc : Array (Option Term × Array Term) := #[])
-    : CommandElabM (Array (Option Term × Array Term) × Bool) := do
-    let some (mk l ir) := remainingIR[0]? | return (acc, seenEntries != 0)
+  go (remainingIR : Array IR) (topLevel : Bool) (preIds := #[])
+    (acc : Array (Option Term × Array Term × Array Ident) := #[])
+    : CommandElabM (Array (Option Term × Array Term × Array Ident) × Bool) := do
+    let some (mk l ir) := remainingIR[0]? | return (acc, preIds.size != 0)
     let remainingIR := remainingIR.extract 1 remainingIR.size
 
     if binders.contains l.getId then
-      return ← go remainingIR seenEntries acc
+      return ← go remainingIR topLevel preIds acc
 
     let hole ← ``(_)
-    let preHoles : Array Term := Array.ofFn fun (_ : Fin seenEntries) => hole
-    let postHoles ← remainingIR.filterMapM fun ir => do
-      if (← IR.toType #[] binders ir).isNone then
-        return none
+    let preHoles := Array.ofFn fun (_ : Fin preIds.size) => hole
+    let postIds ← remainingIR.filterMapM fun ir@(mk l _) => do
+      if (← IR.toType #[] binders ir).isSome then
+        return some l
       else
-        return hole
+        return none
+    let postHoles := Array.ofFn fun (_ : Fin postIds.size) => hole
 
     match ir with
     | .category n => do
       if n == subst.fst then
-        go remainingIR seenEntries.succ <|
-          acc.push (none, preHoles ++ #[← ``($varId)] ++ postHoles)
+        go remainingIR topLevel (preIds.push l) <|
+          acc.push (none, preHoles ++ #[← ``($varId)] ++ postHoles, #[])
       else if let some { substitutions, .. } := symbolExt.getState (← getEnv) |>.find? n then
         if substitutions.contains subst then
           let inFreeId := mkIdent <| ← inFreeName subst.fst n
-          go remainingIR seenEntries.succ <| acc.push
-            (some <| ← ``($inFreeId $varId $l), preHoles ++ #[← ``($l)] ++ postHoles)
+          go remainingIR topLevel (preIds.push l) <| acc.push
+            (some <| ← ``($inFreeId $varId $l), preHoles ++ #[← ``($l)] ++ postHoles, #[l])
         else
-          go remainingIR seenEntries.succ acc
+          go remainingIR topLevel (preIds.push l) acc
       else
-        go remainingIR seenEntries.succ acc
-    | .atom _ => go remainingIR seenEntries acc
-    | .sepBy ir _ => match ← go ir with
-      | (_, false) => go remainingIR seenEntries acc
-      | (#[], true) => go remainingIR seenEntries.succ acc
+        go remainingIR topLevel (preIds.push l) acc
+    | .atom _ => go remainingIR topLevel preIds acc
+    | .sepBy ir _ => match ← go ir false with
+      | (_, false) => go remainingIR topLevel preIds acc
+      | (#[], true) => go remainingIR topLevel (preIds.push l) acc
+      | (ctorInfo, true) => do
+        if !topLevel then
+          throwError "InFree generation is not yet supported for productions with nested sepBys"
+        let acc' ← ctorInfo.mapM
+          fun | (ctorArg?, patArgs, binderIds) =>
+              return (
+                ctorArg?,
+                preHoles ++ #[← ``($(← foldrProd patArgs) :: _)] ++ postHoles,
+                binderIds
+              )
+        let tail := (
+          some <| ← ``($inFreeId $varId ($fullProdId $preIds* $l $postIds*)),
+          preIds ++ #[← ``(_ :: $l)] ++ postIds,
+          preIds ++ #[l] ++ postIds,
+        )
+        go remainingIR topLevel (preIds.push l) <| acc ++ acc' ++ #[tail]
+    | .optional ir => match ← go ir false with
+      | (_, false) => go remainingIR topLevel preIds acc
+      | (#[], true) => go remainingIR topLevel (preIds.push l) acc
       | (ctorInfo, true) => do
         let acc' ← ctorInfo.mapM
-          fun | (ctorArg?, patArgs) =>
-              return (ctorArg?, preHoles ++ #[← ``($(← foldrProd patArgs) :: _)] ++ postHoles)
-        go remainingIR seenEntries.succ <| acc ++ acc'
-    | .optional ir => match ← go ir with
-      | (_, false) => go remainingIR seenEntries acc
-      | (#[], true) => go remainingIR seenEntries.succ acc
-      | (ctorInfo, true) => do
-        let acc' ← ctorInfo.mapM
-          fun | (ctorArg?, patArgs) =>
-              return (ctorArg?, preHoles ++ #[← ``(some $(← foldrProd patArgs))] ++ postHoles)
-        go remainingIR seenEntries.succ <| acc ++ acc'
+          fun | (ctorArg?, patArgs, binderIds) =>
+              return (
+                ctorArg?,
+                preHoles ++ #[← ``(some $(← foldrProd patArgs))] ++ postHoles,
+                binderIds
+              )
+        go remainingIR topLevel (preIds.push l) <| acc ++ acc'
 
 private
 def locallyClosedName (varName : Name) (typeName : Name) : CommandElabM Name := do
@@ -1559,7 +1577,6 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
           `(inductive $locallyClosedId : $canon → (optParam Nat 0) → Prop where $ctors.flatten*)
 
     elabMutualCommands locallyClosedInductives
-
 
 elab_rules : command
   | `($nt:Lott.DSL.NonTerminal) => elabNonTerminals #[nt]
