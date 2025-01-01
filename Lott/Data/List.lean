@@ -44,4 +44,13 @@ theorem exists_fresh (xs : List Nat) : ∃ n, n ∉ xs :=
   let ⟨nxs, nxsgt⟩ := xs.exists_gt
   .intro nxs fun nxsinxs => Nat.not_le_of_lt (nxsgt _ nxsinxs) <| Nat.le_refl _
 
+theorem le_sum_of_mem {as : List Nat} (h : a ∈ as) : a ≤ as.sum := by
+  match h with
+  | .head _ =>
+    rw [sum_cons]
+    exact Nat.le_add_right _ _
+  | .tail _ h' =>
+    rw [sum_cons]
+    exact Nat.le_trans (Nat.le_add_left ..) <| Nat.add_le_add_iff_left.mpr <| le_sum_of_mem h'
+
 end List

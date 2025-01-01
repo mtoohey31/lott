@@ -62,6 +62,32 @@ theorem map_eq_of_eq_of_mem' {f g : Nat → α} (h : ∀ i ∈ [m:n], f i = g i)
   dsimp [Coe.coe]
   exact map_eq_of_eq_of_mem h
 
+theorem eq_of_mem_of_map_eq {f g : Nat → α}
+  (h : List.map (fun i => f i) [m:n] = List.map (fun i => g i) [m:n]) : ∀ i ∈ [m:n], f i = g i := by
+  intro i ⟨mlei, iltn⟩
+  let mltn := Nat.lt_of_le_of_lt mlei iltn
+  rw [toList, if_neg (nomatch ·), if_pos mltn] at h
+  rw [List.map, List.map] at h
+  simp only at h
+  by_cases m = i
+  · case pos h' =>
+    cases h'
+    exact List.cons_eq_cons.mp h |>.left
+  · case neg h' =>
+    exact eq_of_mem_of_map_eq (List.cons_eq_cons.mp h |>.right) i
+      ⟨Nat.succ_le_of_lt <| Nat.lt_of_le_of_ne mlei h', iltn⟩
+termination_by n - m
+decreasing_by
+  all_goals simp_wf
+  apply Nat.sub_succ_lt_self
+  assumption
+
+theorem eq_of_mem_of_map_eq' {f g : Nat → α}
+  (h : List.map (fun i => f i) (Coe.coe [m:n]) = List.map (fun i => g i) (Coe.coe [m:n]))
+  : ∀ i ∈ [m:n], f i = g i := by
+  dsimp [Coe.coe] at h
+  exact eq_of_mem_of_map_eq h
+
 theorem mem_of_mem_map {f : Nat → α} (h : x ∈ List.map (fun i => f i) [m:n])
   : ∃ i ∈ [m:n], x = f i := by
   rw [toList, if_neg Nat.one_ne_zero] at h
@@ -78,6 +104,31 @@ termination_by n - m
 decreasing_by
   all_goals simp_wf
   apply Nat.sub_succ_lt_self
+  assumption
+
+theorem mem_map_of_mem (h : i ∈ [m:n]) : f i ∈ List.map f [m:n] := by
+  rw [toList, if_neg (nomatch ·)]
+  split
+  · case isTrue h' =>
+    simp only
+    rw [List.map]
+    by_cases i = m
+    · case pos h'' =>
+      cases h''
+      exact .head _
+    · case neg h'' =>
+      exact .tail _ <| mem_map_of_mem ⟨
+        Nat.succ_le_of_lt <| Nat.lt_of_le_of_ne h.lower (Ne.symm h''),
+        h.upper
+      ⟩
+  · case isFalse h' => exact h' (Nat.lt_of_le_of_lt h.lower h.upper) |>.elim
+termination_by i - m
+decreasing_by
+  all_goals simp_wf
+  apply Nat.sub_add_lt_sub _ Nat.one_pos
+  apply Nat.succ_le_of_lt
+  apply Nat.lt_of_le_of_ne h.lower
+  apply Ne.symm
   assumption
 
 theorem map_shift {f : Nat → α} (h : j ≤ m)
