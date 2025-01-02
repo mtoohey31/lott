@@ -971,18 +971,24 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
     let aliases := names.extract 1 names.size
 
     let prodAndSubsts ← prods.mapM fun prod => do
-      let `(Production| | $[$ps]* : $name $[$bindConfig?]? $[(id $ids?,*)]? $[(desugar := $desugar?)]? $[(elab := $elab?)]?) := prod
+      let `(Production| | $[$ps]* : $name $[nosubst%$ns?]? $[$bindConfig?]? $[(id $ids?,*)]? $[(desugar := $desugar?)]? $[(elab := $elab?)]?) := prod
         | throwUnsupportedSyntax
       let ids := ids?.getD (.mk #[]) |>.getElems
 
       let ir ← ps.mapM IR.ofProdArg
       let subst ← match ir with
         | #[mk _ (.category n)] =>
-          if metaVarExt.getState (← getEnv) |>.contains n then
+          if ns?.isNone && (metaVarExt.getState (← getEnv)).contains n then
             pure <| some n
+          else if let some ns := ns? then
+            logWarningAt ns "unused nosubst; production is not a candidate for substitution"
+            pure none
           else
             pure none
-        | _ => pure none
+        | _ =>
+          if let some ns := ns? then
+            logWarningAt ns "unused nosubst; production is not a candidate for substitution"
+          pure none
 
       let bindConfig? ← bindConfig?.mapM fun stx => do
         let `(BindConfig| (bind $of $[in $in',*]?)) := stx | throwUnsupportedSyntax

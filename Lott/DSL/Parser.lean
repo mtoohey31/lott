@@ -70,7 +70,7 @@ syntax "(" "elab" " := " term ")" : Lott.DSL.ElabConfig
 def prodArg  := leading_parser
   Parser.optional (atomic (ident >> checkNoWsBefore "no space before ':'" >> ":")) >> syntaxParser argPrec
 
-syntax " | " prodArg+ " : " ident atomic(Lott.DSL.BindConfig)? atomic(Lott.DSL.IdConfig)? atomic(Lott.DSL.DesugarConfig)? (Lott.DSL.ElabConfig)? : Lott.DSL.Production
+syntax " | " prodArg+ " : " withPosition(ident (lineEq "nosubst")?) atomic(Lott.DSL.BindConfig)? atomic(Lott.DSL.IdConfig)? atomic(Lott.DSL.DesugarConfig)? (Lott.DSL.ElabConfig)? : Lott.DSL.Production
 
 syntax "nosubst"? "nonterminal " ("(" "parent" " := " ident ")")? ident,+ " := " Lott.DSL.Production* : Lott.DSL.NonTerminal
 
