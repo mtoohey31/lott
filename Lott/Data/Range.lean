@@ -9,6 +9,8 @@ def toList (r : Range) : List Nat := if r.step = 0 then
 
 instance : Coe Range (List Nat) := ⟨Std.Range.toList⟩
 
+abbrev map (r : Range) (f : Nat → α) : List α := r.toList.map f
+
 theorem toList_append (h₁ : l ≤ m) (h₂ : m ≤ n) : [l:m] ++ [m:n] = [l:n].toList := by
   rw [toList, if_neg Nat.one_ne_zero]
   split

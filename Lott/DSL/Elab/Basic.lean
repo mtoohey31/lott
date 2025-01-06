@@ -209,9 +209,9 @@ def _root_.Lott.DSL.IR.toExprArgs (ir : Array IR) (ids binders : Array Name)
       return some l
 
 private
-def elabSymbolComprehension (symbol : TSyntax `Lott.Symbol) (i : Ident) (collection : Term)
+def elabSymbolComprehension (symbol : TSyntax `Lott.Symbol) (pat : Term) (collection : Term)
   (type : Expr) : TermElabM Expr := do
-  let stx ← `(Coe.coe (β := List Nat) $collection |>.map (fun $i => [[$symbol:Lott.Symbol]]) |>.flatten)
+  let stx ← `($collection |>.map (fun $pat => [[$symbol:Lott.Symbol]]) |>.flatten)
   Term.elabTerm stx (Expr.app (.const `List [levelOne]) type)
 
 private partial
@@ -241,12 +241,12 @@ def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binder
               Lean.Syntax.atom _ "</",
               symbol,
               Lean.Syntax.atom _ "//",
-              i@(Syntax.ident ..),
-              Lean.Syntax.atom _ "∈",
+              pat,
+              Lean.Syntax.atom _ "in",
               collection,
               Lean.Syntax.atom _ "/>"
             ] => do
-              elabSymbolComprehension (TSyntax.mk symbol) (TSyntax.mk i) (TSyntax.mk collection) $type
+              elabSymbolComprehension (TSyntax.mk symbol) (TSyntax.mk pat) (TSyntax.mk collection) $type
             | _, Syntax.node _ $(quote catName) #[
                 lhs@(Syntax.node _ $(quote catName) _),
                 Lean.Syntax.atom _ $(quote sep.trim),
@@ -254,7 +254,7 @@ def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binder
               ] => do
               let lhs ← Lott.DSL.Elab.elabTerm $(quote catName) false lhs
               let rhs ← Lott.DSL.Elab.elabTerm $(quote catName) false rhs
-              Meta.liftMetaM <| Meta.reduce <| mkApp3 (Expr.const `List.append [0]) $type lhs rhs
+              Meta.liftMetaM <| Meta.reduceAll <| mkApp3 (Expr.const `List.append [0]) $type lhs rhs
             | _, Syntax.node _ $(quote catName) #[$patternArgs,*] => do
               $seqItems*
               return mkApp3 (Expr.const `List.cons [0]) $type $mkProd <| Expr.app (Expr.const `List.nil [0]) $type

@@ -69,7 +69,7 @@ def toParser' (canon : Name) : IR → CommandElabM Term
       `(@[$attrIdent:ident] def $comprehensionIdent : Parser :=
           leadingNode $(quote catName) Parser.maxPrec <|
             "</ " >> withPosition (categoryParser $(quote catName) 0) >>
-            " // " >> Parser.ident >> " ∈ " >> termParser >> " />")
+            " // " >> termParser >> " in " >> termParser >> " />")
 
     let sepIdent := mkIdentFrom l <| canon'.appendAfter "_sep_parser"
     elabCommand <| ←
