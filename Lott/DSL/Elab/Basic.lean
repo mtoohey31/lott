@@ -978,12 +978,11 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       let ir ← ps.mapM IR.ofProdArg
       let subst ← match ir with
         | #[mk _ (.category n)] =>
-          if ns?.isNone && (metaVarExt.getState (← getEnv)).contains n then
-            pure <| some n
-          else if let some ns := ns? then
-            logWarningAt ns "unused nosubst; production is not a candidate for substitution"
-            pure none
+          if (metaVarExt.getState (← getEnv)).contains n then
+            pure <| if ns?.isNone then some n else none
           else
+            if let some ns := ns? then
+              logWarningAt ns "unused nosubst; production is not a candidate for substitution"
             pure none
         | _ =>
           if let some ns := ns? then
