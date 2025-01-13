@@ -8,6 +8,7 @@ def mapMem (as : List α) (f : (a : α) → a ∈ as → β) : List β := match 
   | [] => []
   | a :: as' => f a (.head _) :: as'.mapMem (f · <| ·.tail _)
 
+@[simp]
 theorem mapMem_eq_map {as : List α} : as.mapMem (fun a _ => f a) = as.map f := by
   match as with
   | [] => rfl
@@ -44,7 +45,7 @@ theorem exists_fresh (xs : List Nat) : ∃ n, n ∉ xs :=
   let ⟨nxs, nxsgt⟩ := xs.exists_gt
   .intro nxs fun nxsinxs => Nat.not_le_of_lt (nxsgt _ nxsinxs) <| Nat.le_refl _
 
-theorem le_sum_of_mem {as : List Nat} (h : a ∈ as) : a ≤ as.sum := by
+theorem le_sum_of_mem' {as : List Nat} (h : a ∈ as) : a ≤ as.sum := by
   match h with
   | .head _ =>
     rw [sum_cons]
