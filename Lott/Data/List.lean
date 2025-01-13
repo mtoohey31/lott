@@ -52,6 +52,6 @@ theorem le_sum_of_mem' {as : List Nat} (h : a ∈ as) : a ≤ as.sum := by
     exact Nat.le_add_right _ _
   | .tail _ h' =>
     rw [sum_cons]
-    exact Nat.le_trans (Nat.le_add_left ..) <| Nat.add_le_add_iff_left.mpr <| le_sum_of_mem h'
+    exact Nat.le_trans (Nat.le_add_left ..) <| Nat.add_le_add_iff_left.mpr <| le_sum_of_mem' h'
 
 end List
