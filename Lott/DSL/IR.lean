@@ -188,6 +188,11 @@ def foldlAnd (as : Array Term) : CommandElabM Term := if let some a := as[0]? th
   else
     ``(True)
 
+def foldlAppend (as : Array Term) : CommandElabM Term := if let some a := as[0]? then
+    as.foldlM (init := a) (start := 1) fun acc a => `($acc ++ $a)
+  else
+    ``([])
+
 def toTerms (as : TSyntaxArray `Lean.binderIdent) : CommandElabM (Array Term) :=
   as.mapM fun
     | `(Lean.binderIdent| $h:hole) => `(term| $h:hole)

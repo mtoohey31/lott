@@ -937,48 +937,30 @@ end TermVarNotInEnvironment
 
 judgement_syntax a " ∈ " "ftv" "(" A ")" : Type'.InFreeTypeVars (id a)
 
+abbrev Type'.InFreeTypeVars a (A : Type') := a ∈ A.freeTypeVars
+
 namespace Type'.InFreeTypeVars
 
 theorem of_TypeVar_open {A : Type'} (h : a ≠ a')
   : InFreeTypeVars a (A.TypeVar_open a' n) → [[a ∈ ftv(A)]] := fun ainAop => by
   match A with
-  | .var (.free _) =>
-    rw [Type'.TypeVar_open] at ainAop
-    let .var := ainAop
-    exact .var
+  | .var (.free _) => rwa [Type'.TypeVar_open] at ainAop
   | .var (.bound _) =>
     rw [Type'.TypeVar_open] at ainAop
     split at ainAop
     · case isTrue h =>
-      cases ainAop
-      contradiction
-    · case isFalse h =>
-      nomatch ainAop
+      cases List.mem_singleton.mp ainAop
+      nomatch h
+    · case isFalse h => nomatch ainAop
   | .arr A' B =>
     rw [Type'.TypeVar_open] at ainAop
-    match ainAop with
-    | .arr₀ ainA'op => exact .arr₀ <| ainA'op.of_TypeVar_open h
-    | .arr₁ ainA'op => exact .arr₁ <| ainA'op.of_TypeVar_open h
+    exact List.mem_append.mpr <| match List.mem_append.mp ainAop with
+    | .inl ainA'op => .inl <| of_TypeVar_open h ainA'op
+    | .inr ainA'op => .inr <| of_TypeVar_open h ainA'op
   | .forall' A' =>
     rw [Type'.TypeVar_open] at ainAop
-    let .forall' ainA'op := ainAop
-    exact .forall' <| ainA'op.of_TypeVar_open h
-
-theorem exists_gt (A : Type') : ∃ a : Nat, ∀ a' : Nat, [[a' ∈ ftv(A)]] → a' < a := match A with
-  | .var (.free (x : Nat)) =>
-    .intro (x + 1) fun | x', .var => Nat.lt_succ_self _
-  | .var (.bound _) => .intro 0 fun _ x'in => nomatch x'in
-  | .arr E' F =>
-    let ⟨xE', xE'gt⟩ := exists_gt E'
-    let ⟨xF, xFgt⟩ := exists_gt F
-    .intro (max xE' xF) fun
-      | x', .arr₀ x'infvE' =>
-        Nat.lt_of_lt_of_le (xE'gt x' x'infvE') <| Nat.le_max_left _ _
-      | x', .arr₁ x'infvF =>
-        Nat.lt_of_lt_of_le (xFgt x' x'infvF) <| Nat.le_max_right _ _
-  | .forall' E' =>
-    let ⟨xE', xE'gt⟩ := exists_gt E'
-    .intro xE' fun | _, .forall' x'infvE' => xE'gt _ x'infvE'
+    rw [InFreeTypeVars, freeTypeVars] at ainAop ⊢
+    exact of_TypeVar_open h ainAop
 
 end Type'.InFreeTypeVars
 
@@ -989,12 +971,12 @@ def Type'.NotInFreeTypeVars a A := ¬[[a ∈ ftv(A)]]
 namespace Type'.NotInFreeTypeVars
 
 theorem arr : [[a ∉ ftv(A → B)]] ↔ [[a ∉ ftv(A)]] ∧ [[a ∉ ftv(B)]] where
-  mp anin := ⟨(anin <| .arr₀ ·), (anin <| .arr₁ ·)⟩
-  mpr
-    | ⟨aninA, _⟩, .arr₀ ainA => aninA ainA
-    | ⟨_, aninB⟩, .arr₁ ainB => aninB ainB
+  mp anin := ⟨(anin <| List.mem_append.mpr <| .inl ·), (anin <| List.mem_append.mpr <| .inr ·)⟩
+  mpr | ⟨aninA, aninB⟩, ainAarrB => match List.mem_append.mp ainAarrB with
+    | .inl ainA => aninA ainA
+    | .inr ainB => aninB ainB
 
-theorem forall' : [[a ∉ ftv(∀ b. A)]] → [[a ∉ ftv(A)]] := (· <| .forall' ·)
+theorem forall' : [[a ∉ ftv(∀ b. A)]] → [[a ∉ ftv(A)]] := (· ·)
 
 theorem TypeVar_open_of_ne (h : a ≠ a') : [[a ∉ ftv(A)]] → [[a ∉ ftv(A^a')]] :=
   (· <| ·.of_TypeVar_open h)
@@ -1010,7 +992,7 @@ theorem TypeVar_open_inj_of {A B : Type'} (aninftvA : [[a ∉ ftv(A)]]) (aninftv
     split at AopeqBop
     · case isTrue h =>
       rw [Type'.var.inj AopeqBop] at aninftvA
-      exact aninftvA .var |>.elim
+      nomatch List.not_mem_singleton.mp aninftvA
     · case isFalse h => nomatch AopeqBop
   | .var (.bound _), .var (.free _) =>
     rw [Type'.TypeVar_open] at AopeqBop
@@ -1018,7 +1000,7 @@ theorem TypeVar_open_inj_of {A B : Type'} (aninftvA : [[a ∉ ftv(A)]]) (aninftv
     · case isTrue h =>
       rw [Type'.TypeVar_open, if_neg (nomatch ·)] at AopeqBop
       rw [← Type'.var.inj AopeqBop] at aninftvB
-      exact aninftvB .var |>.elim
+      nomatch List.not_mem_singleton.mp aninftvB
     · case isFalse h => nomatch AopeqBop
   | .var (.bound _), .var (.bound _) =>
     rw [Type'.TypeVar_open] at AopeqBop
@@ -1051,7 +1033,7 @@ theorem TypeVar_open_TypeVar_subst_eq_Type'_open_of
     split
     · case isTrue h =>
       rw [← h] at aninftvA
-      exact aninftvA .var |>.elim
+      nomatch List.not_mem_singleton.mp aninftvA
     · case isFalse h => rw [Type'.Type'_open, if_neg (nomatch ·)]
   | .var (.bound _) =>
     rw [Type'.TypeVar_open]
@@ -1073,7 +1055,7 @@ theorem TypeVar_close_eq_of {A : Type'} : [[a ∉ ftv(A)]] → A.TypeVar_close a
     split
     · case isTrue h =>
       rw [← h] at aninftvA
-      exact aninftvA .var |>.elim
+      nomatch List.not_mem_singleton.mp aninftvA
     · case isFalse h => rfl
   | .var (.bound _) => rw [Type'.TypeVar_close, if_neg (nomatch ·)]
   | .arr A' B =>
@@ -1105,8 +1087,8 @@ theorem of_TypeVar_close {A : Type'} : NotInFreeTypeVars a (A.TypeVar_close a n)
     · case isTrue h => exact (nomatch ·)
     · case isFalse h =>
       intro ain
-      let .var := ain
-      contradiction
+      rw [List.mem_singleton.mp ain] at h
+      nomatch h
   | .var (.bound _) =>
     rw [Type'.TypeVar_close, if_neg (nomatch ·)]
     exact (nomatch ·)
@@ -1116,17 +1098,8 @@ theorem of_TypeVar_close {A : Type'} : NotInFreeTypeVars a (A.TypeVar_close a n)
   | .forall' A' =>
     rw [Type'.TypeVar_close]
     intro ain
-    let .forall' ain' := ain
-    exact of_TypeVar_close ain'
-
-theorem exists_fresh {I : List _} : ∃ a ∉ I, [[a ∉ ftv(A)]] :=
-  let ⟨aI, aIgt⟩ := I.exists_gt
-  let ⟨aA, aAgt⟩ := InFreeTypeVars.exists_gt A
-  let xIE := max aI aA
-  .intro xIE ⟨
-    fun inI => Nat.not_le_of_lt (aIgt xIE inI) <| Nat.le_max_left _ _,
-    fun inA => Nat.not_le_of_lt (aAgt xIE inA) <| Nat.le_max_right _ _
-  ⟩
+    rw [InFreeTypeVars, freeTypeVars] at ain
+    exact of_TypeVar_close ain
 
 end Type'.NotInFreeTypeVars
 
@@ -1160,7 +1133,7 @@ theorem Type'_open_eq_of_TypeVar_open_eq {A A' B : Type'}
       rw [TypeVar_open, if_neg (nomatch ·)] at h
       cases h
       rw [Type'_open, if_pos rfl, Type'_open, if_neg (nomatch ·)]
-      exact aninftvA' .var |>.elim
+      nomatch List.not_mem_singleton.mp aninftvA'
     · case isFalse h' =>
       rw [TypeVar_open, if_neg (nomatch ·)] at h
       cases h
@@ -1170,7 +1143,7 @@ theorem Type'_open_eq_of_TypeVar_open_eq {A A' B : Type'}
     · case isTrue h' =>
       cases h'
       cases h
-      exact aninftvA .var |>.elim
+      nomatch List.not_mem_singleton.mp aninftvA
     · case isFalse h' =>
       cases h
   | var (.bound _), var (.bound _) =>
@@ -1220,7 +1193,7 @@ theorem Type'_open_TypeVar_subst_eq_of_TypeVar_open_eq {A A' B B' : Type'}
     split
     · case isTrue h' =>
       cases h'
-      exact aninftvA .var |>.elim
+      nomatch List.not_mem_singleton.mp aninftvA
     · case isFalse h' => rw [Type'_open, if_neg (nomatch ·)]
   | var (.bound _), var (.free _) =>
     rw [TypeVar_open] at h
@@ -1250,7 +1223,7 @@ theorem Type'_open_TypeVar_subst_eq_of_TypeVar_open_eq {A A' B B' : Type'}
         · case isTrue h' =>
           cases h'
           cases h
-          exact aninftvA .var |>.elim
+          nomatch List.not_mem_singleton.mp aninftvA
         · case isFalse h' => nomatch h
     · case isFalse h' => nomatch h
   | var (.bound _), var (.bound _) =>
@@ -1267,7 +1240,7 @@ theorem Type'_open_TypeVar_subst_eq_of_TypeVar_open_eq {A A' B B' : Type'}
         | var (.free _) =>
           rw [TypeVar_open, if_neg (nomatch ·)] at h
           cases h
-          exact aninftvB' .var |>.elim
+          nomatch List.not_mem_singleton.mp aninftvB'
         | var (.bound _) =>
           rw [TypeVar_open] at h
           split at h
@@ -1335,87 +1308,60 @@ end Type'
 
 judgement_syntax x " ∈ " "fv" "(" E ")" : Term.InFreeTermVars (id x)
 
+abbrev Term.InFreeTermVars x (E : Term) := x ∈ E.freeTermVars
+
 namespace Term.InFreeTermVars
 
 theorem of_TermVar_open {E : Term} (h : x ≠ x')
   : InFreeTermVars x (E.TermVar_open x' n) → [[x ∈ fv(E)]] := fun xinEop => by
   match E with
-  | .var (.free _) =>
-    rw [Term.TermVar_open] at xinEop
-    let .var := xinEop
-    exact .var
+  | .var (.free _) => rwa [Term.TermVar_open] at xinEop
   | .var (.bound _) =>
     rw [Term.TermVar_open] at xinEop
     split at xinEop
     · case isTrue h =>
-      cases xinEop
-      contradiction
-    · case isFalse h =>
-      nomatch xinEop
+      cases List.mem_singleton.mp xinEop
+      nomatch h
+    · case isFalse h => nomatch xinEop
   | .lam A E' =>
     rw [Term.TermVar_open] at xinEop
-    let .lam xinE'op := xinEop
-    exact .lam <| xinE'op.of_TermVar_open h
+    rw [InFreeTermVars, freeTermVars] at xinEop ⊢
+    exact of_TermVar_open h xinEop
   | .app E' F =>
     rw [Term.TermVar_open] at xinEop
-    match xinEop with
-    | .app₀ xinE'op => exact .app₀ <| xinE'op.of_TermVar_open h
-    | .app₁ xinE'op => exact .app₁ <| xinE'op.of_TermVar_open h
+    exact List.mem_append.mpr <| match List.mem_append.mp xinEop with
+    | .inl xinE'op => .inl <| of_TermVar_open h xinE'op
+    | .inr xinE'op => .inr <| of_TermVar_open h xinE'op
   | .typeGen E' =>
     rw [Term.TermVar_open] at xinEop
-    let .typeGen xinE'op := xinEop
-    exact .typeGen <| xinE'op.of_TermVar_open h
+    rw [InFreeTermVars, freeTermVars] at xinEop ⊢
+    exact of_TermVar_open h xinEop
   | .typeApp E' A =>
     rw [Term.TermVar_open] at xinEop
-    let .typeApp xinE'op := xinEop
-    exact .typeApp <| xinE'op.of_TermVar_open h
+    rw [InFreeTermVars, freeTermVars] at xinEop ⊢
+    exact of_TermVar_open h xinEop
 
 theorem of_TypeVar_open {E : Term}
   : InFreeTermVars x (E.TypeVar_open a n) → [[x ∈ fv(E)]] := fun xinEop => by
   match E with
-  | .var _ =>
-    rw [Term.TypeVar_open] at xinEop
-    let .var := xinEop
-    exact .var
+  | .var _ => rwa [Term.TypeVar_open] at xinEop
   | .lam A E' =>
     rw [Term.TypeVar_open] at xinEop
-    let .lam xinE'op := xinEop
-    exact .lam xinE'op.of_TypeVar_open
+    rw [InFreeTermVars, freeTermVars] at xinEop ⊢
+    exact of_TypeVar_open xinEop
   | .app E' F =>
     rw [Term.TypeVar_open] at xinEop
-    match xinEop with
-    | .app₀ xinE'op => exact .app₀ xinE'op.of_TypeVar_open
-    | .app₁ xinE'op => exact .app₁ xinE'op.of_TypeVar_open
+    exact List.mem_append.mpr <| match List.mem_append.mp xinEop with
+    | .inl xinE'op => .inl <| of_TypeVar_open xinE'op
+    | .inr xinE'op => .inr <| of_TypeVar_open xinE'op
   | .typeGen E' =>
     rw [Term.TypeVar_open] at xinEop
-    let .typeGen xinE'op := xinEop
-    exact .typeGen xinE'op.of_TypeVar_open
+    rw [InFreeTermVars, freeTermVars] at xinEop ⊢
+    exact of_TypeVar_open xinEop
   | .typeApp E' A =>
     rw [Term.TypeVar_open] at xinEop
-    let .typeApp xinE'op := xinEop
-    exact .typeApp xinE'op.of_TypeVar_open
-
-theorem exists_gt (E : Term) : ∃ x : Nat, ∀ x' : Nat, [[x' ∈ fv(E)]] → x' < x := match E with
-  | .var (.free (x : Nat)) =>
-    .intro (x + 1) fun | x', .var => Nat.lt_succ_self _
-  | .var (.bound _) => .intro 0 fun _ x'in => nomatch x'in
-  | .lam _ E' =>
-    let ⟨xE', xE'gt⟩ := exists_gt E'
-    .intro xE' fun | _, .lam x'infvE' => xE'gt _ x'infvE'
-  | .app E' F =>
-    let ⟨xE', xE'gt⟩ := exists_gt E'
-    let ⟨xF, xFgt⟩ := exists_gt F
-    .intro (max xE' xF) fun
-      | x', .app₀ x'infvE' =>
-        Nat.lt_of_lt_of_le (xE'gt x' x'infvE') <| Nat.le_max_left _ _
-      | x', .app₁ x'infvF =>
-        Nat.lt_of_lt_of_le (xFgt x' x'infvF) <| Nat.le_max_right _ _
-  | .typeGen E' =>
-    let ⟨xE', xE'gt⟩ := exists_gt E'
-    .intro xE' fun | _, .typeGen x'infvE' => xE'gt _ x'infvE'
-  | .typeApp E' _ =>
-    let ⟨xE', xE'gt⟩ := exists_gt E'
-    .intro xE' fun | _, .typeApp x'infvE' => xE'gt _ x'infvE'
+    rw [InFreeTermVars, freeTermVars] at xinEop ⊢
+    exact of_TypeVar_open xinEop
 
 end Term.InFreeTermVars
 
@@ -1425,32 +1371,25 @@ def Term.NotInFreeTermVars x E := ¬[[x ∈ fv(E)]]
 
 namespace Term.NotInFreeTermVars
 
-theorem lam : [[x ∉ fv(λ y : A. E)]] → [[x ∉ fv(E)]] := (· <| .lam ·)
+theorem lam : [[x ∉ fv(λ y : A. E)]] → [[x ∉ fv(E)]] := (· ·)
 
 theorem app : [[x ∉ fv(E F)]] → ([[x ∉ fv(E)]] ∧ [[x ∉ fv(F)]]) :=
-  fun xnin => ⟨(xnin <| .app₀ ·), (xnin <| .app₁ ·)⟩
+  fun xnin => ⟨(xnin <| List.mem_append.mpr <| .inl ·), (xnin <| List.mem_append.mpr <| .inr ·)⟩
 
-theorem typeGen : [[x ∉ fv(Λ a. E)]] → [[x ∉ fv(E)]] := (· <| .typeGen ·)
+theorem typeGen : [[x ∉ fv(Λ a. E)]] → [[x ∉ fv(E)]] := (· ·)
 
-theorem typeApp : [[x ∉ fv(E [A])]] → [[x ∉ fv(E)]] := (· <| .typeApp ·)
+theorem typeApp : [[x ∉ fv(E [A])]] → [[x ∉ fv(E)]] := (· ·)
 
 theorem TermVar_open_of_ne (h : x ≠ x') : [[x ∉ fv(E)]] → [[x ∉ fv(E^x')]] :=
   (· <| ·.of_TermVar_open h)
 
 theorem TypeVar_open : [[x ∉ fv(E)]] → [[x ∉ fv(E^a)]] := (· ·.of_TypeVar_open)
 
-theorem exists_fresh {I : List _} : ∃ x ∉ I, [[x ∉ fv(E)]] :=
-  let ⟨xI, xIgt⟩ := I.exists_gt
-  let ⟨xE, xEgt⟩ := InFreeTermVars.exists_gt E
-  let xIE := max xI xE
-  .intro xIE ⟨
-    fun inI => Nat.not_le_of_lt (xIgt xIE inI) <| Nat.le_max_left _ _,
-    fun inE => Nat.not_le_of_lt (xEgt xIE inE) <| Nat.le_max_right _ _
-  ⟩
-
 end Term.NotInFreeTermVars
 
 judgement_syntax a " ∈ " "ftv" "(" E ")" : Term.InFreeTypeVars (id a)
+
+abbrev Term.InFreeTypeVars a (E : Term) := a ∈ E.freeTypeVars
 
 namespace Term.InFreeTypeVars
 
@@ -1460,23 +1399,23 @@ theorem of_TermVar_open {E : Term} : InFreeTypeVars a (E.TermVar_open x n) → [
   | .var _ => nomatch ainEop
   | .lam A E' =>
     rw [Term.TermVar_open] at ainEop
-    match ainEop with
-    | .lam₀ ainA => exact .lam₀ ainA
-    | .lam₁ ainE' => exact .lam₁ ainE'.of_TermVar_open
+    exact List.mem_append.mpr <| match List.mem_append.mp ainEop with
+    | .inl ainA => .inl ainA
+    | .inr ainE' => .inr <| of_TermVar_open ainE'
   | .app E' F =>
     rw [Term.TermVar_open] at ainEop
-    match ainEop with
-    | .app₀ ainE' => exact .app₀ ainE'.of_TermVar_open
-    | .app₁ ainF => exact .app₁ ainF.of_TermVar_open
+    exact List.mem_append.mpr <| match List.mem_append.mp ainEop with
+    | .inl ainE' => .inl <| of_TermVar_open ainE'
+    | .inr ainF => .inr <| of_TermVar_open ainF
   | .typeGen E' =>
     rw [Term.TermVar_open] at ainEop
-    let .typeGen ainE' := ainEop
-    exact .typeGen ainE'.of_TermVar_open
+    rw [InFreeTypeVars, freeTypeVars] at ainEop ⊢
+    exact of_TermVar_open ainEop
   | .typeApp E' A =>
     rw [Term.TermVar_open] at ainEop
-    match ainEop with
-    | .typeApp₀ ainE' => exact .typeApp₀ ainE'.of_TermVar_open
-    | .typeApp₁ ainA => exact .typeApp₁ ainA
+    exact List.mem_append.mpr <| match List.mem_append.mp ainEop with
+    | .inl ainE' => .inl <| of_TermVar_open ainE'
+    | .inr ainA => .inr ainA
 
 theorem of_TypeVar_open {E : Term} (h : a ≠ a')
   : InFreeTypeVars a (E.TypeVar_open a' n) → [[a ∈ ftv(E)]] := fun ainEop => by
@@ -1484,53 +1423,23 @@ theorem of_TypeVar_open {E : Term} (h : a ≠ a')
   | .var _ => nomatch ainEop
   | .lam A E' =>
     rw [Term.TypeVar_open] at ainEop
-    match ainEop with
-    | .lam₀ ainA => exact .lam₀ <| ainA.of_TypeVar_open h
-    | .lam₁ ainE' => exact .lam₁ <| ainE'.of_TypeVar_open h
+    exact List.mem_append.mpr <| match List.mem_append.mp ainEop with
+    | .inl ainA => .inl <| Type'.InFreeTypeVars.of_TypeVar_open h ainA
+    | .inr ainE' => .inr <| of_TypeVar_open h ainE'
   | .app E' F =>
     rw [Term.TypeVar_open] at ainEop
-    match ainEop with
-    | .app₀ ainE' => exact .app₀ <| ainE'.of_TypeVar_open h
-    | .app₁ ainF => exact .app₁ <| ainF.of_TypeVar_open h
+    exact List.mem_append.mpr <| match List.mem_append.mp ainEop with
+    | .inl ainE' => .inl <| of_TypeVar_open h ainE'
+    | .inr ainF => .inr <| of_TypeVar_open h ainF
   | .typeGen E' =>
     rw [Term.TypeVar_open] at ainEop
-    let .typeGen ainE' := ainEop
-    exact .typeGen <| ainE'.of_TypeVar_open h
+    rw [InFreeTypeVars, freeTypeVars] at ainEop ⊢
+    exact of_TypeVar_open h ainEop
   | .typeApp E' A =>
     rw [Term.TypeVar_open] at ainEop
-    match ainEop with
-    | .typeApp₀ ainE' => exact .typeApp₀ <| ainE'.of_TypeVar_open h
-    | .typeApp₁ ainA => exact .typeApp₁ <| ainA.of_TypeVar_open h
-
-theorem exists_gt (E : Term) : ∃ a : Nat, ∀ a' : Nat, [[a' ∈ ftv(E)]] → a' < a := match E with
-  | .var _ => .intro 0 fun _ x'in => nomatch x'in
-  | .lam A E' =>
-    let ⟨aA, aAgt⟩ := Type'.InFreeTypeVars.exists_gt A
-    let ⟨aE', aE'gt⟩ := exists_gt E'
-    .intro (max aA aE') fun
-      | _, .lam₀ a'infvA =>
-        Nat.lt_of_lt_of_le (aAgt _ a'infvA) <| Nat.le_max_left _ _
-      | _, .lam₁ a'infvE' =>
-        Nat.lt_of_lt_of_le (aE'gt _ a'infvE') <| Nat.le_max_right _ _
-  | .app E' F =>
-    let ⟨aE', aE'gt⟩ := exists_gt E'
-    let ⟨aF, aFgt⟩ := exists_gt F
-    .intro (max aE' aF) fun
-      | _, .app₀ a'infvE' =>
-        Nat.lt_of_lt_of_le (aE'gt _ a'infvE') <| Nat.le_max_left _ _
-      | _, .app₁ a'infvF =>
-        Nat.lt_of_lt_of_le (aFgt _ a'infvF) <| Nat.le_max_right _ _
-  | .typeGen E' =>
-    let ⟨aE', aE'gt⟩ := exists_gt E'
-    .intro aE' fun | _, .typeGen a'infvE' => aE'gt _ a'infvE'
-  | .typeApp E' A =>
-    let ⟨aE', aE'gt⟩ := exists_gt E'
-    let ⟨aA, aAgt⟩ := Type'.InFreeTypeVars.exists_gt A
-    .intro (max aE' aA) fun
-      | _, .typeApp₀ a'infvE' =>
-        Nat.lt_of_lt_of_le (aE'gt _ a'infvE') <| Nat.le_max_left _ _
-      | _, .typeApp₁ a'infvA =>
-        Nat.lt_of_lt_of_le (aAgt _ a'infvA) <| Nat.le_max_right _ _
+    exact List.mem_append.mpr <| match List.mem_append.mp ainEop with
+    | .inl ainE' => .inl <| of_TypeVar_open h ainE'
+    | .inr ainA => .inr <| Type'.InFreeTypeVars.of_TypeVar_open h ainA
 
 end Term.InFreeTypeVars
 
@@ -1541,32 +1450,20 @@ def Term.NotInFreeTypeVars a E := ¬[[a ∈ ftv(E)]]
 namespace Term.NotInFreeTypeVars
 
 theorem lam : [[a ∉ ftv(λ x : A. E)]] → [[a ∉ ftv(A)]] ∧ [[a ∉ ftv(E)]] :=
-  fun anin => ⟨(anin <| .lam₀ ·), (anin <| .lam₁ ·)⟩
+  fun anin => ⟨(anin <| List.mem_append.mpr <| .inl ·), (anin <| List.mem_append.mpr <| .inr ·)⟩
 
 theorem app : [[a ∉ ftv(E F)]] → [[a ∉ ftv(E)]] ∧ [[a ∉ ftv(F)]] :=
-  fun anin => ⟨(anin <| .app₀ ·), (anin <| .app₁ ·)⟩
+  fun anin => ⟨(anin <| List.mem_append.mpr <| .inl ·), (anin <| List.mem_append.mpr <| .inr ·)⟩
 
-theorem typeGen : [[a ∉ ftv(Λ a. E)]] → [[a ∉ ftv(E)]] := (· <| .typeGen ·)
+theorem typeGen : [[a ∉ ftv(Λ a. E)]] → [[a ∉ ftv(E)]] := (· ·)
 
 theorem typeApp : [[a ∉ ftv(E [A])]] → [[a ∉ ftv(E)]] ∧ [[a ∉ ftv(A)]] :=
-  fun anin => ⟨(anin <| .typeApp₀ ·), (anin <| .typeApp₁ ·)⟩
+  fun anin => ⟨(anin <| List.mem_append.mpr <| .inl ·), (anin <| List.mem_append.mpr <| .inr ·)⟩
 
 theorem TermVar_open : [[a ∉ ftv(E)]] → [[a ∉ ftv(E^x)]] := (· <| ·.of_TermVar_open)
 
 theorem TypeVar_open_of_ne (h : a ≠ a') : [[a ∉ ftv(E)]] → [[a ∉ ftv(E^a')]] :=
   (· <| ·.of_TypeVar_open h)
-
-theorem exists_fresh {I : List _} : ∃ a ∉ I, [[a ∉ ftv(E)]] ∧ [[a ∉ ftv(A)]] :=
-  let ⟨aI, aIgt⟩ := I.exists_gt
-  let ⟨aE, aEgt⟩ := InFreeTypeVars.exists_gt E
-  let ⟨aA, aAgt⟩ := Type'.InFreeTypeVars.exists_gt A
-  .intro (max aI (max aE aA) : Nat) ⟨
-    fun inI => Nat.not_le_of_lt (aIgt _ inI) <| Nat.le_max_left _ _,
-    fun inE => Nat.not_le_of_lt (aEgt _ inE) <|
-      Nat.le_trans (Nat.le_max_left _ _) <| Nat.le_max_right _ _,
-    fun inA => Nat.not_le_of_lt (aAgt _ inA) <|
-      Nat.le_trans (Nat.le_max_right _ _) <| Nat.le_max_right _ _
-  ⟩
 
 end Term.NotInFreeTypeVars
 
@@ -1657,7 +1554,7 @@ theorem Type'_open_preservation {A : Type'} {G : Environment} (aninftvA : [[a �
     rw [Type'.TypeVar_open, if_neg (nomatch ·)] at Aopwf
     let .var a'inaG := Aopwf
     match a'inaG.append_elim with
-    | .inl .head => exact aninftvA .var |>.elim
+    | .inl .head => nomatch List.not_mem_singleton.mp aninftvA
     | .inl (.typeVarExt a'inG a'nea) => exact var a'inG.append_inl
     | .inr a'inG => exact .var a'inG.TypeVar_subst.append_inr
   | .var (.bound _) =>
@@ -1999,8 +1896,9 @@ theorem TypeWellFormedness_of : [[G ⊢ E : A]] → [[G ⊢ A]] := fun EtyA => b
   | .typeApp E' B, A, EtyA =>
     let .typeApp E'ty Bwf (A := A') := EtyA
     let .forall' A'wf (I := I) := E'ty.TypeWellFormedness_of
-    let ⟨a, aninI, aninA⟩ := Type'.NotInFreeTypeVars.exists_fresh (I := I) (A := A')
-    exact .Type'_open_preservation (G' := .empty) aninA Bwf <| A'wf a aninI
+    let ⟨a, anin⟩ := A'.freeTypeVars ++ I |>.exists_fresh
+    let ⟨aninA', aninI⟩ := List.not_mem_append'.mp anin
+    exact .Type'_open_preservation (G' := .empty) aninA' Bwf <| A'wf a aninI
 
 theorem weakening (EtyA : [[G ⊢ E : A]]) (G'Gwf : [[⊢ G', G]]) : [[G', G ⊢ E : A]] :=
   match EtyA with
@@ -2023,7 +1921,7 @@ theorem Term_open_preservation {E : Term} (EtyB : Typing [[ε, x : A, G]] (E.Ter
     rw [Term.Term_open, if_neg (nomatch ·)]
     let .var εxAGwf x'BinεxAG := EtyB
     match x'BinεxAG.append_elim with
-    | .inl ⟨.head, _⟩ => exact xninfvE .var |>.elim
+    | .inl ⟨.head, _⟩ => nomatch List.not_mem_singleton.mp xninfvE
     | .inr xBinG => exact var εxAGwf.TermVar_drop xBinG
   | .var (.bound _) =>
     rw [Term.Term_open]
@@ -2171,13 +2069,16 @@ theorem preservation (EtyA : [[ε ⊢ E : A]]) (EstepF : [[E -> F]]) : [[ε ⊢ 
   match EstepF, EtyA with
   | appl E'stepE'next, .app E'tyA'arrA FtyA' => .app (E'stepE'next.preservation E'tyA'arrA) FtyA'
   | appr FstepFnext, .app VtyA'arrA FtyA' => .app VtyA'arrA <| FstepFnext.preservation FtyA'
-  | lamApp, .app (.lam _ E'tyA (E := E')) VtyA'' =>
-    let ⟨x, xnin, xninfv⟩ := Term.NotInFreeTermVars.exists_fresh
-    .Term_open_preservation (E'tyA x xnin) (fun _ => (nomatch ·)) xninfv VtyA''
+  | lamApp, .app (.lam _ E'tyA (E := E') (I := I)) VtyA'' =>
+    let ⟨x, xnin⟩ := E'.freeTermVars ++ I |>.exists_fresh
+    let ⟨xninE', xninI⟩ := List.not_mem_append'.mp xnin
+    .Term_open_preservation (E'tyA x xninI) (fun _ => (nomatch ·)) xninE' VtyA''
   | typeApp E'stepE'next, .typeApp E'ty A'wf => .typeApp (E'stepE'next.preservation E'ty) A'wf
-  | typeGenApp, .typeApp (.typeGen E'tyA'') A'wf =>
-    let ⟨a, anin, aninftvE', aninftvA''⟩ := Term.NotInFreeTypeVars.exists_fresh
-    .Type'_open_preservation (G := .empty) (E'tyA'' a anin) (nomatch ·) aninftvE' aninftvA'' A'wf
+  | typeGenApp, .typeApp (.typeGen E'tyA'' (E := E') (A := A'') (I := I)) A'wf =>
+    let ⟨a, anin⟩ := E'.freeTypeVars ++ A''.freeTypeVars ++ I |>.exists_fresh
+    let ⟨aninE'A'', aninI⟩ := List.not_mem_append'.mp anin
+    let ⟨aninE', aninA''⟩ := List.not_mem_append'.mp aninE'A''
+    .Type'_open_preservation (G := .empty) (E'tyA'' a aninI) (nomatch ·) aninE' aninA'' A'wf
 
 theorem progress (EtyA : [[ε ⊢ E : A]]) : E.IsValue ∨ ∃ F, [[E -> F]] := match E, EtyA with
   | .lam .., _ => .inl .lam

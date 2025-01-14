@@ -54,4 +54,7 @@ theorem le_sum_of_mem' {as : List Nat} (h : a ∈ as) : a ≤ as.sum := by
     rw [sum_cons]
     exact Nat.le_trans (Nat.le_add_left ..) <| Nat.add_le_add_iff_left.mpr <| le_sum_of_mem' h'
 
+theorem not_mem_singleton : a ∉ [b] ↔ a ≠ b :=
+  ⟨(· <| mem_singleton.mpr ·), (· <| mem_singleton.mp ·)⟩
+
 end List

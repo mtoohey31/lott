@@ -142,46 +142,30 @@ end Term
 
 judgement_syntax x " ∈ " "fv" "(" e ")" : Term.InFreeVars (id x)
 
-namespace Term.InFreeVars
+abbrev Term.InFreeVars x (e : Term) := x ∈ e.freeVars
 
-theorem exists_gt (e : Term) : ∃ x : Nat, ∀ x' : Nat, [[x' ∈ fv(e)]] → x' < x :=
-  match e with
-  | .var (.free (x : Nat)) => .intro (x + 1) fun | _, var => Nat.lt_succ_self _
-  | .var (.bound _) => .intro 0 fun _ => (nomatch ·)
-  | .lam e' =>
-    let ⟨xe', xe'gt⟩ := exists_gt e'
-    .intro xe' fun | _, lam x'infve' => xe'gt _ x'infve'
-  | .app e₀ e₁ =>
-    let ⟨xe₀, xe₀gt⟩ := exists_gt e₀
-    let ⟨xe₁, xe₁gt⟩ := exists_gt e₁
-    .intro (max xe₀ xe₁) fun
-      | _, app₀ x'infve₀ => Nat.lt_of_lt_of_le (xe₀gt _ x'infve₀) <| Nat.le_max_left _ _
-      | _, app₁ x'infve₁ => Nat.lt_of_lt_of_le (xe₁gt _ x'infve₁) <| Nat.le_max_right _ _
+namespace Term.InFreeVars
 
 theorem Var_open : InFreeVars x (e.Var_open x' n) → x ≠ x' → [[x ∈ fv(e)]] :=
   fun xinfveop xnex' => by match e with
-    | .var (.free _) =>
-      rw [Term.Var_open, if_neg (nomatch ·)] at xinfveop
-      let .var := xinfveop
-      exact var
+    | .var (.free _) => rwa [Term.Var_open, if_neg (nomatch ·)] at xinfveop
     | .var (.bound _) =>
       rw [Term.Var_open] at xinfveop
       split at xinfveop
       · case isTrue h =>
         cases h
-        let .var := xinfveop
-        exact xnex' rfl |>.elim
+        cases List.mem_singleton.mp xinfveop
+        nomatch xnex'
       · case isFalse h => exact xinfveop
     | .lam e' =>
       rw [Term.Var_open] at xinfveop
-      let .lam xinfve'op := xinfveop
-      exact lam <| xinfve'op.Var_open xnex'
+      rw [InFreeVars, freeVars] at xinfveop ⊢
+      exact Var_open xinfveop xnex'
     | .app e₀ e₁ =>
       rw [Term.Var_open] at xinfveop
-      match xinfveop with
-      | app₀ xinfve₀op => exact app₀ <| xinfve₀op.Var_open xnex'
-      | app₁ xinfve₁op => exact app₁ <| xinfve₁op.Var_open xnex'
-
+      exact match List.mem_append.mp xinfveop with
+      | .inl xinfve₀op => List.mem_append.mpr <| .inl <| Var_open xinfve₀op xnex'
+      | .inr xinfve₁op => List.mem_append.mpr <| .inr <| Var_open xinfve₁op xnex'
 
 end Term.InFreeVars
 
@@ -191,20 +175,11 @@ abbrev Term.NotInFreeVars x e := ¬[[x ∈ fv(e)]]
 
 namespace Term.NotInFreeVars
 
-theorem exists_fresh (e : Term) (I : List VarId) : ∃ x ∉ I, [[x ∉ fv(e)]] :=
-  let ⟨xI, xIgt⟩ := I.exists_gt
-  let ⟨xE, xEgt⟩ := InFreeVars.exists_gt e
-  let xIE := max xI xE
-  .intro xIE ⟨
-    fun inI => Nat.not_le_of_lt (xIgt xIE inI) <| Nat.le_max_left _ _,
-    fun inE => Nat.not_le_of_lt (xEgt xIE inE) <| Nat.le_max_right _ _
-  ⟩
+theorem lam : [[x ∉ fv(λ x. e)]] → [[x ∉ fv(e)]] := (· ·)
 
-theorem lam : [[x ∉ fv(λ x. e)]] → [[x ∉ fv(e)]] := (· <| .lam ·)
+theorem app₀ : [[x ∉ fv(e₀ e₁)]] → [[x ∉ fv(e₀)]] := (· <| List.mem_append.mpr <| .inl ·)
 
-theorem app₀ : [[x ∉ fv(e₀ e₁)]] → [[x ∉ fv(e₀)]] := (· <| .app₀ ·)
-
-theorem app₁ : [[x ∉ fv(e₀ e₁)]] → [[x ∉ fv(e₁)]] := (· <| .app₁ ·)
+theorem app₁ : [[x ∉ fv(e₀ e₁)]] → [[x ∉ fv(e₁)]] := (· <| List.mem_append.mpr <| .inr ·)
 
 theorem Var_open : [[x ∉ fv(e)]] → x ≠ x' → [[x ∉ fv(e^x')]] :=
   fun xninfve xnex' xinfveop => xninfve <| xinfveop.Var_open xnex'
@@ -515,7 +490,7 @@ theorem opening
     rw [Term.Var_open, if_neg (nomatch ·)] at e₁ty
     let .var Γ₀xΓ₁wf x'inΓ₀xΓ₁ := e₁ty
     match x'inΓ₀xΓ₁.append_elim with
-    | .inl ⟨.head, x'ninΓ₁⟩ => exact xninfve₁ .var |>.elim
+    | .inl ⟨.head, x'ninΓ₁⟩ => nomatch List.not_mem_singleton.mp xninfve₁
     | .inl ⟨.ext x'inΓ₀ _, x'ninΓ₁⟩ => exact .var Γ₀xΓ₁wf.drop <| x'inΓ₀.append_inl x'ninΓ₁
     | .inr x'inΓ₁ => exact .var Γ₀xΓ₁wf.drop x'inΓ₁.append_inr
   | .var (.bound _) =>
@@ -571,7 +546,8 @@ theorem preservation (ty : [[Γ ⊢ e : τ]]) (re : [[e ↦ e']]) : [[Γ ⊢ e' 
   | appr e₁ree₁', .app e₀ty e₁ty => .app e₀ty <| e₁ree₁'.preservation e₁ty
   | lamApp, .app e₀ty vty =>
     let .lam e₀'ty (e := e₀') (I := I) := e₀ty
-    let ⟨x, xninI, xninfve₀'⟩ := Term.NotInFreeVars.exists_fresh e₀' I
+    let ⟨x, xnin⟩ := e₀'.freeVars ++ I |>.exists_fresh
+    let ⟨xninfve₀', xninI⟩ := List.not_mem_append'.mp xnin
     e₀'ty x xninI |>.opening (Γ₁ := .empty) vty (fun _ => (nomatch ·)) xninfve₀'
 
 theorem progress (ty : [[ε ⊢ e : τ]]) : e.IsValue ∨ ∃ e', [[e ↦ e']] := match e, ty with
