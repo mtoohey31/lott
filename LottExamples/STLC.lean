@@ -1,3 +1,4 @@
+import Aesop
 import Lott
 import Lott.Data.List
 import Lott.DSL.Elab.UniversalJudgement
@@ -23,118 +24,30 @@ nonterminal Term, e :=
 namespace Term
 
 @[simp]
-theorem Var_open_sizeOf (e : Term) : sizeOf (e.Var_open x n) = sizeOf e := by
-  have : ∀ e : Term, e._sizeOf_1 = sizeOf e := fun _ => by dsimp only [sizeOf]
-  match e with
-  | var (.free _) => rw [Var_open, if_neg (nomatch ·)]
-  | var (.bound _) =>
-    rw [Var_open]
-    split
-    · case isTrue h =>
-      dsimp only [sizeOf]
-      rw [_sizeOf_1, _sizeOf_1]
-      dsimp only [sizeOf]
-      rw [default.sizeOf, default.sizeOf]
-    · case isFalse h => rfl
-  | lam e' =>
-    dsimp only [sizeOf]
-    rw [Var_open, _sizeOf_1, _sizeOf_1]
-    simp only
-    rw [← _sizeOf_1, ← _sizeOf_1, this, this, e'.Var_open_sizeOf (n := n + 1)]
-  | app e₀ e₁ =>
-    dsimp only [sizeOf]
-    rw [Var_open, _sizeOf_1, _sizeOf_1]
-    simp only
-    rw [← _sizeOf_1, ← _sizeOf_1, ← _sizeOf_1, ← _sizeOf_1, this, this, this, this,
-        e₀.Var_open_sizeOf, e₁.Var_open_sizeOf]
+theorem Var_open_sizeOf : sizeOf (Var_open e x n) = sizeOf e := by
+  induction e generalizing n <;> aesop (add simp Var_open)
 
-theorem Var_open_comm (e : Term) (mnen : m ≠ n)
-  : (e.Var_open x m).Var_open x' n = (e.Var_open x' n).Var_open x m := by match e with
-  | var (.free _) => simp [Var_open]
-  | var (.bound _) =>
-    rw [Var_open]
-    split
-    · case isTrue h =>
-      cases h
-      rw [Var_open, if_neg (nomatch ·), Var_open, if_neg (mnen.symm <| Var.bound.inj ·), Var_open,
-          if_pos rfl]
-    · case isFalse h =>
-      rw [Var_open]
-      split
-      · case isTrue h' =>
-        cases h'
-        rw [Var_open, if_neg (nomatch ·)]
-      · case isFalse h' => rw [Var_open, if_neg h]
-  | lam e' => simp [Var_open, e'.Var_open_comm (mnen <| Nat.succ_inj'.mp ·)]
-  | app e₀ e₁ => simp [Var_open, e₀.Var_open_comm mnen, e₁.Var_open_comm mnen]
+theorem Var_open_comm (e : Term)
+  : m ≠ n → (e.Var_open x m).Var_open x' n = (e.Var_open x' n).Var_open x m := by
+  induction e generalizing m n <;> aesop (add simp Var_open)
 
 namespace VarLocallyClosed
 
-theorem weakening {e : Term} (mlen : m ≤ n) : e.VarLocallyClosed m → e.VarLocallyClosed n
-  | var_free => var_free
-  | var_bound h => var_bound <| Nat.lt_of_lt_of_le h mlen
-  | lam e'lc => lam <| e'lc.weakening <| Nat.succ_le_succ_iff.mpr mlen
-  | app e₀lc e₁lc => app (e₀lc.weakening mlen) (e₁lc.weakening mlen)
+theorem weakening (elc : VarLocallyClosed e m) : m ≤ n → e.VarLocallyClosed n := by
+  induction elc generalizing n
+  all_goals aesop (add 20% constructors VarLocallyClosed, 20% Nat.lt_of_lt_of_le)
 
-theorem Var_open_drop {e : Term} (mltn : m < n)
-  : (e.Var_open x m).VarLocallyClosed n → e.VarLocallyClosed n := fun eoplc => by match e with
-  | var (.free _) => exact var_free
-  | var (.bound _) =>
-    rw [Var_open] at eoplc
-    split at eoplc
-    · case isTrue h =>
-      cases h
-      exact var_bound mltn
-    · case isFalse h => exact eoplc
-  | .lam e' =>
-    rw [Var_open] at eoplc
-    let .lam e'oplc := eoplc
-    exact lam <| e'oplc.Var_open_drop <| Nat.succ_lt_succ_iff.mpr mltn
-  | .app e₀ e₁ =>
-    rw [Var_open] at eoplc
-    let .app e₀oplc e₁oplc := eoplc
-    exact app (e₀oplc.Var_open_drop mltn) (e₁oplc.Var_open_drop mltn)
+theorem Var_open_drop : m < n → (Var_open e x m).VarLocallyClosed n → e.VarLocallyClosed n := by
+  induction e generalizing m n <;> aesop
+    (add simp Var_open, safe cases VarLocallyClosed, safe constructors VarLocallyClosed)
 
-theorem Var_open_eq_of (e : Term) (elc : e.VarLocallyClosed n) : e.Var_open x n = e := by
-  match e with
-  | var (.free _) => simp [Var_open]
-  | var (.bound _) =>
-    rw [Var_open]
-    split
-    · case isTrue h =>
-      cases h
-      let .var_bound nltn := elc
-      nomatch Nat.ne_of_lt nltn
-    · case isFalse h => rfl
-  | .lam e' =>
-    let .lam e'lc := elc
-    simp [Var_open, e'lc.Var_open_eq_of]
-  | .app e₀ e₁ =>
-    let .app e₀lc e₁lc := elc
-    simp [Var_open, e₀lc.Var_open_eq_of, e₁lc.Var_open_eq_of]
+theorem Var_open_id : VarLocallyClosed e n → e.Var_open x n = e := by
+  induction e generalizing n <;> aesop (add simp Var_open, safe cases VarLocallyClosed)
 
-theorem Var_open_Term_open_comm {e e' : Term} (e'lc : e'.VarLocallyClosed) (mnen : m ≠ n)
-  : (e.Term_open e' m).Var_open x n = (e.Var_open x n).Term_open e' m := by match e with
-  | var (.free _) => simp [Var_open, Term_open]
-  | var (.bound _) =>
-    rw [Term_open]
-    split
-    · case isTrue h =>
-      cases h
-      rw [Var_open, if_neg (mnen.symm <| Var.bound.inj ·), Term_open, if_pos rfl,
-          e'lc.weakening (Nat.zero_le _) |>.Var_open_eq_of]
-    · case isFalse h =>
-      rw [Var_open]
-      split
-      · case isTrue h' =>
-        cases h'
-        rw [Term_open, if_neg (nomatch ·)]
-      · case isFalse h' => rw [Term_open, if_neg h]
-  | .lam e' =>
-    rw [Term_open, Var_open, Var_open, Term_open, e'lc.Var_open_Term_open_comm]
-    exact (mnen <| Nat.succ_inj'.mp ·)
-  | .app e₀ e₁ =>
-    simp [Term_open, Var_open, e'lc.Var_open_Term_open_comm mnen, e'lc.Var_open_Term_open_comm mnen]
+theorem Var_open_Term_open_comm (e'lc : VarLocallyClosed e')
+  : m ≠ n → (Term_open e e' m).Var_open x n = (e.Var_open x n).Term_open e' m := by
+  induction e generalizing m n <;> aesop
+    (add simp [Var_open, Term_open], 50% apply Nat.zero_le, 20% apply [Var_open_id, weakening])
 
 end VarLocallyClosed
 
@@ -146,26 +59,8 @@ abbrev Term.InFreeVars x (e : Term) := x ∈ e.freeVars
 
 namespace Term.InFreeVars
 
-theorem Var_open : InFreeVars x (e.Var_open x' n) → x ≠ x' → [[x ∈ fv(e)]] :=
-  fun xinfveop xnex' => by match e with
-    | .var (.free _) => rwa [Term.Var_open, if_neg (nomatch ·)] at xinfveop
-    | .var (.bound _) =>
-      rw [Term.Var_open] at xinfveop
-      split at xinfveop
-      · case isTrue h =>
-        cases h
-        cases List.mem_singleton.mp xinfveop
-        nomatch xnex'
-      · case isFalse h => exact xinfveop
-    | .lam e' =>
-      rw [Term.Var_open] at xinfveop
-      rw [InFreeVars, freeVars] at xinfveop ⊢
-      exact Var_open xinfveop xnex'
-    | .app e₀ e₁ =>
-      rw [Term.Var_open] at xinfveop
-      exact match List.mem_append.mp xinfveop with
-      | .inl xinfve₀op => List.mem_append.mpr <| .inl <| Var_open xinfve₀op xnex'
-      | .inr xinfve₁op => List.mem_append.mpr <| .inr <| Var_open xinfve₁op xnex'
+theorem Var_open_drop : InFreeVars x (e.Var_open x' n) → x ≠ x' → [[x ∈ fv(e)]] := by
+  induction e generalizing n <;> all_goals aesop (add simp InFreeVars, simp Term.freeVars)
 
 end Term.InFreeVars
 
@@ -181,8 +76,8 @@ theorem app₀ : [[x ∉ fv(e₀ e₁)]] → [[x ∉ fv(e₀)]] := (· <| List.m
 
 theorem app₁ : [[x ∉ fv(e₀ e₁)]] → [[x ∉ fv(e₁)]] := (· <| List.mem_append.mpr <| .inr ·)
 
-theorem Var_open : [[x ∉ fv(e)]] → x ≠ x' → [[x ∉ fv(e^x')]] :=
-  fun xninfve xnex' xinfveop => xninfve <| xinfveop.Var_open xnex'
+theorem Var_open_intro : [[x ∉ fv(e)]] → x ≠ x' → [[x ∉ fv(e^x')]] :=
+  fun xninfve xnex' xinfveop => xninfve <| xinfveop.Var_open_drop xnex'
 
 end Term.NotInFreeVars
 
@@ -514,7 +409,7 @@ theorem opening
       rw [this, e₁'.Var_open_comm <| Nat.succ_ne_zero _] at e₁'ty
       rw [e₀ty.toVarLocallyClosed.Var_open_Term_open_comm <| Nat.succ_ne_zero _]
       let xninΓ₁x' : [[x ∉ Γ₁, x' : τ₀']] := Environment.VarNotIn.ext.mpr ⟨xnex'.symm, xninΓ₁⟩
-      exact e₁'ty.opening e₀ty xninΓ₁x' <| xninfve₁.lam.Var_open xnex'.symm
+      exact e₁'ty.opening e₀ty xninΓ₁x' <| xninfve₁.lam.Var_open_intro xnex'.symm
   | .app e₁₀ e₁₁ =>
     let .app e₁₀ty e₁₁ty := e₁ty
     exact .app (e₁₀ty.opening e₀ty xninΓ₁ xninfve₁.app₀) (e₁₁ty.opening e₀ty xninΓ₁ xninfve₁.app₁)
