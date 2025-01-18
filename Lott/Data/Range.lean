@@ -39,25 +39,26 @@ theorem toList_eq_nil_of_stop_le_start (h : r.stop ≤ r.start) : toList r = [] 
   · case isTrue => rfl
   · case isFalse => rw [if_neg (Nat.not_lt_of_le h)]
 
-theorem map_eq_of_eq_of_mem {f g : Nat → α} (h : ∀ i ∈ [m:n], f i = g i)
-  : List.map (fun i => f i) [m:n] = List.map (fun i => g i) [m:n] := by
-  rw [toList]
-  split
-  · case isTrue =>
-    contradiction
+theorem mem_of_mem_toList (h : i ∈ [m:n].toList) : i ∈ [m:n] := by
+  rw [toList, if_neg (nomatch ·)] at h
+  split at h
+  · case isTrue mltn =>
+    cases h
+    · case head => exact ⟨Nat.le_refl _, mltn⟩
+    · case tail h' =>
+      let ⟨msucclei, iltn⟩ := mem_of_mem_toList h'
+      exact ⟨Nat.le_of_succ_le msucclei, iltn⟩
   · case isFalse =>
-    split
-    · case isTrue h' =>
-      simp only [List.map]
-      apply List.cons_eq_cons.mpr
-      let h'' i (mem : i ∈ [m + 1:n]) := h i ⟨Nat.le_of_succ_le mem.lower, mem.upper⟩
-      exact ⟨h m ⟨Nat.le_refl _, h'⟩, map_eq_of_eq_of_mem h''⟩
-    · case isFalse => rfl
+    nomatch h
 termination_by n - m
 decreasing_by
-  all_goals simp_wf
+  all_goals simp_arith
   apply Nat.sub_succ_lt_self
   assumption
+
+theorem map_eq_of_eq_of_mem {f g : Nat → α} (h : ∀ i ∈ [m:n], f i = g i)
+  : List.map (fun i => f i) [m:n] = List.map (fun i => g i) [m:n] :=
+  List.map_eq_map_iff.mpr (h · <| mem_of_mem_toList ·)
 
 theorem map_eq_of_eq_of_mem' {f g : Nat → α} (h : ∀ i ∈ [m:n], f i = g i)
   : List.map (fun i => f i) (Coe.coe [m:n]) = List.map (fun i => g i) (Coe.coe [m:n]) := by

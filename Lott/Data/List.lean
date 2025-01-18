@@ -57,4 +57,18 @@ theorem le_sum_of_mem' {as : List Nat} (h : a ∈ as) : a ≤ as.sum := by
 theorem not_mem_singleton : a ∉ [b] ↔ a ≠ b :=
   ⟨(· <| mem_singleton.mpr ·), (· <| mem_singleton.mp ·)⟩
 
+theorem eq_of_map_eq_map_of_inj {α β : Type} {f : α → β} {l₀ l₁ : List α}
+  (eq : List.map f l₀ = List.map f l₁) (finj : ∀ x ∈ l₀, ∀ y ∈ l₁, f x = f y → x = y)
+  : l₀ = l₁ := by
+  match l₁ with
+  | [] =>
+    rw [map_nil] at eq
+    rw [map_eq_nil_iff.mp eq]
+  | x :: l₁' =>
+    rw [map_cons] at eq
+    let ⟨_, _, eq₀, eq₁, eq'⟩ := map_eq_cons_iff.mp eq
+    cases eq₀
+    rw [finj _ (.head _) _ (.head _) eq₁]
+    rw [eq_of_map_eq_map_of_inj eq' fun _ mem₀ _ mem₁ => finj _ (.tail _ mem₀) _ (.tail _ mem₁)]
+
 end List
