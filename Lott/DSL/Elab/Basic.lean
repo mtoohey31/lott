@@ -209,10 +209,16 @@ def _root_.Lott.DSL.IR.toExprArgs (ir : Array IR) (ids binders : Array Name)
       return some l
 
 private
-def elabSymbolComprehension (symbol : TSyntax `Lott.Symbol) (pat : Term) (collection : Term)
+def elabListComprehension (symbol : TSyntax `Lott.Symbol) (pat : Term) (collection : Term)
   (type : Expr) : TermElabM Expr := do
   let stx ← `($collection |>.map (fun $pat => [[$symbol:Lott.Symbol]]) |>.flatten)
-  Term.elabTerm stx (Expr.app (.const `List [levelOne]) type)
+  Term.elabTerm stx <| Expr.app (.const `List [levelOne]) type
+
+private
+def elabOptionComprehension (symbol : TSyntax `Lott.Symbol) (condition : Term) (type : Expr)
+  : TermElabM Expr := do
+  let stx ← `([[$symbol:Lott.Symbol]].filter fun _ => $condition)
+  Term.elabTerm stx <| Expr.app (.const `Option [levelOne]) type
 
 private partial
 def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binders : Array Name)
@@ -246,7 +252,7 @@ def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binder
               collection,
               Lean.Syntax.atom _ "/>"
             ] => do
-              elabSymbolComprehension (TSyntax.mk symbol) (TSyntax.mk pat) (TSyntax.mk collection) $type
+              elabListComprehension (TSyntax.mk symbol) (TSyntax.mk pat) (TSyntax.mk collection) $type
             | _, Syntax.node _ $(quote catName) #[
                 lhs@(Syntax.node _ $(quote catName) _),
                 Lean.Syntax.atom _ $(quote sep.trim),
@@ -264,18 +270,32 @@ def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binder
           | some stx => Lott.DSL.Elab.elabTerm $(quote catName) false stx
           | none => pure <| Expr.app (Expr.const `List.nil [0]) $type)
     | mk l (.optional ir) => do
+      let catName := sepByPrefix ++ (← getCurrNamespace) ++ canon ++ l.getId |>.obfuscateMacroScopes
       let patternArgs ← IR.toPatternArgs ir
       let seqItems ← IR.toTermSeqItems ir canon ids binders
       let exprArgs ← IR.toExprArgs ir ids binders
       let exprTypes ← ir.filterMapM <| IR.toMkTypeExpr ids binders
       let some (mkProd, type) ← mkMkProd (exprArgs.getElems.zip exprTypes) | return none
 
+      let termElabIdent := mkIdentFrom l <| canon ++ l.getId.appendAfter "TermElab"
+      elabCommand <| ←
+        `(@[lott_term_elab $(mkIdent catName)] def $termElabIdent : Lott.DSL.Elab.TermElab
+            | _, Syntax.node _ $(quote catName) #[
+              Lean.Syntax.atom _ "</",
+              symbol,
+              Lean.Syntax.atom _ "//",
+              condition,
+              Lean.Syntax.atom _ "/>"
+            ] => do
+              elabOptionComprehension (TSyntax.mk symbol) (TSyntax.mk condition) $type
+            | _, Syntax.node _ $(quote catName) #[$patternArgs,*] => do
+              $seqItems*
+              return mkApp2 (Expr.const `Option.some [0]) $type $mkProd
+            | _, _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
+
       `(doSeqItem| let $l ← match (Syntax.getArgs $l)[0]? with
-          | some stx => do
-            let Syntax.node _ _ #[$patternArgs,*] := stx | throwUnsupportedSyntax
-            $seqItems*
-            return mkApp2 (Expr.const `Option.some [levelOne]) $type $mkProd
-          | none => return Expr.app (Expr.const `Option.none [levelOne]))
+          | some stx => Lott.DSL.Elab.elabTerm $(quote catName) false stx
+          | none => pure <| Expr.app (Expr.const `Option.none [0]) $type)
 
 partial
 def _root_.Lott.DSL.IR.toTexSeqItems (ir : Array IR) (canon : Name) : CommandElabM (TSyntaxArray `Lean.Parser.Term.doSeqItem) :=
@@ -298,7 +318,7 @@ def _root_.Lott.DSL.IR.toTexSeqItems (ir : Array IR) (canon : Name) : CommandEla
       let seqItems ← IR.toTexSeqItems ir canon
       let joinArgs := IR.toJoinArgs ir
 
-      `(doSeqItem| let $l ← (Syntax.getArgs $l)[0]?.mapM fun stx => do
+      `(doSeqItem| let $l ← Option.getD (dflt := "") <$> (Syntax.getArgs $l)[0]?.mapM fun stx => do
           let Syntax.node _ _ #[$patternArgs,*] := stx | throwUnsupportedSyntax
           $seqItems*
           return String.join [$joinArgs,*])

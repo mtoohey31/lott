@@ -78,7 +78,27 @@ def toParser' (canon : Name) : IR → CommandElabM Term
             checkLineEq >> $(quote sep) >> categoryParser $(quote catName) 0)
 
     ``(Parser.optional (categoryParser $(quote catName) 0))
-  | mk _ (.optional ir) => do ``(Parser.optional $(← toParserSeq canon ir))
+  | mk l (.optional ir) => do
+    let canon' := canon ++ l.getId |>.obfuscateMacroScopes
+    let catName := sepByPrefix ++ (← getCurrNamespace) ++ canon'
+    let parserAttrName := catName.appendAfter "_parser"
+
+    setEnv <| ← Parser.registerParserCategory (← getEnv) parserAttrName catName .symbol
+
+    let attrIdent := mkIdent parserAttrName
+    let (val, type) ← toParser ir canon' sepByPrefix
+    if type != (← `(term| Parser)) then throwError "invalid left recursive optional syntax"
+    let parserIdent := mkIdentFrom l <| canon'.appendAfter "_parser"
+    elabCommand <| ← `(@[$attrIdent:ident] def $parserIdent : Parser := $val)
+
+    let comprehensionIdent := mkIdentFrom l <| canon'.appendAfter "_comprehension_parser"
+    elabCommand <| ←
+      `(@[$attrIdent:ident] def $comprehensionIdent : Parser :=
+          leadingNode $(quote catName) Parser.maxPrec <|
+            "</ " >> withPosition (categoryParser $(quote catName) 0) >>
+            " // " >> termParser >> " />")
+
+    ``(Parser.optional (categoryParser $(quote catName) 0))
 
 private partial
 def toParserSeq (canon : Name) (ir : Array IR) : CommandElabM Term := do
