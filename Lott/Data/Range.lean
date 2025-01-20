@@ -1,3 +1,5 @@
+import Lott.Data.Nat
+
 namespace Std.Range
 
 def toList (r : Range) : List Nat := if r.step = 0 then
@@ -170,6 +172,42 @@ theorem length_toList : [m:n].toList.length = n - m := by
     rw [List.length_cons, length_toList, Nat.sub_add_eq, Nat.sub_add_cancel]
     exact Nat.succ_le_of_lt <| Nat.sub_pos_iff_lt.mpr h
   · case isFalse h => rw [List.length_nil, Nat.sub_eq_zero_of_le <| Nat.le_of_not_lt h]
+termination_by n - m
+decreasing_by
+  all_goals simp_arith
+  apply Nat.sub_succ_lt_self
+  assumption
+
+theorem map_get!_eq [Inhabited α] {as : List α} : [:as.length].map as.get! = as := by
+  match as with
+  | [] =>
+    rw [List.length_nil, map, toList, if_neg (nomatch ·), if_neg (Nat.not_lt_of_le (Nat.le_refl _)),
+        List.map_nil]
+  | a :: as' =>
+    rw [List.length_cons, map, toList, if_neg (nomatch ·), if_pos (Nat.succ_pos _), List.map_cons,
+        List.get!_cons_zero, ← map_shift (Nat.le_add_left ..), Nat.add_sub_cancel,
+        Nat.add_sub_cancel, map_eq_of_eq_of_mem fun _ _ => List.get!_cons_succ .., ← map,
+        map_get!_eq]
+
+theorem count_toList_le_one : [m:n].toList.count l ≤ 1 := by
+  rw [toList, if_neg (nomatch ·)]
+  split
+  · case isTrue h =>
+    rw [List.count_cons]
+    simp only
+    split
+    · case isTrue h' =>
+      cases Nat.eq_of_beq_eq_true' h'
+      rw [List.count_eq_zero_of_not_mem]
+      · exact Nat.le_refl _
+      · intro lmem
+        nomatch Nat.ne_of_lt <| Nat.lt_of_succ_le <| And.left <| mem_of_mem_toList lmem
+    · case isFalse h' =>
+      rw [Nat.add_zero]
+      exact count_toList_le_one
+  · case isFalse h =>
+    rw [List.count_nil]
+    exact Nat.le_of_lt Nat.one_pos
 termination_by n - m
 decreasing_by
   all_goals simp_arith

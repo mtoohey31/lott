@@ -1,3 +1,5 @@
+import Lott.Data.Nat
+
 namespace List
 
 /-
@@ -24,6 +26,10 @@ theorem not_mem_append' {xs ys : List α} : z ∉ xs ++ ys ↔ z ∉ xs ∧ z �
   mpr | ⟨xninxs, xninys⟩, xinxsys => match mem_append.mp xinxsys with
     | .inl xinxs => xninxs xinxs
     | .inr xinys => xninys xinys
+
+theorem not_mem_cons : x ∉ y :: xs ↔ x ≠ y ∧ x ∉ xs where
+  mp nmem := ⟨ne_of_not_mem_cons nmem, not_mem_of_not_mem_cons nmem⟩
+  mpr | ⟨ne, nmem⟩ => not_mem_cons_of_ne_of_not_mem ne nmem
 
 theorem exists_gt (xs : List Nat)
   : ∃ n : Nat, ∀ m : Nat, m ∈ xs → m < n := match xs with
@@ -70,5 +76,82 @@ theorem eq_of_map_eq_map_of_inj {α β : Type} {f : α → β} {l₀ l₁ : List
     cases eq₀
     rw [finj _ (.head _) _ (.head _) eq₁]
     rw [eq_of_map_eq_map_of_inj eq' fun _ mem₀ _ mem₁ => finj _ (.tail _ mem₀) _ (.tail _ mem₁)]
+
+theorem get!_mem [Inhabited α] {as : List α} (h : i < as.length) : as.get! i ∈ as := by
+  rw [get!_eq_getD, getD_eq_getElem?_getD, getElem?_eq, dif_pos h, Option.getD]
+  exact getElem_mem _
+
+theorem two_le_count_of_get!_eq_of_ne [BEq α] [LawfulBEq α] [Inhabited α] {as : List α}
+  (iltlen : i < as.length) (jltlen : j < as.length) (eq : as.get! i = as.get! j) (ne : i ≠ j)
+  : 2 ≤ List.count (as.get! i) as := by match as with
+  | [] =>
+    rw [length_nil] at iltlen
+    nomatch Nat.not_lt_zero _ iltlen
+  | a :: as' =>
+    rw [count_cons]
+    split
+    · case isTrue h =>
+      by_cases i = 0
+      · case pos h =>
+        cases h
+        rw [eq]
+        let ⟨k, eq'⟩ := Nat.exists_eq_succ_of_ne_zero ne.symm
+        cases eq'
+        rw [get!_cons_succ]
+        show 1 + 1 ≤ _
+        rw [length_cons] at jltlen
+        apply Nat.add_le_add_right <| Nat.succ_le_of_lt <| count_pos_iff.mpr <| get!_mem <|
+          Nat.add_lt_add_iff_right.mp jltlen
+      · case neg h =>
+        let ⟨k, eq'⟩ := Nat.exists_eq_succ_of_ne_zero h
+        cases eq'
+        rw [get!_cons_succ]
+        by_cases j = 0
+        · case pos h' =>
+          show 1 + 1 ≤ _
+          rw [length_cons] at jltlen
+          apply Nat.add_le_add_right <| Nat.succ_le_of_lt <| count_pos_iff.mpr <| get!_mem <|
+            Nat.add_lt_add_iff_right.mp iltlen
+        · case neg h' =>
+          apply Nat.le_add_right_of_le
+          let ⟨l, eq''⟩ := Nat.exists_eq_succ_of_ne_zero h'
+          cases eq''
+          exact two_le_count_of_get!_eq_of_ne (Nat.add_lt_add_iff_right.mp iltlen)
+            (Nat.add_lt_add_iff_right.mp jltlen) eq (ne <| Nat.succ_inj'.mpr ·)
+    · case isFalse h =>
+      by_cases i = 0
+      · case pos h' =>
+        cases h'
+        rw [get!_cons_zero, BEq.refl] at h
+        nomatch h
+      · case neg h' =>
+        by_cases j = 0
+        · case pos h'' =>
+          cases h''
+          rw [eq, get!_cons_zero, BEq.refl] at h
+          nomatch h
+        · case neg h'' =>
+          let ⟨k, eq'⟩ := Nat.exists_eq_succ_of_ne_zero h'
+          cases eq'
+          let ⟨k', eq''⟩ := Nat.exists_eq_succ_of_ne_zero h''
+          cases eq''
+          rw [get!_cons_succ, Nat.add_zero]
+          exact two_le_count_of_get!_eq_of_ne (Nat.add_lt_add_iff_right.mp iltlen)
+            (Nat.add_lt_add_iff_right.mp jltlen) eq (ne <| Nat.succ_inj'.mpr ·)
+
+theorem map_eq_id_of_eq_id_of_mem (id_of_mem : ∀ a ∈ as, f a = a) : List.map f as = as := by
+  match as with
+  | [] => rw [List.map_nil]
+  | a :: as' =>
+    rw [List.map_cons, id_of_mem _ <| .head _,
+        map_eq_id_of_eq_id_of_mem fun _ mem => id_of_mem _ <| .tail _ mem]
+
+theorem sizeOf_map_eq_of_eq_id_of_mem [SizeOf α] {f : α → α}
+  (sizeOf_eq_of_mem : ∀ a ∈ as, sizeOf (f a) = sizeOf a) : sizeOf (List.map f as) = sizeOf as := by
+  match as with
+  | [] => rw [List.map_nil]
+  | a :: as' =>
+    rw [List.map_cons, List.cons.sizeOf_spec, List.cons.sizeOf_spec, sizeOf_eq_of_mem _ <| .head _,
+        sizeOf_map_eq_of_eq_id_of_mem fun _ mem => sizeOf_eq_of_mem _ <| .tail _ mem]
 
 end List
