@@ -31,6 +31,28 @@ theorem not_mem_cons : x ∉ y :: xs ↔ x ≠ y ∧ x ∉ xs where
   mp nmem := ⟨ne_of_not_mem_cons nmem, not_mem_of_not_mem_cons nmem⟩
   mpr | ⟨ne, nmem⟩ => not_mem_cons_of_ne_of_not_mem ne nmem
 
+theorem not_mem_flatten : x ∉ flatten xss ↔ ∀ xs ∈ xss, x ∉ xs where
+  mp xnmem xs xsin := by
+    let _ :: xss' := xss
+    rw [flatten] at xnmem
+    match xsin with
+    | .head _ => exact List.not_mem_append'.mp xnmem |>.left
+    | .tail _ xsin' =>
+      apply not_mem_flatten.mp <| List.not_mem_append'.mp xnmem |>.right
+      exact xsin'
+  mpr nmem_of_mem := by
+    match xss with
+    | [] =>
+      rw [List.flatten_nil]
+      intro xin
+      nomatch xin
+    | xs :: xss' =>
+      rw [List.flatten]
+      exact List.not_mem_append'.mpr ⟨
+        nmem_of_mem _ <| .head _,
+        not_mem_flatten.mpr fun _ mem => nmem_of_mem _ <| .tail _ mem
+      ⟩
+
 theorem exists_gt (xs : List Nat)
   : ∃ n : Nat, ∀ m : Nat, m ∈ xs → m < n := match xs with
   | [] => .intro 0 fun x' x'in => nomatch x'in
