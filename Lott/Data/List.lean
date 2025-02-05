@@ -176,4 +176,21 @@ theorem sizeOf_map_eq_of_eq_id_of_mem [SizeOf α] {f : α → α}
     rw [List.map_cons, List.cons.sizeOf_spec, List.cons.sizeOf_spec, sizeOf_eq_of_mem _ <| .head _,
         sizeOf_map_eq_of_eq_id_of_mem fun _ mem => sizeOf_eq_of_mem _ <| .tail _ mem]
 
+theorem get!_zip [Inhabited α] [Inhabited β] {l₁ : List α} {l₂ : List β}
+  (length_eq : l₁.length = l₂.length) (ilt : i < l₁.length)
+  : (zip l₁ l₂).get! i = (l₁.get! i, l₂.get! i) := by match l₁, l₂ with
+  | [], _ => nomatch ilt
+  | _, [] =>
+    rw [length_eq] at ilt
+    nomatch ilt
+  | a :: l₁', b :: l₂' =>
+    rw [zip_cons_cons]
+    match i with
+    | 0 => rw [get!_cons_zero, get!_cons_zero, get!_cons_zero]
+    | i' + 1 =>
+      rw [get!_cons_succ, get!_cons_succ, get!_cons_succ]
+      rw [length, length] at length_eq
+      rw [length] at ilt
+      exact get!_zip (Nat.add_one_inj.mp length_eq) <| Nat.lt_of_succ_lt_succ ilt
+
 end List

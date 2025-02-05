@@ -214,4 +214,18 @@ decreasing_by
   apply Nat.sub_succ_lt_self
   assumption
 
+theorem get!_map [Inhabited α] {f : Nat → α} (iltnsubm : i < n - m)
+  : ([m:n].map f).get! i = f (i + m) := by match i with
+  | 0 =>
+    rw [map, toList, if_neg (nomatch ·), if_pos (Nat.lt_of_sub_pos iltnsubm), List.map_cons,
+        List.get!_cons_zero, Nat.zero_add]
+  | i' + 1 =>
+    let mltn := Nat.lt_of_sub_pos (Nat.lt_of_le_of_lt (Nat.zero_le _) iltnsubm)
+    rw [map, toList, if_neg (nomatch ·), if_pos mltn, List.map_cons, List.get!_cons_succ,
+        ← map_shift (j := 1) (Nat.succ_le_of_lt (Nat.add_one_pos _)), get!_map, Nat.add_sub_cancel,
+        Nat.add_assoc, Nat.add_comm m, ← Nat.add_assoc]
+    rw [Nat.add_sub_cancel, Nat.sub_right_comm]
+    apply Nat.lt_sub_of_add_lt
+    exact iltnsubm
+
 end Std.Range
