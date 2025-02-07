@@ -176,6 +176,13 @@ theorem sizeOf_map_eq_of_eq_id_of_mem [SizeOf α] {f : α → α}
     rw [List.map_cons, List.cons.sizeOf_spec, List.cons.sizeOf_spec, sizeOf_eq_of_mem _ <| .head _,
         sizeOf_map_eq_of_eq_id_of_mem fun _ mem => sizeOf_eq_of_mem _ <| .tail _ mem]
 
+theorem sum_map_eq_of_eq_of_mem {f g : α → Nat} (eq_of_mem : ∀ a ∈ as, f a = g a)
+  : (List.map f as).sum = (as.map g).sum := by match as with
+  | [] => rw [List.map_nil, List.map_nil]
+  | a :: as' =>
+    rw [List.map, List.map, List.sum_cons, List.sum_cons, eq_of_mem _ <| .head _,
+        sum_map_eq_of_eq_of_mem fun _ mem => eq_of_mem _ <| .tail _ mem]
+
 theorem get!_zip [Inhabited α] [Inhabited β] {l₁ : List α} {l₂ : List β}
   (length_eq : l₁.length = l₂.length) (ilt : i < l₁.length)
   : (zip l₁ l₂).get! i = (l₁.get! i, l₂.get! i) := by match l₁, l₂ with
