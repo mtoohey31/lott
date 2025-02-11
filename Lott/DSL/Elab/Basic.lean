@@ -757,7 +757,7 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $names,*) => do
     elabCommand <| ←
       `(@[$(mkIdent parserAttrName):ident] def $parserIdent : TrailingParser :=
           trailingNode $(quote catName) Parser.maxPrec 0 <|
-            checkLineEq >> "@" >> checkLineEq >> (Parser.ident <|> Parser.numLit))
+            checkNoWsBefore >> "@" >> checkLineEq >> (Parser.ident <|> Parser.numLit))
     if locallyNameless then
       let parserIdent := mkIdentFrom alias <| canon.getId ++ aliasName.appendAfter "_bound_parser"
       elabCommand <| ←
@@ -1085,20 +1085,23 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       elabCommand <| ←
         `(@[Lott.Symbol_parser, $attrIdent:ident] def $parserIdent : TrailingParser :=
             trailingNode $(quote <| ← nt.catName) Parser.maxPrec 0 <|
-              "^" >> categoryParser $(quote <| symbolPrefix ++ varName) 0)
+              checkNoWsBefore >> "^" >> categoryParser $(quote <| symbolPrefix ++ varName) 0 >>
+              Parser.optional (checkNoWsBefore >> "#" >> checkLineEq >> Parser.numLit))
 
       let parserIdent := mkIdent <| canonName ++ valName |>.appendAfter "_open_parser"
       elabCommand <| ←
         `(@[Lott.Symbol_parser, $attrIdent:ident] def $parserIdent : TrailingParser :=
             trailingNode $(quote <| ← nt.catName) Parser.maxPrec 0 <|
-              "^^" >> categoryParser $(quote <| symbolPrefix ++ valName) 0)
+              checkNoWsBefore >> "^^" >> categoryParser $(quote <| symbolPrefix ++ valName) 0 >>
+              Parser.optional (checkNoWsBefore >> "#" >> checkLineEq >> Parser.numLit))
 
       let parserIdent := mkIdent <| canonName ++ varName |>.appendAfter "_close_parser"
       elabCommand <| ←
         `(@[Lott.Symbol_parser, $attrIdent:ident] def $parserIdent : Parser :=
             leadingNode $(quote <| ← nt.catName) Parser.maxPrec <|
-              "\\" >> categoryParser $(quote <| symbolPrefix ++ varName) 0 >> "^" >>
-                categoryParser $(quote <| ← nt.catName) 0)
+              "\\" >> categoryParser $(quote <| symbolPrefix ++ varName) 0 >>
+              Parser.optional (checkNoWsBefore >> "#" >> checkLineEq >> Parser.numLit) >>
+              "^" >> categoryParser $(quote <| ← nt.catName) 0)
 
     -- Define variable parsers, plus variable category parser in symbol category.
     let varAttrIdent := mkIdent <| ← nt.varParserAttrName
@@ -1110,12 +1113,14 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
             leadingNode $(quote <| ← nt.varCatName) Parser.maxPrec <|
               Lott.DSL.identPrefix $(quote nameStr))
 
+    -- TODO: Should this have `Lott.Symbol_parser`?
     let varParserIdent := mkIdentFrom canon <| canonName.appendAfter "_variable_parser"
     elabCommand <| ←
       `(@[$attrIdent:ident] def $varParserIdent : Parser :=
           leadingNode $(quote <| ← nt.catName) Parser.maxPrec <|
             categoryParser $(quote <| ← nt.varCatName) Parser.maxPrec >>
-            Parser.optional (checkLineEq >> "@" >> checkLineEq >> (Parser.ident <|> Parser.numLit)))
+            Parser.optional
+              (checkNoWsBefore >> "@" >> checkLineEq >> (Parser.ident <|> Parser.numLit)))
 
     -- Define parser in parent.
     if let some parent' := parent? then
@@ -1184,11 +1189,15 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
             | _, Lean.Syntax.node _ $(quote <| ← nt.catName) #[
                 base@(Lean.Syntax.node _ $(quote <| ← nt.catName) _),
                 Lean.Syntax.atom _ "^",
-                var@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ varName) _)
+                var@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ varName) _),
+                Lean.Syntax.node _ `null level
               ] => do
               let baseExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ ns ++ canonName) false base
               let varExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ varName) true var
-              return Lean.mkApp3 (Expr.const $(quote openName) []) baseExpr varExpr <| Expr.lit <| Literal.natVal 0)
+              let natType := Expr.const `Nat []
+              let lvlExpr? ← level[1]?.mapM fun lvl => Lean.Elab.Term.elabTerm lvl natType
+              return Lean.mkApp3 (Expr.const $(quote openName) []) baseExpr varExpr <|
+                lvlExpr?.getD <| Expr.lit <| Literal.natVal 0)
 
     let termOpen'MatchAlts ← if parent?.isSome then pure #[] else
       substitutions.getD #[] |>.filterMapM fun (varName, valName) => do
@@ -1200,11 +1209,15 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
             | _, Lean.Syntax.node _ $(quote <| ← nt.catName) #[
                 base@(Lean.Syntax.node _ $(quote <| ← nt.catName) _),
                 Lean.Syntax.atom _ "^^",
-                val@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ valName) _)
+                val@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ valName) _),
+                Lean.Syntax.node _ `null level
               ] => do
               let baseExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ ns ++ canonName) false base
               let valExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ valName) false val
-              return Lean.mkApp3 (Expr.const $(quote openName) []) baseExpr valExpr <| Expr.lit <| Literal.natVal 0)
+              let natType := Expr.const `Nat []
+              let lvlExpr? ← level[1]?.mapM fun lvl => Lean.Elab.Term.elabTerm lvl natType
+              return Lean.mkApp3 (Expr.const $(quote openName) []) baseExpr valExpr <|
+                lvlExpr?.getD <| Expr.lit <| Literal.natVal 0)
 
     let termCloseMatchAlts ← if parent?.isSome then pure #[] else
       substitutions.getD #[] |>.filterMapM fun (varName, _) => do
@@ -1216,12 +1229,16 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
             | _, Lean.Syntax.node _ $(quote <| ← nt.catName) #[
                 Lean.Syntax.atom _ "\\",
                 var@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ varName) _),
+                Lean.Syntax.node _ `null level,
                 Lean.Syntax.atom _ "^",
                 base@(Lean.Syntax.node _ $(quote <| ← nt.catName) _)
               ] => do
               let varExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ varName) true var
               let baseExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ ns ++ canonName) false base
-              return Lean.mkApp3 (Expr.const $(quote closeName) []) baseExpr varExpr <| Expr.lit <| Literal.natVal 0)
+              let natType := Expr.const `Nat []
+              let lvlExpr? ← level[1]?.mapM fun lvl => Lean.Elab.Term.elabTerm lvl natType
+              return Lean.mkApp3 (Expr.const $(quote closeName) []) baseExpr varExpr <|
+                lvlExpr?.getD <| Expr.lit <| Literal.natVal 0)
 
     let termElabIdent := mkIdentFrom canon <| canonName.appendAfter "TermElab"
     elabCommand <| ←
