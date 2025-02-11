@@ -546,10 +546,11 @@ where
       | (_, #[]) => go irs (patAcc.push hole) propAcc
       | (#[patArg], props) => go irs (patAcc.push lbi) <| propAcc.push <| ←
           `(∀ $patArg:binderIdent ∈ $l, $(← foldlAnd props))
-      | (patArgs, #[prop]) => go irs (patAcc.push lbi) <| propAcc.push <| ←
-          `(∀ x ∈ $l, let $(← foldrProd <| ← toTerms patArgs):term := x; $prop)
-      -- TODO: Figure out how to actually do this without nesting And inside...
-      | _ => go irs (patAcc.push lbi) <| propAcc.push <| ← ``(False)
+      | (patArgs, props) =>
+        let propAcc' ← props.mapM fun prop =>
+          do `(∀ x ∈ $l, let $(← foldrProd <| ← toTerms patArgs):term := x; $prop)
+        go irs (patAcc.push lbi) <| propAcc ++ propAcc'
+
 
 def substName (varName : Name) : CommandElabM Name :=
   return varName.replacePrefix (← getCurrNamespace) .anonymous |>.appendAfter "_subst"
