@@ -35,11 +35,13 @@ decreasing_by
   apply Nat.sub_succ_lt_self
   assumption
 
-theorem toList_eq_nil_of_stop_le_start (h : r.stop ≤ r.start) : toList r = [] := by
-  rw [toList]
-  split
-  · case isTrue => rfl
-  · case isFalse => rw [if_neg (Nat.not_lt_of_le h)]
+theorem toList_eq_nil_iff : toList [m:n] = [] ↔ n ≤ m where
+  mp eq := by
+    rw [toList, if_neg (nomatch ·)] at eq
+    split at eq
+    · case isTrue h => nomatch eq
+    · case isFalse h => exact Nat.le_of_not_lt h
+  mpr le := by rw [toList, if_neg (nomatch ·), if_neg (Nat.not_lt_of_le le)]
 
 theorem mem_of_mem_toList (h : i ∈ [m:n].toList) : i ∈ [m:n] := by
   rw [toList, if_neg (nomatch ·)] at h
