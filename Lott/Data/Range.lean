@@ -230,4 +230,23 @@ theorem get!_map [Inhabited α] {f : Nat → α} (iltnsubm : i < n - m)
     apply Nat.lt_sub_of_add_lt
     exact iltnsubm
 
+theorem skolem [Inhabited α] {p : Nat → α → Prop}
+  : (∀ i ∈ [:n], ∃ a, p i a) → ∃ f : Nat → α, ∀ i ∈ [:n], p i (f i) := by
+  intro h
+  induction n with
+  | zero => exact ⟨fun _ => default, fun i mem => nomatch mem⟩
+  | succ n ih =>
+    let ⟨f', h'⟩ := ih fun i mem => h i ⟨mem.lower, Nat.lt_add_right _ mem.upper⟩
+    let ⟨a, h''⟩ := h n ⟨Nat.zero_le _, Nat.lt_succ_self _⟩
+    let f i := if i = n then a else f' i
+    apply Exists.intro f
+    intro i mem
+    dsimp only [f]
+    split
+    · case isTrue h''' =>
+      cases h'''
+      exact h''
+    · case isFalse h''' =>
+      exact h' i ⟨mem.lower, Nat.lt_of_le_of_ne (Nat.le_of_lt_succ mem.upper) h'''⟩
+
 end Std.Range

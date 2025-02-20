@@ -200,4 +200,17 @@ theorem get!_zip [Inhabited α] [Inhabited β] {l₁ : List α} {l₂ : List β}
       rw [length] at ilt
       exact get!_zip (Nat.add_one_inj.mp length_eq) <| Nat.lt_of_succ_lt_succ ilt
 
+theorem cofinite_skolem {p : Nat → α → Prop} {I : List Nat}
+  : (∀ x ∉ I, ∃ a, p x a) → ∃ f : Nat → α, ∀ x ∉ I, p x (f x) := by
+  intro h
+  let ⟨x', x'nmem⟩ := I.exists_fresh
+  let ⟨a', _⟩ := h x' x'nmem
+  apply (Classical.skolem (b := fun _ => α) (p := fun x a => x ∉ I → p x a)).mp
+  intro x
+  by_cases x ∉ I
+  · case pos xnmem =>
+    let ⟨y, h'⟩ := h _ xnmem
+    exact ⟨y, fun _ => h'⟩
+  · case neg xmem => exact ⟨a', fun xnmem => nomatch xmem xnmem⟩
+
 end List
