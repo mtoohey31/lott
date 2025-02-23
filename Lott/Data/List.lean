@@ -55,7 +55,7 @@ theorem not_mem_flatten : x ∉ flatten xss ↔ ∀ xs ∈ xss, x ∉ xs where
 
 theorem exists_gt (xs : List Nat)
   : ∃ n : Nat, ∀ m : Nat, m ∈ xs → m < n := match xs with
-  | [] => .intro 0 fun x' x'in => nomatch x'in
+  | [] => .intro 0 nofun
   | x :: xs' =>
     let ⟨nxs', nxs'gt⟩ := xs'.exists_gt
     let n := max (x + 1) nxs'

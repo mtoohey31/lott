@@ -728,7 +728,7 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $names,*) => do
             else
               isFalse (h <| $(mkIdent <| canon.getId ++ `bound.inj) ·)
           | .free _, .bound _
-          | .bound _, .free _ => isFalse (nomatch ·))
+          | .bound _, .free _ => isFalse nofun)
     elabCommand <| ← `(instance : Coe $idIdent $canon where coe := .free)
   else
     elabCommand <| ← `(def $canon := Nat)
