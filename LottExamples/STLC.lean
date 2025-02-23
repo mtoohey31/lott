@@ -139,7 +139,7 @@ namespace VarIn
 
 theorem append_elim : [[x : τ ∈ Γ₀, Γ₁]] → [[x : τ ∈ Γ₀]] ∧ [[x ∉ Γ₁]] ∨ [[x : τ ∈ Γ₁]] :=
   fun xinΓ₀Γ₁ => match Γ₁ with
-    | .empty => .inl ⟨xinΓ₀Γ₁, fun _ => (nomatch ·)⟩
+    | .empty => .inl ⟨xinΓ₀Γ₁, nofun⟩
     | .ext .. =>
       match xinΓ₀Γ₁ with
       | .head => .inr head
@@ -322,7 +322,7 @@ theorem VarIn.exchange
 
 theorem VarNotIn.of_VarIn_of_WellFormedness
   : [[x : τ ∈ Γ₀]] → [[⊢ Γ₀, Γ₁]] → [[x ∉ Γ₁]] := fun xinΓ₀ Γ₀Γ₁wf => match Γ₁ with
-  | .empty => fun _ => (nomatch ·)
+  | .empty => nofun
   | .ext .. =>
     let .ext Γ₀Γ₁'wf x'ninΓ₀Γ₁ := Γ₀Γ₁wf
     ext.mpr ⟨
@@ -382,7 +382,7 @@ theorem opening
   : Typing (Γ₀.append Γ₁) (e₁.Term_open e₀ n) τ₁ := by
   match e₁ with
   | .var (.free x') =>
-    rw [Term.Var_open, if_neg (nomatch ·)] at e₁ty
+    rw [Term.Var_open, if_neg nofun] at e₁ty
     let .var Γ₀xΓ₁wf x'inΓ₀xΓ₁ := e₁ty
     match x'inΓ₀xΓ₁.append_elim with
     | .inl ⟨.head, x'ninΓ₁⟩ => nomatch List.not_mem_singleton.mp xninfve₁
@@ -443,7 +443,7 @@ theorem preservation (ty : [[Γ ⊢ e : τ]]) (re : [[e ↦ e']]) : [[Γ ⊢ e' 
     let .lam e₀'ty (e := e₀') (I := I) := e₀ty
     let ⟨x, xnin⟩ := e₀'.freeVars ++ I |>.exists_fresh
     let ⟨xninfve₀', xninI⟩ := List.not_mem_append'.mp xnin
-    e₀'ty x xninI |>.opening (Γ₁ := .empty) vty (fun _ => (nomatch ·)) xninfve₀'
+    e₀'ty x xninI |>.opening (Γ₁ := .empty) vty nofun xninfve₀'
 
 theorem progress (ty : [[ε ⊢ e : τ]]) : e.IsValue ∨ ∃ e', [[e ↦ e']] := match e, ty with
   | .lam _, _ => .inl .lam
