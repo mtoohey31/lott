@@ -1,6 +1,6 @@
 import Lean
 
-namespace Lott.DSL
+namespace Lott
 
 open Lean
 
@@ -13,4 +13,4 @@ initialize metaVarExt : PersistentEnvExtension (Name × Bool) (Name × Bool) (Na
   exportEntriesFn := RBMap.fold (cmp := Name.quickCmp) (init := #[]) fun acc n ln => acc.push (n, ln)
 }
 
-end Lott.DSL
+end Lott

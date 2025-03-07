@@ -1,6 +1,6 @@
-import Lott.DSL.Elab
+import Lott.Elab
 
-namespace Lott.DSL.Elab
+namespace Lott.Elab
 
 open Lean
 open Lean.Elab
@@ -25,4 +25,4 @@ def boolTexElab : TexElab
     return texEscape <| i.getId.toString (escape := false)
   | _, _ => throwUnsupportedSyntax
 
-end Lott.DSL.Elab
+end Lott.Elab

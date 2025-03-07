@@ -1,7 +1,7 @@
 import Lean
-import Lott.DSL.Environment.MetaVar
+import Lott.Environment.MetaVar
 
-namespace Lott.DSL
+namespace Lott
 
 open Lean
 open Lean.Elab
@@ -221,4 +221,4 @@ def toTerms (as : TSyntaxArray `Lean.binderIdent) : CommandElabM (Array Term) :=
 
 end IR
 
-end Lott.DSL
+end Lott

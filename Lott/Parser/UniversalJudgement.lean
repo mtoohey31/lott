@@ -1,6 +1,6 @@
-import Lott.DSL.Parser
+import Lott.Parser
 
-namespace Lott.DSL
+namespace Lott
 
 open Lean.Parser.Term
 
@@ -8,4 +8,4 @@ syntax (name := universalJudgement) "∀ " (ppSpace (binderIdent <|> bracketedBi
 
 syntax (name := universalPredJudgement) "∀ " ident binderPred ", " withPosition(Lott.Judgement) : Lott.Judgement
 
-end Lott.DSL
+end Lott

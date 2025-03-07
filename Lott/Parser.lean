@@ -1,6 +1,6 @@
 import Lean.Parser
 
-namespace Lott.DSL
+namespace Lott
 
 open Lean
 open Lean.Parser
@@ -43,55 +43,55 @@ syntax "locally_nameless"? "metavar " ident,+ : command
 /- Non-terminal syntax. -/
 
 declare_syntax_cat Lott.Symbol
-declare_syntax_cat Lott.DSL.BindConfig
-declare_syntax_cat Lott.DSL.IdConfig
-declare_syntax_cat Lott.DSL.DesugarConfig
-declare_syntax_cat Lott.DSL.ElabConfig
-declare_syntax_cat Lott.DSL.Production
-declare_syntax_cat Lott.DSL.NonTerminal
+declare_syntax_cat Lott.BindConfig
+declare_syntax_cat Lott.IdConfig
+declare_syntax_cat Lott.DesugarConfig
+declare_syntax_cat Lott.ElabConfig
+declare_syntax_cat Lott.Production
+declare_syntax_cat Lott.NonTerminal
 
 private
 def bind := nonReservedSymbol "bind"
 
-syntax "(" bind ident (" in " ident,+)? ")" : Lott.DSL.BindConfig
+syntax "(" bind ident (" in " ident,+)? ")" : Lott.BindConfig
 
 private
 def id := nonReservedSymbol "id"
 
-syntax "(" id ident,+ ")" : Lott.DSL.IdConfig
+syntax "(" id ident,+ ")" : Lott.IdConfig
 
 private
 def desugar := nonReservedSymbol "desugar"
 
-syntax "(" desugar " := " term ")" : Lott.DSL.DesugarConfig
+syntax "(" desugar " := " term ")" : Lott.DesugarConfig
 
-syntax "(" "elab" " := " term ")" : Lott.DSL.ElabConfig
+syntax "(" "elab" " := " term ")" : Lott.ElabConfig
 
 def prodArg  := leading_parser
   Parser.optional (atomic (ident >> checkNoWsBefore "no space before ':'" >> ":")) >> syntaxParser argPrec
 
-syntax " | " prodArg+ " : " withPosition(ident (lineEq "nosubst")?) atomic(Lott.DSL.BindConfig)? atomic(Lott.DSL.IdConfig)? atomic(Lott.DSL.DesugarConfig)? (Lott.DSL.ElabConfig)? : Lott.DSL.Production
+syntax " | " prodArg+ " : " withPosition(ident (lineEq "nosubst")?) atomic(Lott.BindConfig)? atomic(Lott.IdConfig)? atomic(Lott.DesugarConfig)? (Lott.ElabConfig)? : Lott.Production
 
-syntax "nosubst"? "nonterminal " ("(" "parent" " := " ident ")")? ident,+ " := " Lott.DSL.Production* : Lott.DSL.NonTerminal
+syntax "nosubst"? "nonterminal " ("(" "parent" " := " ident ")")? ident,+ " := " Lott.Production* : Lott.NonTerminal
 
-syntax Lott.DSL.NonTerminal : command
+syntax Lott.NonTerminal : command
 
 /- Judgement syntax. -/
 
 declare_syntax_cat Lott.Judgement
-declare_syntax_cat Lott.DSL.InferenceRule
-declare_syntax_cat Lott.DSL.JudgementDecl
+declare_syntax_cat Lott.InferenceRule
+declare_syntax_cat Lott.JudgementDecl
 
-syntax "judgement_syntax " stx+ " : " ident (Lott.DSL.IdConfig)? : command
+syntax "judgement_syntax " stx+ " : " ident (Lott.IdConfig)? : command
 
 private
 def bracketedBinder := Term.bracketedBinder
 
-syntax withPosition(Lott.Judgement)* "─"+ withPosition(ident (lineEq bracketedBinder)*) withPosition(Lott.Judgement) : Lott.DSL.InferenceRule
+syntax withPosition(Lott.Judgement)* "─"+ withPosition(ident (lineEq bracketedBinder)*) withPosition(Lott.Judgement) : Lott.InferenceRule
 
-syntax "judgement " ident " := " Lott.DSL.InferenceRule* : Lott.DSL.JudgementDecl
+syntax "judgement " ident " := " Lott.InferenceRule* : Lott.JudgementDecl
 
-syntax Lott.DSL.JudgementDecl : command
+syntax Lott.JudgementDecl : command
 
 /- Term embedding syntax. -/
 
@@ -200,4 +200,4 @@ def filterParser : Parser := { fn := filterParserFn }
 
 syntax "filter " str str : command
 
-end Lott.DSL
+end Lott

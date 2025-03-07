@@ -1,6 +1,6 @@
-import Lott.DSL.Elab
+import Lott.Elab
 
-namespace Lott.DSL.Elab
+namespace Lott.Elab
 
 open Lean
 open Lean.Elab
@@ -38,4 +38,4 @@ def natTexElab : TexElab
     return texEscape ss.toString
   | _, _ => throwUnsupportedSyntax
 
-end Lott.DSL.Elab
+end Lott.Elab

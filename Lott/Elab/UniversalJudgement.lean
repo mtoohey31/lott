@@ -1,12 +1,12 @@
-import Lott.DSL.Elab.Basic
-import Lott.DSL.Parser.UniversalJudgement
+import Lott.Elab.Basic
+import Lott.Parser.UniversalJudgement
 
-namespace Lott.DSL.Elab
+namespace Lott.Elab
 
 open Lean.Elab
 open Lean.Parser.Term
 
-@[lott_term_elab Lott.DSL.universalJudgement]
+@[lott_term_elab Lott.universalJudgement]
 private
 def universalJudgementTermElab : TermElab := fun _ stx => do
   let `(Lott.Judgement| ∀ $[$binders]* $[$type?]?, $«judgement»:Lott.Judgement) := stx
@@ -14,7 +14,7 @@ def universalJudgementTermElab : TermElab := fun _ stx => do
   let stx' ← ``(∀ $binders* $[$type?:typeSpec]?, [[$«judgement»:Lott.Judgement]])
   Lean.Elab.Term.elabTerm stx' none
 
-@[lott_term_elab Lott.DSL.universalPredJudgement]
+@[lott_term_elab Lott.universalPredJudgement]
 private
 def universalPredJudgementTermElab : TermElab := fun _ stx => do
   let stx' ← match stx with
@@ -25,4 +25,4 @@ def universalPredJudgementTermElab : TermElab := fun _ stx => do
   | _ => throwUnsupportedSyntax
   Lean.Elab.Term.elabTerm stx' none
 
-end Lott.DSL.Elab
+end Lott.Elab

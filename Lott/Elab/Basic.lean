@@ -1,8 +1,8 @@
 import Lott.Data.List
 import Lott.Data.Option
-import Lott.DSL.Environment
-import Lott.DSL.Parser
-import Lott.DSL.IR
+import Lott.Environment
+import Lott.Parser
+import Lott.IR
 
 -- TODO: Remove unnecessary qualifications from names.
 -- TODO: Delab to embeddings when possible.
@@ -10,7 +10,7 @@ import Lott.DSL.IR
 -- TODO: Test stuff without locally nameless.
 -- TODO: Centralize validation of bind/id usage in nonterminals.
 
-namespace Lott.DSL.Elab
+namespace Lott.Elab
 
 open Lean
 open Lean.Elab
@@ -21,7 +21,7 @@ open Lean.Parser
 open Lean.Parser.Command
 open Lean.Parser.Syntax
 open Lean.Parser.Term
-open Lott.DSL.IR
+open Lott.IR
 
 /- Term embedding syntax. -/
 
@@ -29,7 +29,7 @@ abbrev TermElab := Bool → Syntax → TermElabM Expr
 
 private unsafe
 def mkLottTermElabAttributeUnsafe (ref : Name) : IO (KeyedDeclsAttribute TermElab) := do
-  mkElabAttribute TermElab .anonymous `lott_term_elab `Lott `Lott.DSL.Elab.TermElab "lott" ref
+  mkElabAttribute TermElab .anonymous `lott_term_elab `Lott `Lott.Elab.TermElab "lott" ref
 
 @[implemented_by mkLottTermElabAttributeUnsafe]
 opaque mkLottTermElabAttribute (ref : Name) : IO (KeyedDeclsAttribute TermElab)
@@ -79,7 +79,7 @@ abbrev TexElab := (ref : Syntax) → Syntax → TermElabM String
 
 private unsafe
 def mkLottTexElabAttributeUnsafe (ref : Name) : IO (KeyedDeclsAttribute TexElab) := do
-  mkElabAttribute TexElab .anonymous `lott_tex_elab `Lott `Lott.DSL.Elab.TexElab "lott" ref
+  mkElabAttribute TexElab .anonymous `lott_tex_elab `Lott `Lott.Elab.TexElab "lott" ref
 
 @[implemented_by mkLottTexElabAttributeUnsafe]
 opaque mkLottTexElabAttribute (ref : Name) : IO (KeyedDeclsAttribute TexElab)
@@ -170,7 +170,7 @@ def _root_.Lean.Name.getFinal : Name → Name
   | .num _ n => .num .anonymous n
 
 partial
-def _root_.Lott.DSL.IR.ofStx (stx : TSyntax `stx) (l? : Option Ident := none) : CommandElabM IR := do
+def _root_.Lott.IR.ofStx (stx : TSyntax `stx) (l? : Option Ident := none) : CommandElabM IR := do
   let l := l?.getD <| ← mkFreshIdent stx
   match stx with
   | `(stx| $name:ident) => do
@@ -184,7 +184,7 @@ def _root_.Lott.DSL.IR.ofStx (stx : TSyntax `stx) (l? : Option Ident := none) : 
   | _ => throwUnsupportedSyntax
 
 partial
-def _root_.Lott.DSL.IR.ofProdArg (arg : TSyntax `Lott.DSL.prodArg) : CommandElabM IR := do
+def _root_.Lott.IR.ofProdArg (arg : TSyntax `Lott.prodArg) : CommandElabM IR := do
   let `(prodArg| $[$l?:ident:]?$stx:stx) := arg | throwUnsupportedSyntax
   ofStx stx l?
 
@@ -200,7 +200,7 @@ def mkMkProd (entries : Array (Term × Term)) : CommandElabM (Option (Term × Te
   return some res
 
 private partial
-def _root_.Lott.DSL.IR.toExprArgs (ir : Array IR) (ids binders : Array Name)
+def _root_.Lott.IR.toExprArgs (ir : Array IR) (ids binders : Array Name)
   : CommandElabM (TSepArray `term ",") :=
   ir.filterMapM (β := Term) fun | ir@(mk l _) => do
       if (← IR.toType ids binders ir).isNone then
@@ -221,7 +221,7 @@ def elabOptionComprehension (symbol : TSyntax `Lott.Symbol) (condition : Term) (
   Term.elabTerm stx <| Expr.app (.const `Option [levelOne]) type
 
 private partial
-def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binders : Array Name)
+def _root_.Lott.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binders : Array Name)
   : CommandElabM (TSyntaxArray `Lean.Parser.Term.doSeqItem) :=
   ir.filterMapM fun
     | mk l (.category n) => do
@@ -229,7 +229,7 @@ def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binder
         return none
 
       `(doSeqItem|
-          let $l ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ n)
+          let $l ← Lott.Elab.elabTerm $(quote <| symbolPrefix ++ n)
             $(quote <| ids.contains l.getId) $l)
     | mk _ (.atom _) => return none
     | mk l (.sepBy ir sep) => do
@@ -242,7 +242,7 @@ def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binder
 
       let termElabIdent := mkIdentFrom l <| canon ++ l.getId.appendAfter "TermElab"
       elabCommand <| ←
-        `(@[lott_term_elab $(mkIdent catName)] def $termElabIdent : Lott.DSL.Elab.TermElab
+        `(@[lott_term_elab $(mkIdent catName)] def $termElabIdent : Lott.Elab.TermElab
             | _, Syntax.node _ $(quote catName) #[
               Lean.Syntax.atom _ "</",
               symbol,
@@ -258,8 +258,8 @@ def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binder
                 Lean.Syntax.atom _ $(quote sep.trim),
                 rhs@(Syntax.node _ $(quote catName) _)
               ] => do
-              let lhs ← Lott.DSL.Elab.elabTerm $(quote catName) false lhs
-              let rhs ← Lott.DSL.Elab.elabTerm $(quote catName) false rhs
+              let lhs ← Lott.Elab.elabTerm $(quote catName) false lhs
+              let rhs ← Lott.Elab.elabTerm $(quote catName) false rhs
               Meta.liftMetaM <| Meta.reduceAll <| mkApp3 (Expr.const `List.append [0]) $type lhs rhs
             | _, Syntax.node _ $(quote catName) #[$patternArgs,*] => do
               $seqItems*
@@ -267,7 +267,7 @@ def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binder
             | _, _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
       `(doSeqItem| let $l ← match (Syntax.getArgs $l)[0]? with
-          | some stx => Lott.DSL.Elab.elabTerm $(quote catName) false stx
+          | some stx => Lott.Elab.elabTerm $(quote catName) false stx
           | none => pure <| Expr.app (Expr.const `List.nil [0]) $type)
     | mk l (.optional ir) => do
       let catName := sepByPrefix ++ (← getCurrNamespace) ++ canon ++ l.getId |>.obfuscateMacroScopes
@@ -279,7 +279,7 @@ def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binder
 
       let termElabIdent := mkIdentFrom l <| canon ++ l.getId.appendAfter "TermElab"
       elabCommand <| ←
-        `(@[lott_term_elab $(mkIdent catName)] def $termElabIdent : Lott.DSL.Elab.TermElab
+        `(@[lott_term_elab $(mkIdent catName)] def $termElabIdent : Lott.Elab.TermElab
             | _, Syntax.node _ $(quote catName) #[
               Lean.Syntax.atom _ "</",
               symbol,
@@ -294,13 +294,13 @@ def _root_.Lott.DSL.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binder
             | _, _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
       `(doSeqItem| let $l ← match (Syntax.getArgs $l)[0]? with
-          | some stx => Lott.DSL.Elab.elabTerm $(quote catName) false stx
+          | some stx => Lott.Elab.elabTerm $(quote catName) false stx
           | none => pure <| Expr.app (Expr.const `Option.none [0]) $type)
 
 partial
-def _root_.Lott.DSL.IR.toTexSeqItems (ir : Array IR) (canon : Name) : CommandElabM (TSyntaxArray `Lean.Parser.Term.doSeqItem) :=
+def _root_.Lott.IR.toTexSeqItems (ir : Array IR) (canon : Name) : CommandElabM (TSyntaxArray `Lean.Parser.Term.doSeqItem) :=
   ir.mapM fun
-    | mk l (.category n) => `(doSeqItem| let $l ← Lott.DSL.Elab.elabTex $(quote <| symbolPrefix ++ n) ref $l)
+    | mk l (.category n) => `(doSeqItem| let $l ← Lott.Elab.elabTex $(quote <| symbolPrefix ++ n) ref $l)
     | mk l (.atom s) => `(doSeqItem| let $l := $(quote s))
     | mk l (.sepBy ir _) => do
       let patternArgs ← IR.toPatternArgs ir
@@ -324,7 +324,7 @@ def _root_.Lott.DSL.IR.toTexSeqItems (ir : Array IR) (canon : Name) : CommandEla
           return String.join [$joinArgs,*])
 
 partial
-def _root_.Lott.DSL.IR.toIsChildCtor (prodIdent isIdent : Ident) (qualified pqualified : Name) (ir pir : Array IR)
+def _root_.Lott.IR.toIsChildCtor (prodIdent isIdent : Ident) (qualified pqualified : Name) (ir pir : Array IR)
   (binders : Array Name) : CommandElabM (TSyntax `Lean.Parser.Command.ctor) := do
   if ir.size != pir.size then
     throwErrorAt prodIdent "length of child production ({ir.size}) doesn't match length of parent production ({pir.size})"
@@ -753,7 +753,7 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $names,*) => do
     let parserIdent := mkIdentFrom alias <| canon.getId ++ aliasName.appendAfter "_parser"
     elabCommand <| ←
       `(@[$(mkIdent parserAttrName):ident] def $parserIdent : Parser :=
-          leadingNode $(quote catName) Parser.maxPrec <| Lott.DSL.identPrefix $(quote nameStr))
+          leadingNode $(quote catName) Parser.maxPrec <| Lott.identPrefix $(quote nameStr))
     let parserIdent := mkIdentFrom alias <| canon.getId ++ aliasName.appendAfter "_idx_parser"
     elabCommand <| ←
       `(@[$(mkIdent parserAttrName):ident] def $parserIdent : TrailingParser :=
@@ -764,7 +764,7 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $names,*) => do
       elabCommand <| ←
         `(@[$(mkIdent parserAttrName):ident] def $parserIdent : Parser :=
             leadingNode $(quote catName) Parser.maxPrec <|
-              Lott.DSL.identPrefix $(quote nameStr) >> "$" >> num)
+              Lott.identPrefix $(quote nameStr) >> "$" >> num)
 
   -- Define elaboration.
   let catIdent := mkIdent catName
@@ -796,7 +796,7 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $names,*) => do
           let type ← Lean.Elab.Term.elabType <| mkIdent $(quote canonQualified)
           Lean.Elab.Term.elabTerm ident type), #[])
   elabCommand <| ←
-    `(@[lott_term_elab $catIdent] def $termElabName : Lott.DSL.Elab.TermElab
+    `(@[lott_term_elab $catIdent] def $termElabName : Lott.Elab.TermElab
         | isBinder, Lean.Syntax.node _ $(quote catName) #[ident@(Lean.Syntax.ident ..)] => $rhs
         | isBinder, Lean.Syntax.node _ $(quote catName) #[
             Lean.Syntax.node _ $(quote catName) #[fun'@(Lean.Syntax.ident ..)],
@@ -817,9 +817,9 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $names,*) => do
         | _, stx => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
   let texElabName := mkIdentFrom canon <| canon.getId.appendAfter "TexElab"
   elabCommand <| ←
-    `(@[lott_tex_elab $catIdent] def $texElabName : Lott.DSL.Elab.TexElab
+    `(@[lott_tex_elab $catIdent] def $texElabName : Lott.Elab.TexElab
         | _, Lean.Syntax.node _ $(quote catName) #[Lean.Syntax.ident _ _ n _] => do
-          return Lott.DSL.Elab.texEscape <| n.toString (escape := false)
+          return Lott.Elab.texEscape <| n.toString (escape := false)
         | _, _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
 /- Non-terminal syntax. -/
@@ -1112,7 +1112,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       elabCommand <| ←
         `(@[$varAttrIdent:ident] def $parserIdent : Parser :=
             leadingNode $(quote <| ← nt.varCatName) Parser.maxPrec <|
-              Lott.DSL.identPrefix $(quote nameStr))
+              Lott.identPrefix $(quote nameStr))
 
     -- TODO: Should this have `Lott.Symbol_parser`?
     let varParserIdent := mkIdentFrom canon <| canonName.appendAfter "_variable_parser"
@@ -1175,9 +1175,9 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
                 var@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ varName) _),
                 Lean.Syntax.atom _ "]"
               ] => do
-              let baseExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ ns ++ canonName) false base
-              let varExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ varName) true var
-              let valExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ valName) false val
+              let baseExpr ← Lott.Elab.elabTerm $(quote <| symbolPrefix ++ ns ++ canonName) false base
+              let varExpr ← Lott.Elab.elabTerm $(quote <| symbolPrefix ++ varName) true var
+              let valExpr ← Lott.Elab.elabTerm $(quote <| symbolPrefix ++ valName) false val
               return Lean.mkApp3 (Expr.const $(quote substName) []) baseExpr varExpr valExpr)
 
     let termOpenMatchAlts ← if parent?.isSome then pure #[] else
@@ -1193,8 +1193,8 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
                 var@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ varName) _),
                 Lean.Syntax.node _ `null level
               ] => do
-              let baseExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ ns ++ canonName) false base
-              let varExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ varName) true var
+              let baseExpr ← Lott.Elab.elabTerm $(quote <| symbolPrefix ++ ns ++ canonName) false base
+              let varExpr ← Lott.Elab.elabTerm $(quote <| symbolPrefix ++ varName) true var
               let natType := Expr.const `Nat []
               let lvlExpr? ← level[1]?.mapM fun lvl => Lean.Elab.Term.elabTerm lvl natType
               return Lean.mkApp3 (Expr.const $(quote openName) []) baseExpr varExpr <|
@@ -1213,8 +1213,8 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
                 val@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ valName) _),
                 Lean.Syntax.node _ `null level
               ] => do
-              let baseExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ ns ++ canonName) false base
-              let valExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ valName) false val
+              let baseExpr ← Lott.Elab.elabTerm $(quote <| symbolPrefix ++ ns ++ canonName) false base
+              let valExpr ← Lott.Elab.elabTerm $(quote <| symbolPrefix ++ valName) false val
               let natType := Expr.const `Nat []
               let lvlExpr? ← level[1]?.mapM fun lvl => Lean.Elab.Term.elabTerm lvl natType
               return Lean.mkApp3 (Expr.const $(quote openName) []) baseExpr valExpr <|
@@ -1234,8 +1234,8 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
                 Lean.Syntax.atom _ "^",
                 base@(Lean.Syntax.node _ $(quote <| ← nt.catName) _)
               ] => do
-              let varExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ varName) true var
-              let baseExpr ← Lott.DSL.Elab.elabTerm $(quote <| symbolPrefix ++ ns ++ canonName) false base
+              let varExpr ← Lott.Elab.elabTerm $(quote <| symbolPrefix ++ varName) true var
+              let baseExpr ← Lott.Elab.elabTerm $(quote <| symbolPrefix ++ ns ++ canonName) false base
               let natType := Expr.const `Nat []
               let lvlExpr? ← level[1]?.mapM fun lvl => Lean.Elab.Term.elabTerm lvl natType
               return Lean.mkApp3 (Expr.const $(quote closeName) []) baseExpr varExpr <|
@@ -1243,7 +1243,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
     let termElabIdent := mkIdentFrom canon <| canonName.appendAfter "TermElab"
     elabCommand <| ←
-      `(@[lott_term_elab $catIdent] def $termElabIdent : Lott.DSL.Elab.TermElab
+      `(@[lott_term_elab $catIdent] def $termElabIdent : Lott.Elab.TermElab
           $termProdMatchAlts:matchAlt*
           $termSubstMatchAlts:matchAlt*
           $termOpenMatchAlts:matchAlt*
@@ -1287,9 +1287,9 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
                 var@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ varName) _),
                 Lean.Syntax.atom _ "]"
               ] => do
-              let baseString ← Lott.DSL.Elab.elabTex $(quote <| symbolPrefix ++ ns ++ canonName) ref base
-              let valString ← Lott.DSL.Elab.elabTex $(quote <| symbolPrefix ++ valName) ref val
-              let varString ← Lott.DSL.Elab.elabTex $(quote <| symbolPrefix ++ varName) ref var
+              let baseString ← Lott.Elab.elabTex $(quote <| symbolPrefix ++ ns ++ canonName) ref base
+              let valString ← Lott.Elab.elabTex $(quote <| symbolPrefix ++ valName) ref val
+              let varString ← Lott.Elab.elabTex $(quote <| symbolPrefix ++ varName) ref var
               return baseString ++ " [" ++ valString ++ " / " ++ varString ++ "]")
 
     let texOpenMatchAlts ← if parent?.isSome then pure #[] else
@@ -1303,8 +1303,8 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
                   Lean.Syntax.atom _ "^",
                   var@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ varName) _)
                 ] => do
-                let baseString ← Lott.DSL.Elab.elabTex $(quote <| symbolPrefix ++ ns ++ canonName) ref base
-                let varString ← Lott.DSL.Elab.elabTex $(quote <| symbolPrefix ++ varName) ref var
+                let baseString ← Lott.Elab.elabTex $(quote <| symbolPrefix ++ ns ++ canonName) ref base
+                let varString ← Lott.Elab.elabTex $(quote <| symbolPrefix ++ varName) ref var
                 return baseString ++ "^{" ++ varString ++ "}")
 
     let texOpen'MatchAlts ← if parent?.isSome then pure #[] else
@@ -1318,13 +1318,13 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
                   Lean.Syntax.atom _ "^^",
                   val@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ valName) _)
                 ] => do
-                let baseString ← Lott.DSL.Elab.elabTex $(quote <| symbolPrefix ++ ns ++ canonName) ref base
-                let valString ← Lott.DSL.Elab.elabTex $(quote <| symbolPrefix ++ valName) ref val
+                let baseString ← Lott.Elab.elabTex $(quote <| symbolPrefix ++ ns ++ canonName) ref base
+                let valString ← Lott.Elab.elabTex $(quote <| symbolPrefix ++ valName) ref val
                 return baseString ++ "^{" ++ valString ++ "}")
 
     let texElabName := mkIdentFrom canon <| canon.getId.appendAfter "TexElab"
     elabCommand <| ←
-      `(@[lott_tex_elab $catIdent] def $texElabName : Lott.DSL.Elab.TexElab
+      `(@[lott_tex_elab $catIdent] def $texElabName : Lott.Elab.TexElab
           $texProdMatchAlts:matchAlt*
           $texSubstMatchAlts:matchAlt*
           $texOpenMatchAlts:matchAlt*
@@ -1332,13 +1332,13 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
           | _, Lean.Syntax.node _ $(quote <| ← nt.catName) #[
               Lean.Syntax.node _ $(quote <| ← nt.varCatName) #[Lean.Syntax.ident _ _ n _],
               Lean.Syntax.node _ `null #[]
-            ] => return Lott.DSL.Elab.texEscape <| n.toString (escape := false)
+            ] => return Lott.Elab.texEscape <| n.toString (escape := false)
           | _, Lean.Syntax.node _ $(quote <| ← nt.catName) #[
               Lean.Syntax.node _ $(quote <| ← nt.varCatName) #[Lean.Syntax.ident _ _ n _],
               Lean.Syntax.node _ `null #[Lean.Syntax.atom _ "@", Lean.Syntax.ident _ _ i _]
             ] => do
-            let n := Lott.DSL.Elab.texEscape (n.toString (escape := false))
-            let i := Lott.DSL.Elab.texEscape (i.toString (escape := false))
+            let n := Lott.Elab.texEscape (n.toString (escape := false))
+            let i := Lott.Elab.texEscape (i.toString (escape := false))
             return "{" ++ n ++ "}_{" ++ i ++ "}"
           | _, _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
@@ -1351,22 +1351,22 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       let parentTermElabName :=
         mkIdent <| `_root_ ++ parentQualified ++ canon.getId.appendAfter "TermElab"
       elabCommand <| ←
-        `(@[lott_term_elab $parentCatIdent] def $parentTermElabName : Lott.DSL.Elab.TermElab
+        `(@[lott_term_elab $parentCatIdent] def $parentTermElabName : Lott.Elab.TermElab
             | _, Lean.Syntax.node _ $(quote parentCatName) #[
                 stx@(Lean.Syntax.node _ $(quote <| ← nt.catName) _)
               ] => do
               let type ← Lean.Elab.Term.elabType <| mkIdent $(quote qualified)
-              let e ← Lott.DSL.Elab.elabTerm $(quote catName) false stx
+              let e ← Lott.Elab.elabTerm $(quote catName) false stx
               return Lean.Expr.proj `Subtype 0 e
             | _, _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
       let parentTexElabName :=
         mkIdent <| `_root_ ++ parentQualified ++ canon.getId.appendAfter "TexElab"
       elabCommand <| ←
-        `(@[lott_tex_elab $parentCatIdent] def $parentTexElabName : Lott.DSL.Elab.TexElab
+        `(@[lott_tex_elab $parentCatIdent] def $parentTexElabName : Lott.Elab.TexElab
             | ref, Lean.Syntax.node _ $(quote parentCatName) #[
                 stx@(Lean.Syntax.node _ $(quote <| ← nt.catName) _)
-              ] => Lott.DSL.Elab.elabTex $(quote catName) ref stx
+              ] => Lott.Elab.elabTex $(quote catName) ref stx
             | _, _ => no_error_if_unused% Lean.Elab.throwUnsupportedSyntax)
 
   -- Add metavar functions.
@@ -1580,8 +1580,8 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
     elabMutualCommands locallyClosedInductives
 
 elab_rules : command
-  | `($nt:Lott.DSL.NonTerminal) => elabNonTerminals #[nt]
-  | `(mutual $[$nts:Lott.DSL.NonTerminal]* end) => elabNonTerminals nts
+  | `($nt:Lott.NonTerminal) => elabNonTerminals #[nt]
+  | `(mutual $[$nts:Lott.NonTerminal]* end) => elabNonTerminals nts
 
 /- Judgement syntax. -/
 
@@ -1612,7 +1612,7 @@ elab_rules : command | `(judgement_syntax $[$ps]* : $name $[(id $ids?,*)]?) => d
   let catIdent := mkIdent catName
   let termElabIdent := mkIdentFrom name <| name.getId.appendAfter "TermElab"
   elabCommand <| ←
-    `(@[lott_term_elab $catIdent] def $termElabIdent : Lott.DSL.Elab.TermElab
+    `(@[lott_term_elab $catIdent] def $termElabIdent : Lott.Elab.TermElab
         | _, Lean.Syntax.node _ $(quote catName) #[$patternArgs,*] => do
           $termSeqItems*
           let name := $(quote qualified)
@@ -1625,7 +1625,7 @@ elab_rules : command | `(judgement_syntax $[$ps]* : $name $[(id $ids?,*)]?) => d
   let joinArgs := IR.toJoinArgs ir
   let texElabName := mkIdentFrom name <| name.getId.appendAfter "TexElab"
   elabCommand <| ←
-    `(@[lott_tex_elab $catIdent] def $texElabName : Lott.DSL.Elab.TexElab
+    `(@[lott_tex_elab $catIdent] def $texElabName : Lott.Elab.TexElab
         | ref, Lean.Syntax.node _ $(quote catName) #[$patternArgs,*] => do
           $texSeqItems*
           return String.join [$joinArgs,*]
@@ -1656,8 +1656,8 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
   elabMutualCommands inductives
 
 elab_rules : command
-  | `($jd:Lott.DSL.JudgementDecl) => elabJudgementDecls #[jd]
-  | `(mutual $[$jds:Lott.DSL.JudgementDecl]* end) => elabJudgementDecls jds
+  | `($jd:Lott.JudgementDecl) => elabJudgementDecls #[jd]
+  | `(mutual $[$jds:Lott.JudgementDecl]* end) => elabJudgementDecls jds
 
 /- External interaction syntax. -/
 
@@ -1683,4 +1683,4 @@ elab_rules : command
 
     liftIO <| writeFile outputFname.getString <| String.join output.toList
 
-end Lott.DSL.Elab
+end Lott.Elab

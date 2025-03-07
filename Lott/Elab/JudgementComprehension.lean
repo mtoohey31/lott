@@ -1,11 +1,11 @@
-import Lott.DSL.Elab.Basic
-import Lott.DSL.Parser.JudgementComprehension
+import Lott.Elab.Basic
+import Lott.Parser.JudgementComprehension
 
-namespace Lott.DSL.Elab
+namespace Lott.Elab
 
 open Lean.Elab
 
-@[lott_term_elab Lott.DSL.judgementComprehension]
+@[lott_term_elab Lott.judgementComprehension]
 private
 def judgementComprehensionTermElab : TermElab := fun _ stx => do
   let `(Lott.Judgement| </ $«judgement»:Lott.Judgement // $p:term in $c:term />) := stx
@@ -13,4 +13,4 @@ def judgementComprehensionTermElab : TermElab := fun _ stx => do
   let ft ← `(∀ x ∈ $c, let $p:term := x; [[$«judgement»:Lott.Judgement]])
   Lean.Elab.Term.elabTerm ft none
 
-end Lott.DSL.Elab
+end Lott.Elab

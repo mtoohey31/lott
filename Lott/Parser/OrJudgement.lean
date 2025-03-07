@@ -1,7 +1,7 @@
-import Lott.DSL.Parser
+import Lott.Parser
 
-namespace Lott.DSL
+namespace Lott
 
 syntax (name := orJudgement) Lott.Judgement " ∨ " withPosition(Lott.Judgement) : Lott.Judgement
 
-end Lott.DSL
+end Lott

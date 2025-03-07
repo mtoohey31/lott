@@ -1,8 +1,8 @@
 import Lean.Data.Trie
 import Lean.Environment
-import Lott.DSL.IR
+import Lott.IR
 
-namespace Lott.DSL
+namespace Lott
 
 open Lean
 open Lean.Data
@@ -92,4 +92,4 @@ initialize childExt : PersistentEnvExtension Child Child ChildState ← register
   exportEntriesFn := RBMap.fold (cmp := Name.quickCmp) (init := #[]) fun acc _ child => acc.push child
 }
 
-end Lott.DSL
+end Lott

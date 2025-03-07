@@ -1,7 +1,7 @@
 import Aesop
 import Lott
 import Lott.Data.List
-import Lott.DSL.Elab.UniversalJudgement
+import Lott.Elab.UniversalJudgement
 
 namespace LottExamples.STLC
 
