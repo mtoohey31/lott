@@ -100,7 +100,7 @@ theorem eq_of_map_eq_map_of_inj {α β : Type} {f : α → β} {l₀ l₁ : List
     rw [eq_of_map_eq_map_of_inj eq' fun _ mem₀ _ mem₁ => finj _ (.tail _ mem₀) _ (.tail _ mem₁)]
 
 theorem get!_mem [Inhabited α] {as : List α} (h : i < as.length) : as.get! i ∈ as := by
-  rw [get!_eq_getD, getD_eq_getElem?_getD, getElem?_eq, dif_pos h, Option.getD]
+  rw [get!_eq_getD, getD_eq_getElem?_getD, getElem?_def, dif_pos h, Option.getD]
   exact getElem_mem _
 
 theorem two_le_count_of_get!_eq_of_ne [BEq α] [LawfulBEq α] [Inhabited α] {as : List α}

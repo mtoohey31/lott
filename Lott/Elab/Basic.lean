@@ -42,7 +42,8 @@ def elabTerm (catName : Name) : TermElab := fun isBinder stx => do
   match result with
   | some (decl, stxNew?) => do
     let stxNew ← liftMacroM <| liftExcept stxNew?
-    withInfoContext' stx (mkInfo := mkTermInfo decl stx) <|
+    withInfoContext' stx (mkInfo := mkTermInfo decl stx)
+      (mkInfoOnError := mkPartialTermInfo decl stx) <|
       withMacroExpansion stx stxNew <|
         withRef stxNew <|
           elabTerm catName isBinder stxNew
@@ -716,7 +717,7 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $names,*) => do
       `(inductive $canon where
           | $(mkIdent `free):ident (id : $idIdent)
           | $(mkIdent `bound):ident (idx : Nat))
-    elabCommand <| ← `(instance : SizeOf $canon := instSizeOf $canon)
+    elabCommand <| ← `(instance : SizeOf $canon := instSizeOfDefault $canon)
     elabCommand <| ←
       `(instance (x y : $canon) : Decidable (x = y) := match x, y with
           | .free idx, .free idy => if h : idx = idy then
