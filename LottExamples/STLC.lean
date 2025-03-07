@@ -60,7 +60,7 @@ abbrev Term.InFreeVars x (e : Term) := x ∈ e.freeVars
 namespace Term.InFreeVars
 
 theorem Var_open_drop : InFreeVars x (e.Var_open x' n) → x ≠ x' → [[x ∈ fv(e)]] := by
-  induction e generalizing n <;> all_goals aesop (add simp InFreeVars, simp Term.freeVars)
+  induction e generalizing n <;> all_goals aesop (add simp [InFreeVars, Var_open, freeVars])
 
 end Term.InFreeVars
 

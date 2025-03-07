@@ -2,23 +2,25 @@ import Lott.Data.Nat
 
 namespace Std.Range
 
-def toList (r : Range) : List Nat := if r.step = 0 then
-   []
-  else if r.start < r.stop then
+def toList (r : Range) : List Nat := if r.start < r.stop then
     r.start :: toList { r with start := r.start + r.step }
   else
     []
+termination_by r.stop - r.start
+decreasing_by
+  apply Nat.sub_lt_sub_left _ <| Nat.lt_add_of_pos_right r.step_pos
+  assumption
 
 instance : Coe Range (List Nat) := ⟨Std.Range.toList⟩
 
 abbrev map (r : Range) (f : Nat → α) : List α := r.toList.map f
 
 theorem toList_append (h₁ : l ≤ m) (h₂ : m ≤ n) : [l:m] ++ [m:n] = [l:n].toList := by
-  rw [toList, if_neg Nat.one_ne_zero]
+  rw [toList]
   split
   · case isTrue h =>
     apply Eq.symm
-    rw [toList, if_neg Nat.one_ne_zero]
+    rw [toList]
     apply Eq.symm
     simp only at *
     rw [if_pos (Nat.lt_of_lt_of_le h h₂), List.cons_append, toList_append (Nat.succ_le_of_lt h) h₂]
@@ -37,21 +39,21 @@ decreasing_by
 
 theorem toList_eq_nil_iff : toList [m:n] = [] ↔ n ≤ m where
   mp eq := by
-    rw [toList, if_neg nofun] at eq
+    rw [toList] at eq
     split at eq
     · case isTrue h => nomatch eq
     · case isFalse h => exact Nat.le_of_not_lt h
-  mpr le := by rw [toList, if_neg nofun, if_neg (Nat.not_lt_of_le le)]
+  mpr le := by rw [toList, if_neg (Nat.not_lt_of_le le)]
 
 theorem mem_of_mem_toList (h : i ∈ [m:n].toList) : i ∈ [m:n] := by
-  rw [toList, if_neg nofun] at h
+  rw [toList] at h
   split at h
   · case isTrue mltn =>
     cases h
-    · case head => exact ⟨Nat.le_refl _, mltn⟩
+    · case head => exact ⟨Nat.le_refl _, mltn, Nat.mod_one _⟩
     · case tail h' =>
-      let ⟨msucclei, iltn⟩ := mem_of_mem_toList h'
-      exact ⟨Nat.le_of_succ_le msucclei, iltn⟩
+      let ⟨msucclei, iltn, _⟩ := mem_of_mem_toList h'
+      exact ⟨Nat.le_of_succ_le msucclei, iltn, Nat.mod_one _⟩
   · case isFalse =>
     nomatch h
 termination_by n - m
@@ -71,9 +73,9 @@ theorem map_eq_of_eq_of_mem' {f g : Nat → α} (h : ∀ i ∈ [m:n], f i = g i)
 
 theorem eq_of_mem_of_map_eq {f g : Nat → α}
   (h : List.map (fun i => f i) [m:n] = List.map (fun i => g i) [m:n]) : ∀ i ∈ [m:n], f i = g i := by
-  intro i ⟨mlei, iltn⟩
+  intro i ⟨mlei, iltn, _⟩
   let mltn := Nat.lt_of_le_of_lt mlei iltn
-  rw [toList, if_neg nofun, if_pos mltn] at h
+  rw [toList, if_pos mltn] at h
   rw [List.map, List.map] at h
   simp only at h
   by_cases m = i
@@ -82,7 +84,7 @@ theorem eq_of_mem_of_map_eq {f g : Nat → α}
     exact List.cons_eq_cons.mp h |>.left
   · case neg h' =>
     exact eq_of_mem_of_map_eq (List.cons_eq_cons.mp h |>.right) i
-      ⟨Nat.succ_le_of_lt <| Nat.lt_of_le_of_ne mlei h', iltn⟩
+      ⟨Nat.succ_le_of_lt <| Nat.lt_of_le_of_ne mlei h', iltn, Nat.mod_one _⟩
 termination_by n - m
 decreasing_by
   all_goals simp_wf
@@ -97,15 +99,15 @@ theorem eq_of_mem_of_map_eq' {f g : Nat → α}
 
 theorem mem_of_mem_map {f : Nat → α} (h : x ∈ List.map (fun i => f i) [m:n])
   : ∃ i ∈ [m:n], x = f i := by
-  rw [toList, if_neg Nat.one_ne_zero] at h
+  rw [toList] at h
   split at h
   · case isTrue h' =>
     rw [List.map] at h
     cases h
-    · case head => exact .intro m ⟨⟨Nat.le_refl _, h'⟩, rfl⟩
+    · case head => exact .intro m ⟨⟨Nat.le_refl _, h', Nat.mod_one _⟩, rfl⟩
     · case tail h'' =>
       have ⟨i, mem, eq⟩ := mem_of_mem_map (m := m + 1) h''
-      exact ⟨i, ⟨Nat.le_of_succ_le mem.lower, mem.upper⟩, eq⟩
+      exact ⟨i, ⟨Nat.le_of_succ_le mem.lower, mem.upper, Nat.mod_one _⟩, eq⟩
   · case isFalse h' => cases h
 termination_by n - m
 decreasing_by
@@ -114,7 +116,7 @@ decreasing_by
   assumption
 
 theorem mem_map_of_mem (h : i ∈ [m:n]) : f i ∈ List.map f [m:n] := by
-  rw [toList, if_neg nofun]
+  rw [toList]
   split
   · case isTrue h' =>
     simp only
@@ -126,7 +128,8 @@ theorem mem_map_of_mem (h : i ∈ [m:n]) : f i ∈ List.map f [m:n] := by
     · case neg h'' =>
       exact .tail _ <| mem_map_of_mem ⟨
         Nat.succ_le_of_lt <| Nat.lt_of_le_of_ne h.lower (Ne.symm h''),
-        h.upper
+        h.upper,
+        Nat.mod_one _
       ⟩
   · case isFalse h' => exact h' (Nat.lt_of_le_of_lt h.lower h.upper) |>.elim
 termination_by i - m
@@ -144,7 +147,6 @@ theorem map_shift {f : Nat → α} (h : j ≤ m)
   apply Eq.symm
   rw [toList]
   apply Eq.symm
-  rw [if_neg Nat.one_ne_zero, if_neg Nat.one_ne_zero]
   simp only
   split
   · case isTrue h' =>
@@ -167,7 +169,7 @@ theorem map_append {f : Nat → α} (h₁ : l ≤ m) (h₂ : m ≤ n)
   rw [← List.map_append, toList_append h₁ h₂]
 
 theorem length_toList : [m:n].toList.length = n - m := by
-  rw [toList, if_neg nofun]
+  rw [toList]
   split
   · case isTrue h =>
     simp only
@@ -183,16 +185,14 @@ decreasing_by
 theorem map_get!_eq [Inhabited α] {as : List α} : [:as.length].map as.get! = as := by
   match as with
   | [] =>
-    rw [List.length_nil, map, toList, if_neg nofun, if_neg (Nat.not_lt_of_le (Nat.le_refl _)),
-        List.map_nil]
+    rw [List.length_nil, map, toList, if_neg (Nat.not_lt_of_le (Nat.le_refl _)), List.map_nil]
   | a :: as' =>
-    rw [List.length_cons, map, toList, if_neg nofun, if_pos (Nat.succ_pos _), List.map_cons,
-        List.get!_cons_zero, ← map_shift (Nat.le_add_left ..), Nat.add_sub_cancel,
-        Nat.add_sub_cancel, map_eq_of_eq_of_mem fun _ _ => List.get!_cons_succ .., ← map,
-        map_get!_eq]
+    rw [List.length_cons, map, toList, if_pos (Nat.succ_pos _), List.map_cons, List.get!_cons_zero,
+        ← map_shift (Nat.le_add_left ..), Nat.add_sub_cancel, Nat.add_sub_cancel,
+        map_eq_of_eq_of_mem fun _ _ => List.get!_cons_succ .., ← map, map_get!_eq]
 
 theorem count_toList_le_one : [m:n].toList.count l ≤ 1 := by
-  rw [toList, if_neg nofun]
+  rw [toList]
   split
   · case isTrue h =>
     rw [List.count_cons]
@@ -219,11 +219,11 @@ decreasing_by
 theorem get!_map [Inhabited α] {f : Nat → α} (iltnsubm : i < n - m)
   : ([m:n].map f).get! i = f (i + m) := by match i with
   | 0 =>
-    rw [map, toList, if_neg nofun, if_pos (Nat.lt_of_sub_pos iltnsubm), List.map_cons,
-        List.get!_cons_zero, Nat.zero_add]
+    rw [map, toList, if_pos (Nat.lt_of_sub_pos iltnsubm), List.map_cons, List.get!_cons_zero,
+        Nat.zero_add]
   | i' + 1 =>
     let mltn := Nat.lt_of_sub_pos (Nat.lt_of_le_of_lt (Nat.zero_le _) iltnsubm)
-    rw [map, toList, if_neg nofun, if_pos mltn, List.map_cons, List.get!_cons_succ,
+    rw [map, toList, if_pos mltn, List.map_cons, List.get!_cons_succ,
         ← map_shift (j := 1) (Nat.succ_le_of_lt (Nat.add_one_pos _)), get!_map, Nat.add_sub_cancel,
         Nat.add_assoc, Nat.add_comm m, ← Nat.add_assoc]
     rw [Nat.add_sub_cancel, Nat.sub_right_comm]
@@ -236,8 +236,8 @@ theorem skolem [Inhabited α] {p : Nat → α → Prop}
   induction n with
   | zero => exact ⟨fun _ => default, nofun⟩
   | succ n ih =>
-    let ⟨f', h'⟩ := ih fun i mem => h i ⟨mem.lower, Nat.lt_add_right _ mem.upper⟩
-    let ⟨a, h''⟩ := h n ⟨Nat.zero_le _, Nat.lt_succ_self _⟩
+    let ⟨f', h'⟩ := ih fun i mem => h i ⟨mem.lower, Nat.lt_add_right _ mem.upper, Nat.mod_one _⟩
+    let ⟨a, h''⟩ := h n ⟨Nat.zero_le _, Nat.lt_succ_self _, Nat.mod_one _⟩
     let f i := if i = n then a else f' i
     apply Exists.intro f
     intro i mem
@@ -247,6 +247,6 @@ theorem skolem [Inhabited α] {p : Nat → α → Prop}
       cases h'''
       exact h''
     · case isFalse h''' =>
-      exact h' i ⟨mem.lower, Nat.lt_of_le_of_ne (Nat.le_of_lt_succ mem.upper) h'''⟩
+      exact h' i ⟨mem.lower, Nat.lt_of_le_of_ne (Nat.le_of_lt_succ mem.upper) h''', Nat.mod_one _⟩
 
 end Std.Range
