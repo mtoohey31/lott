@@ -19,10 +19,4 @@ def boolTermElab : TermElab
     Term.elabTerm n <| .some (.const `Bool [])
   | _, _ => throwUnsupportedSyntax
 
-@[lott_tex_elab Lott.Symbol.Bool]
-def boolTexElab : TexElab
-  | _, Syntax.node _ `Lott.Symbol.Bool #[i@(.ident ..)] =>
-    return texEscape <| i.getId.toString (escape := false)
-  | _, _ => throwUnsupportedSyntax
-
 end Lott.Elab

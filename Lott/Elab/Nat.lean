@@ -28,14 +28,4 @@ def natTermElab : TermElab
     Term.elabTerm n <| .some (.const `Nat [])
   | _, _ => throwUnsupportedSyntax
 
-@[lott_tex_elab Lott.Symbol.Nat]
-def natTexElab : TexElab
-  | _, Syntax.node _ `Lott.Symbol.Nat #[i@(.ident ..)] =>
-    return texEscape <| i.getId.toString (escape := false)
-  | _, .node _ `Lott.Symbol.Nat #[s@(.node _ `num _)]
-  | _, .node _ `Lott.Symbol.Nat #[.atom _ "(", s, .atom _ ")"] => do
-    let some ss := s.getSubstring? | throwUnsupportedSyntax
-    return texEscape ss.toString
-  | _, _ => throwUnsupportedSyntax
-
 end Lott.Elab

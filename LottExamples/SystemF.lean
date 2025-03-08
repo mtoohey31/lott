@@ -1616,6 +1616,4 @@ theorem progress (EtyA : [[ε ⊢ E : A]]) : E.IsValue ∨ ∃ F, [[E -> F]] := 
 
 end OperationalSemantics
 
-filter "LottExamples/SystemF/main.tex" "LottExamples/SystemF/main.mng"
-
 end LottExamples.SystemF
