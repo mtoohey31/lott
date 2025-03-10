@@ -62,18 +62,25 @@ def toParser' (canon : Name) : IR → CommandElabM Term
     let (val, type) ← toParser ir canon' sepByPrefix
     if type != (← `(term| Parser)) then throwError "invalid left recursive sepBy syntax"
     let parserIdent := mkIdentFrom l <| canon'.appendAfter "_parser"
-    elabCommand <| ← `(@[$attrIdent:ident] def $parserIdent : Parser := $val)
+    elabCommand <| ←
+      `(@[$attrIdent:ident]
+        private
+        def $parserIdent : Parser := $val)
 
     let comprehensionIdent := mkIdentFrom l <| canon'.appendAfter "_comprehension_parser"
     elabCommand <| ←
-      `(@[$attrIdent:ident] def $comprehensionIdent : Parser :=
+      `(@[$attrIdent:ident]
+        private
+        def $comprehensionIdent : Parser :=
           leadingNode $(quote catName) Parser.maxPrec <|
             "</ " >> withPosition (categoryParser $(quote catName) 0) >>
-            " // " >> termParser >> " in " >> termParser >> " />")
+              " // " >> termParser >> " in " >> termParser >> " />")
 
     let sepIdent := mkIdentFrom l <| canon'.appendAfter "_sep_parser"
     elabCommand <| ←
-      `(@[$attrIdent:ident] def $sepIdent : TrailingParser :=
+      `(@[$attrIdent:ident]
+        private
+        def $sepIdent : TrailingParser :=
           trailingNode $(quote catName) Parser.maxPrec 0 <|
             checkLineEq >> $(quote sep) >> categoryParser $(quote catName) 0)
 
@@ -89,14 +96,19 @@ def toParser' (canon : Name) : IR → CommandElabM Term
     let (val, type) ← toParser ir canon' sepByPrefix
     if type != (← `(term| Parser)) then throwError "invalid left recursive optional syntax"
     let parserIdent := mkIdentFrom l <| canon'.appendAfter "_parser"
-    elabCommand <| ← `(@[$attrIdent:ident] def $parserIdent : Parser := $val)
+    elabCommand <| ←
+      `(@[$attrIdent:ident]
+        private
+        def $parserIdent : Parser := $val)
 
     let comprehensionIdent := mkIdentFrom l <| canon'.appendAfter "_comprehension_parser"
     elabCommand <| ←
-      `(@[$attrIdent:ident] def $comprehensionIdent : Parser :=
+      `(@[$attrIdent:ident]
+        private
+        def $comprehensionIdent : Parser :=
           leadingNode $(quote catName) Parser.maxPrec <|
             "</ " >> withPosition (categoryParser $(quote catName) 0) >>
-            " // " >> termParser >> " />")
+              " // " >> termParser >> " />")
 
     ``(Parser.optional (categoryParser $(quote catName) 0))
 
@@ -153,33 +165,6 @@ def toTypeProdSeq (ids binders : Array Name) (ir : Array IR) : CommandElabM (Opt
   return some <| ← types.foldlM (start := 1) (init := type') fun acc t => ``($acc × $t)
 end
 
-mutual
-partial
-def toMkTypeExpr (ids binders : Array Name) : IR → CommandElabM (Option Term)
-  | IR.mk l (.category n) => do
-    for binder in binders do
-      if l.getId == binder && (metaVarExt.getState (← getEnv)).find! n then
-        return none
-    for id in ids do
-      if l.getId == id && (metaVarExt.getState (← getEnv)).find! n then
-        return some <| ← ``(Expr.const $(quote <| n.appendAfter "Id") [])
-    ``(Expr.const $(quote n) [])
-  | IR.mk _ (.atom _) => return none
-  | IR.mk _ (.sepBy ir _) => do
-    let some type' ← toMkTypeProdSeqExpr ir ids binders | return none
-    ``(mkApp (Expr.const `List [levelOne]) $type')
-  | IR.mk _ (.optional ir) => do
-    let some type' ← toMkTypeProdSeqExpr ir ids binders | return none
-    ``(mkApp (Expr.const `Option [levelOne]) $type')
-
-partial
-def toMkTypeProdSeqExpr (ir : Array IR) (ids binders : Array Name) : CommandElabM (Option Term) := do
-  let types ← ir.filterMapM <| IR.toMkTypeExpr ids binders
-  let some back := types.back? | return none
-  types.foldrM (start := types.size - 1) (β := Term) (init := back) fun t acc =>
-    ``(mkApp2 (Expr.const `Prod [levelOne, levelOne]) $t $acc)
-end
-
 def foldrArrow (args : Array Term) (init : Term) : CommandElabM Term :=
   args.foldrM (init := init) fun arg acc => ``($arg → $acc)
 
@@ -198,8 +183,8 @@ def toPatternArgs (ir : Array IR) : CommandElabM (TSepArray `term ",") :=
 
 def toJoinArgs (ir : Array IR) : TSepArray `term "," := ir.map (β := Term) fun | mk l _ => l
 
-def foldrProd (as : Array Term) : CommandElabM Term := if let some a := as.back? then
-    as.foldrM (init := a) (start := as.size - 1) fun a acc => `(($acc, $a))
+def foldrProd (as : Array Term) : MacroM Term := if let some a := as.back? then
+    as.foldrM (init := a) (start := as.size - 1) fun a acc => `(($a, $acc))
   else
     ``(())
 

@@ -1,28 +1,23 @@
 import Lott.Elab.Basic
 import Lott.Parser.UniversalJudgement
 
-namespace Lott.Elab
+namespace Lott
 
-open Lean.Elab
-open Lean.Parser.Term
+open Lean
 
-@[lott_term_elab Lott.universalJudgement]
+@[macro judgementEmbed]
 private
-def universalJudgementTermElab : TermElab := fun _ stx => do
-  let `(Lott.Judgement| ∀ $[$binders]* $[$type?]?, $«judgement»:Lott.Judgement) := stx
-    | throwUnsupportedSyntax
-  let stx' ← ``(∀ $binders* $[$type?:typeSpec]?, [[$«judgement»:Lott.Judgement]])
-  Lean.Elab.Term.elabTerm stx' none
+def universalJudgementImpl : Macro := fun stx => do
+  let `([[∀ $[$binders]* $[$type?]?, $«judgement»:Lott.Judgement]]) := stx | Macro.throwUnsupported
+  ``(∀ $binders* $[$type?:typeSpec]?, [[$«judgement»:Lott.Judgement]])
 
-@[lott_term_elab Lott.universalPredJudgement]
+@[macro judgementEmbed]
 private
-def universalPredJudgementTermElab : TermElab := fun _ stx => do
-  let stx' ← match stx with
-  | `(Lott.Judgement| ∀ $i:ident $bp:binderPred, $«judgement»:Lott.Judgement) =>
+def universalPredJudgementImpl : Macro
+  | `([[∀ $i:ident $bp:binderPred, $«judgement»:Lott.Judgement]]) =>
     ``(∀ $i:ident, satisfies_binder_pred% $i $bp → [[$«judgement»:Lott.Judgement]])
-  | `(Lott.Judgement| ∀ $i:ident, $«judgement»:Lott.Judgement) =>
+  | `([[∀ $i:ident, $«judgement»:Lott.Judgement]]) =>
     ``(∀ $i:ident, [[$«judgement»:Lott.Judgement]])
-  | _ => throwUnsupportedSyntax
-  Lean.Elab.Term.elabTerm stx' none
+  | _ => Macro.throwUnsupported
 
-end Lott.Elab
+end Lott

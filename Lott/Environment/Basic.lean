@@ -80,7 +80,7 @@ initialize judgementExt : PersistentEnvExtension Judgement Judgement JudgementSt
 
 structure Child where
   canon : Name
-  parent' : Name
+  parent : Name
 
 abbrev ChildState := NameMap Child
 

@@ -1,16 +1,15 @@
 import Lott.Elab.Basic
 import Lott.Parser.JudgementComprehension
 
-namespace Lott.Elab
+namespace Lott
 
-open Lean.Elab
+open Lean
 
-@[lott_term_elab Lott.judgementComprehension]
+@[macro judgementEmbed]
 private
-def judgementComprehensionTermElab : TermElab := fun _ stx => do
-  let `(Lott.Judgement| </ $«judgement»:Lott.Judgement // $p:term in $c:term />) := stx
-    | throwUnsupportedSyntax
-  let ft ← `(∀ x ∈ $c, let $p:term := x; [[$«judgement»:Lott.Judgement]])
-  Lean.Elab.Term.elabTerm ft none
+def judgementComprehensionImpl : Macro := fun stx => do
+  let `([[</ $«judgement»:Lott.Judgement // $p:term in $c:term />]]) := stx
+    | Macro.throwUnsupported
+  `(∀ x ∈ $c, let $p:term := x; [[$«judgement»:Lott.Judgement]])
 
-end Lott.Elab
+end Lott

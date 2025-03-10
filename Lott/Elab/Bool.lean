@@ -1,6 +1,6 @@
 import Lott.Elab
 
-namespace Lott.Elab
+namespace Lott
 
 open Lean
 open Lean.Elab
@@ -11,12 +11,17 @@ declare_syntax_cat Lott.Symbol.Bool
 run_cmd setEnv <| aliasExt.addEntry (← getEnv) { canon := `Bool, alias := `b }
 
 @[Lott.Symbol.Bool_parser]
+private
 def bool.b_parser : Parser := leadingNode `Lott.Symbol.Bool maxPrec <| identPrefix "b"
 
-@[lott_term_elab Lott.Symbol.Bool]
-def boolTermElab : TermElab
-  | _, .node _ `Lott.Symbol.Bool #[n@(.ident ..)] =>
-    Term.elabTerm n <| .some (.const `Bool [])
-  | _, _ => throwUnsupportedSyntax
+@[macro symbolEmbed]
+private
+def boolImpl : Macro := fun stx => do
+  let .node _ `Lott.symbolEmbed #[
+    .atom _ "[[",
+    .node _ `Lott.Symbol.Bool #[b@(.ident ..)],
+    .atom _ "]]"
+  ] := stx | Macro.throwUnsupported
+  return b
 
-end Lott.Elab
+end Lott

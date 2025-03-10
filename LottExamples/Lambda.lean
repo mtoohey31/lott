@@ -9,7 +9,7 @@ nonterminal Term, e :=
   | x             : var
   | "λ " x ". " e : lam (bind x in e)
   | e₀ e₁         : app
-  | "(" e ")"     : paren (desugar := return e)
+  | "(" e ")"     : paren (expand := return e)
 
 -- Alpha reduction is not included since locally nameless representation makes it meaningless.
 
@@ -20,9 +20,7 @@ judgement BetaReduction :=
 ─────────────────────── mk
 (λ x. e₀) e₁ ->ᵦ e₀^^e₁
 
-judgement_syntax "lc" "(" e ")" : Term.VarLocallyClosed₀
-
-abbrev Term.VarLocallyClosed₀ e := Term.VarLocallyClosed e
+judgement_syntax "lc" "(" e ")" : Term.VarLocallyClosed
 
 judgement_syntax e " ->η " e' : EtaReduction
 

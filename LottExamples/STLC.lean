@@ -19,7 +19,7 @@ nonterminal Term, e :=
   | x             : var
   | "λ " x ". " e : lam (bind x in e)
   | e₀ e₁         : app
-  | "(" e ")"     : paren (desugar := return e)
+  | "(" e ")"     : paren (expand := return e)
 
 namespace Term
 
@@ -81,28 +81,25 @@ theorem Var_open_intro : [[x ∉ fv(e)]] → x ≠ x' → [[x ∉ fv(e^x')]] :=
 
 end Term.NotInFreeVars
 
-private
-def Environment.appendExpr : Lean.Expr := .const `LottExamples.STLC.Environment.append []
-
 nonterminal Environment, Γ :=
   | "ε"              : empty
   | Γ ", " x " : " τ : ext (id x)
-  | Γ₀ ", " Γ₁       : append (elab := return Lean.mkApp2 Environment.appendExpr Γ₀ Γ₁)
+  | Γ₀ ", " Γ₁       : append (expand := return .mkCApp `LottExamples.STLC.Environment.append #[Γ₀, Γ₁])
 
 namespace Environment
 
 def append (Γ₀ : Environment) : Environment → Environment
-  | empty => Γ₀
-  | ext Γ₁ x τ => Γ₀.append Γ₁ |>.ext x τ
+  | [[ε]] => Γ₀
+  | [[Γ₁, x : τ]] => Γ₀.append Γ₁ |>.ext x τ
 
 def empty_append (Γ : Environment) : Environment.empty.append Γ = Γ := match Γ with
-  | empty => rfl
-  | ext Γ' x τ => by rw [append, Γ'.empty_append]
+  | [[ε]] => rfl
+  | [[Γ', x : τ]] => by rw [append, Γ'.empty_append]
 
 def append_assoc {Γ₀ : Environment} : Γ₀.append (Γ₁.append Γ₂) = (Γ₀.append Γ₁).append Γ₂ := by
   match Γ₂ with
-  | empty => rfl
-  | ext Γ₂' x τ => rw [append, append, append_assoc, ← append]
+  | [[ε]] => rfl
+  | [[Γ₂', x : τ]] => rw [append, append, append_assoc, ← append]
 
 end Environment
 
@@ -267,8 +264,8 @@ namespace WellFormedness
 
 theorem insert : [[⊢ Γ₀, Γ₁]] → [[x ∉ dom(Γ₀, Γ₁)]] → [[⊢ Γ₀, x : τ, Γ₁]] :=
   fun Γ₀Γ₁wf xnindomΓ₀Γ₁ => by match Γ₁ with
-    | .empty => exact Γ₀Γ₁wf.ext xnindomΓ₀Γ₁
-    | .ext Γ₁' x' τ' =>
+    | [[ε]] => exact Γ₀Γ₁wf.ext xnindomΓ₀Γ₁
+    | [[Γ₁', x' : τ']] =>
       let .ext Γ₀Γ₁'wf x'nindomΓ₀Γ₁' := Γ₀Γ₁wf
       let ⟨x'nindomΓ₀, x'nindomΓ₁'⟩ := VarNotInDom.append.mp x'nindomΓ₀Γ₁'
       let ⟨_, xnindomΓ₁⟩  := VarNotInDom.append.mp xnindomΓ₀Γ₁
@@ -287,7 +284,7 @@ theorem drop : [[⊢ Γ₀, x : τ, Γ₁]] → [[⊢ Γ₀, Γ₁]] :=
 
 theorem exchange : [[⊢ Γ₀, x : τ, Γ₁, Γ₂]] → [[⊢ Γ₀, Γ₁, x : τ, Γ₂]] := fun Γ₀xΓ₁Γ₂wf =>
   match Γ₂ with
-  | .empty => by induction Γ₁ with
+  | [[ε]] => by induction Γ₁ with
     | empty => exact Γ₀xΓ₁Γ₂wf
     | ext Γ₁' x' τ' ih =>
       simp [append] at Γ₀xΓ₁Γ₂wf ih ⊢
@@ -296,7 +293,7 @@ theorem exchange : [[⊢ Γ₀, x : τ, Γ₁, Γ₂]] → [[⊢ Γ₀, Γ₁, x
       let ⟨x'nindomΓ₀x, _⟩ := VarNotInDom.append.mp x'nindomΓ₀xΓ₁'
       let ⟨xnex', _⟩ := VarNotInDom.ext.mp x'nindomΓ₀x
       exact Γ₀Γ₁'wf.ext x'nindomΓ₀xΓ₁'.drop |>.ext <| VarNotInDom.ext.mpr ⟨xnex'.symm, xnindomΓ₀Γ₁⟩
-  | .ext Γ₂' x' τ' =>
+  | [[Γ₂', x' : τ']] =>
     let .ext Γ₀xΓ₁Γ₂'wf x'ninΓ₀xΓ₁Γ₂' := Γ₀xΓ₁Γ₂wf
     Γ₀xΓ₁Γ₂'wf.exchange.ext x'ninΓ₀xΓ₁Γ₂'.exchange
 
@@ -399,7 +396,7 @@ theorem opening
       | .inl ⟨.head, _⟩ => exact e₀ty.weakening Γ₀xΓ₁wf.drop
       | .inr xinΓ₁ => exact xninΓ₁ _ xinΓ₁ |>.elim
     · case isFalse h => nomatch e₁ty
-  | .lam e₁' =>
+  | [[λ x. e₁']] =>
     rw [Term.Term_open]
     let .lam e₁'ty (τ₀ := τ₀') (I := I) := e₁ty
     exact .lam (I := x :: I) fun x' x'nin => by
@@ -410,7 +407,7 @@ theorem opening
       rw [e₀ty.toVarLocallyClosed.Var_open_Term_open_comm <| Nat.succ_ne_zero _]
       let xninΓ₁x' : [[x ∉ Γ₁, x' : τ₀']] := Environment.VarNotIn.ext.mpr ⟨xnex'.symm, xninΓ₁⟩
       exact e₁'ty.opening e₀ty xninΓ₁x' <| xninfve₁.lam.Var_open_intro xnex'.symm
-  | .app e₁₀ e₁₁ =>
+  | [[e₁₀ e₁₁]] =>
     let .app e₁₀ty e₁₁ty := e₁ty
     exact .app (e₁₀ty.opening e₀ty xninΓ₁ xninfve₁.app₀) (e₁₁ty.opening e₀ty xninΓ₁ xninfve₁.app₁)
 
@@ -446,11 +443,11 @@ theorem preservation (ty : [[Γ ⊢ e : τ]]) (re : [[e ↦ e']]) : [[Γ ⊢ e' 
     e₀'ty x xninI |>.opening (Γ₁ := .empty) vty nofun xninfve₀'
 
 theorem progress (ty : [[ε ⊢ e : τ]]) : e.IsValue ∨ ∃ e', [[e ↦ e']] := match e, ty with
-  | .lam _, _ => .inl .lam
-  | .app e₀ e₁, .app e₀ty e₁ty => match progress e₀ty with
+  | [[λ x. e₀]], _ => .inl .lam
+  | [[e₀ e₁]], .app e₀ty e₁ty => match progress e₀ty with
     | .inl _ => match progress e₁ty with
       | .inl e₁IsValue =>
-        let .lam _ := e₀
+        let [[λ x. e₀']] := e₀
         let v₁ : Value := ⟨e₁, e₁IsValue⟩
         .inr <| .intro _ <| .lamApp (v := v₁)
       | .inr ⟨_, e₁ree₁'⟩ => .inr <| .intro _ <| .appr e₁ree₁'

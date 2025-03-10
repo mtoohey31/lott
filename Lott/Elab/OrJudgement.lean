@@ -1,15 +1,14 @@
 import Lott.Elab.Basic
 import Lott.Parser.OrJudgement
 
-namespace Lott.Elab
+namespace Lott
 
-open Lean.Elab
+open Lean
 
-@[lott_term_elab Lott.orJudgement]
+@[macro Lott.judgementEmbed]
 private
-def orJudgementTermElab : TermElab := fun _ stx => do
-  let `(Lott.Judgement| $j₀:Lott.Judgement ∨ $j₁:Lott.Judgement) := stx | throwUnsupportedSyntax
-  let stx' ← ``([[$j₀:Lott.Judgement]] ∨ [[$j₁:Lott.Judgement]])
-  Lean.Elab.Term.elabTerm stx' none
+def orJudgementImpl : Macro := fun stx => do
+  let `([[$j₀:Lott.Judgement ∨ $j₁:Lott.Judgement]]) := stx | Macro.throwUnsupported
+  ``([[$j₀:Lott.Judgement]] ∨ [[$j₁:Lott.Judgement]])
 
-end Lott.Elab
+end Lott

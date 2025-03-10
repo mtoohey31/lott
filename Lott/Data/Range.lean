@@ -15,6 +15,8 @@ instance : Coe Range (List Nat) := ⟨Std.Range.toList⟩
 
 abbrev map (r : Range) (f : Nat → α) : List α := r.toList.map f
 
+abbrev flatMap (r : Range) (f : Nat → List α) : List α := r.toList.flatMap f
+
 theorem toList_append (h₁ : l ≤ m) (h₂ : m ≤ n) : [l:m] ++ [m:n] = [l:n].toList := by
   rw [toList]
   split
@@ -70,6 +72,9 @@ theorem map_eq_of_eq_of_mem' {f g : Nat → α} (h : ∀ i ∈ [m:n], f i = g i)
   : List.map (fun i => f i) (Coe.coe [m:n]) = List.map (fun i => g i) (Coe.coe [m:n]) := by
   dsimp [Coe.coe]
   exact map_eq_of_eq_of_mem h
+
+theorem map_eq_of_eq_of_mem'' {f g : Nat → α} (h : ∀ i ∈ [m:n], f i = g i)
+  : [m:n].map (fun i => f i) = [m:n].map (fun i => g i) := by exact map_eq_of_eq_of_mem h
 
 theorem eq_of_mem_of_map_eq {f g : Nat → α}
   (h : List.map (fun i => f i) [m:n] = List.map (fun i => g i) [m:n]) : ∀ i ∈ [m:n], f i = g i := by
@@ -142,15 +147,15 @@ decreasing_by
   assumption
 
 theorem map_shift {f : Nat → α} (h : j ≤ m)
-  : List.map (fun i => f (i + j)) [m - j:n - j] = List.map (fun i => f i) [m:n] := by
-  rw [toList]
+  : [m - j:n - j].map (fun i => f (i + j)) = [m:n].map fun i => f i := by
+  rw [map, map, toList]
   apply Eq.symm
   rw [toList]
   apply Eq.symm
   simp only
   split
   · case isTrue h' =>
-    rw [if_pos, List.map, Nat.sub_add_cancel h, ← Nat.sub_add_comm h, map_shift (m := m + 1),
+    rw [if_pos, List.map, Nat.sub_add_cancel h, ← Nat.sub_add_comm h, ← map, map_shift (m := m + 1),
         ← List.map]
     · exact Nat.le_succ_of_le h
     · have := Nat.sub_pos_of_lt h'
@@ -188,8 +193,8 @@ theorem map_get!_eq [Inhabited α] {as : List α} : [:as.length].map as.get! = a
     rw [List.length_nil, map, toList, if_neg (Nat.not_lt_of_le (Nat.le_refl _)), List.map_nil]
   | a :: as' =>
     rw [List.length_cons, map, toList, if_pos (Nat.succ_pos _), List.map_cons, List.get!_cons_zero,
-        ← map_shift (Nat.le_add_left ..), Nat.add_sub_cancel, Nat.add_sub_cancel,
-        map_eq_of_eq_of_mem fun _ _ => List.get!_cons_succ .., ← map, map_get!_eq]
+        ← map, ← map_shift (Nat.le_add_left ..), Nat.add_sub_cancel, Nat.add_sub_cancel,
+        map_eq_of_eq_of_mem'' fun _ _ => List.get!_cons_succ .., map_get!_eq]
 
 theorem count_toList_le_one : [m:n].toList.count l ≤ 1 := by
   rw [toList]
@@ -223,7 +228,7 @@ theorem get!_map [Inhabited α] {f : Nat → α} (iltnsubm : i < n - m)
         Nat.zero_add]
   | i' + 1 =>
     let mltn := Nat.lt_of_sub_pos (Nat.lt_of_le_of_lt (Nat.zero_le _) iltnsubm)
-    rw [map, toList, if_pos mltn, List.map_cons, List.get!_cons_succ,
+    rw [map, toList, if_pos mltn, List.map_cons, List.get!_cons_succ, ← map,
         ← map_shift (j := 1) (Nat.succ_le_of_lt (Nat.add_one_pos _)), get!_map, Nat.add_sub_cancel,
         Nat.add_assoc, Nat.add_comm m, ← Nat.add_assoc]
     rw [Nat.add_sub_cancel, Nat.sub_right_comm]
