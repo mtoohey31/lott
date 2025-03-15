@@ -11,9 +11,13 @@ open Lean.Parser
 open Lean.Parser.Command
 open Lean.Parser.Term
 
+def optionalPrefix := `Lott.Optional
+
 def symbolPrefix := `Lott.Symbol
 
 def sepByPrefix := `Lott.SepBy
+
+def variablePrefix := `Lott.Variable
 
 -- Useful for avoiding "un-uniqueification" resulting from the use of `eraseMacroScopes`.
 def _root_.Lean.Name.obfuscateMacroScopes (n : Name) : Name :=
@@ -87,13 +91,13 @@ def toParser' (canon : Name) : IR → CommandElabM Term
     ``(Parser.optional (categoryParser $(quote catName) 0))
   | mk l (.optional ir) => do
     let canon' := canon ++ l.getId |>.obfuscateMacroScopes
-    let catName := sepByPrefix ++ (← getCurrNamespace) ++ canon'
+    let catName := optionalPrefix ++ (← getCurrNamespace) ++ canon'
     let parserAttrName := catName.appendAfter "_parser"
 
     setEnv <| ← Parser.registerParserCategory (← getEnv) parserAttrName catName .symbol
 
     let attrIdent := mkIdent parserAttrName
-    let (val, type) ← toParser ir canon' sepByPrefix
+    let (val, type) ← toParser ir canon' optionalPrefix
     if type != (← `(term| Parser)) then throwError "invalid left recursive optional syntax"
     let parserIdent := mkIdentFrom l <| canon'.appendAfter "_parser"
     elabCommand <| ←
@@ -203,6 +207,45 @@ def toTerms (as : TSyntaxArray `Lean.binderIdent) : CommandElabM (Array Term) :=
     | `(Lean.binderIdent| $h:hole) => `(term| $h:hole)
     | `(Lean.binderIdent| $i:ident) => `(term| $i:ident)
     | _ => throwUnsupportedSyntax
+
+partial
+def toExampleSyntax (ir : Array IR) (canonQualified : Name) : CommandElabM (Array Syntax) :=
+  ir.mapM fun (mk l ir) => match ir with
+    | .category n => do
+      if metaVarExt.getState (← getEnv) |>.contains n then
+        return mkNode (symbolPrefix ++ n) #[l]
+      else
+        return mkNode (symbolPrefix ++ n) #[mkNode (variablePrefix ++ n) #[l]]
+    | .atom s => return mkAtom s.trim
+    | .sepBy ir _ => do
+      let catName := sepByPrefix ++ canonQualified ++ l.getId |>.obfuscateMacroScopes
+      return mkNullNode #[
+        mkNode catName #[
+          mkAtom "</",
+          mkNode catName <| ← toExampleSyntax ir canonQualified,
+          mkAtom "//",
+          mkIdent `i,
+          mkAtom "in",
+          mkNode ``Std.Range.«term[:_]» #[
+            mkAtom "[",
+            mkAtom ":",
+            mkIdent `n,
+            mkAtom "]"
+          ],
+          mkAtom "/>"
+        ]
+      ]
+    | .optional ir => do
+      let catName := optionalPrefix ++ canonQualified ++ l.getId |>.obfuscateMacroScopes
+      return mkNullNode #[
+        mkNode catName #[
+          mkAtom "</",
+          mkNode catName <| ← toExampleSyntax ir canonQualified,
+          mkAtom "//",
+          mkIdent `b,
+          mkAtom "/>"
+        ]
+      ]
 
 end IR
 

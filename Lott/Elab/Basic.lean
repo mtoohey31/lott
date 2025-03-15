@@ -1,5 +1,9 @@
+import Lott.Data.Char
 import Lott.Data.List
+import Lott.Data.Name
 import Lott.Data.Option
+import Lott.Data.String
+import Lott.Elab.NoTexJudgement
 import Lott.Environment
 import Lott.Parser
 import Lott.IR
@@ -12,6 +16,7 @@ import Lott.IR
 
 namespace Lott
 
+open IO.FS
 open Lean
 open Lean.Elab
 open Lean.Elab.Command
@@ -22,8 +27,245 @@ open Lean.Parser.Command
 open Lean.Parser.Syntax
 open Lean.Parser.Term
 open Lott.IR
+open System
 
 /- Utility stuff. -/
+
+register_option lott.tex.locallyNameless : Bool := {
+  defValue := true
+  descr := "show locally nameless operations in tex output"
+}
+
+register_option lott.tex.output.dir : String := {
+  defValue := "."
+  descr := "directory where tex output files should be saved"
+}
+
+register_option lott.tex.output.sourceRelative : Bool := {
+  defValue := true
+  descr := "when output.dir is relative, whether it should be considered relative to the source file's parent, or to the Lean process's working directory"
+}
+
+register_option lott.tex.output.makeDeps : Bool := {
+  defValue := false
+  descr := "also output .d files for make alongside tex"
+}
+
+private
+def writeMakeDeps (filePath : FilePath) : CommandElabM Unit := do
+  if !(← getOptions).get lott.tex.output.makeDeps.name lott.tex.output.makeDeps.defValue then
+    return
+
+  let sp ← liftIO <| initSrcSearchPath
+  let depPaths ← (← getEnv).allImportedModuleNames.mapM (findLean sp ·)
+  let deps := " ".intercalate <| depPaths.toList.map
+    (·.toString.dropPrefixes "./" |>.toString)
+  writeFile (filePath.addExtension "d")
+    s!"{filePath.toString.dropPrefixes "./" |>.toString}: {deps}\n"
+
+private
+def writeTexOutput (name : Name) (mkTex : CommandElabM String) : CommandElabM Unit := do
+  let opts ← getOptions
+  let some (outputDir : String) := opts.get? lott.tex.output.dir.name | return
+  let outputDir ← if FilePath.isAbsolute outputDir then
+      pure (outputDir : FilePath)
+    else if opts.get lott.tex.output.sourceRelative.name lott.tex.output.sourceRelative.defValue then
+      let some parent := FilePath.parent <| ← getFileName
+        | throwError "failed to resolve parent of current file"
+      pure <| parent / outputDir
+    else
+      pure outputDir
+  let outputName := outputDir / name.toStringWithSep "/" false |>.addExtension "tex"
+  let some parent := outputName.parent | throwError "failed to resolve parent of output file name"
+  createDirAll parent
+
+  writeMakeDeps outputName
+  writeFile outputName <| ← mkTex
+
+abbrev TexElab := (ref : Syntax) → Syntax → TermElabM String
+
+private unsafe
+def mkLottTexElabAttributeUnsafe (ref : Name) : IO (KeyedDeclsAttribute TexElab) := do
+  mkElabAttribute TexElab .anonymous `lott_tex_elab `Lott ``Lott.TexElab "lott" ref
+
+@[implemented_by mkLottTexElabAttributeUnsafe]
+opaque mkLottTexElabAttribute (ref : Name) : IO (KeyedDeclsAttribute TexElab)
+
+initialize lottTexElabAttribute : KeyedDeclsAttribute TexElab ← mkLottTexElabAttribute decl_name%
+
+private
+def texElabIdx : Syntax → TermElabM String
+  | .ident _ _ val _ => pure <| val.toString false |>.texEscape
+  | .node _ `num #[.atom _ raw] => pure raw.texEscape
+  | _ => throwUnsupportedSyntax
+
+private
+def texElabMetavar : TexElab := fun
+  | _, .node _ _ #[.ident _ _ val _]
+  | _, .node _ _ #[.ident _ _ val _, .atom _ "$", .node _ `num _] =>
+    return val.toString false |>.texEscape
+  | ref, .node _ _ #[«fun», .atom _ "@", idx] => do
+    let funTex ← texElabMetavar ref «fun»
+    let idxTex ← texElabIdx idx
+    return s!"\{{funTex}}_\{{idxTex}}"
+  | _, _ => throwUnsupportedSyntax
+
+mutual
+
+private
+def texElabVariable : TexElab := fun
+  | _, .node _ _ #[.node _ _ #[.ident _ _ val _] ] => return val.toString false |>.texEscape
+  | ref, .node info kind #[.node _ _ #[«fun», .atom _ "@", idx] ] => do
+    let funTex ← texElabVariable ref <| .node info kind #[«fun»]
+    let idxTex ← texElabIdx idx
+    return s!"\{{funTex}}_\{{idxTex}}"
+  | ref, .node _ catName #[
+      base@(.node _ catName₀ _),
+      .atom _ "[",
+      val@(.node _ symbolPrefixedValName _),
+      .atom _ "/",
+      var@(.node _ symbolPrefixedVarName _),
+      .atom _ "]"
+    ] => do
+    if catName != catName₀ then
+      throwUnsupportedSyntax
+
+    if !symbolPrefix.isPrefixOf catName then throwUnsupportedSyntax
+    if !symbolPrefix.isPrefixOf symbolPrefixedValName then throwUnsupportedSyntax
+    if !symbolPrefix.isPrefixOf symbolPrefixedVarName then throwUnsupportedSyntax
+
+    let baseTex ← texElabSymbolOrJudgement catName ref base
+    let valTex ← texElabSymbolOrJudgement symbolPrefixedValName ref val
+    let varTex ← texElabSymbolOrJudgement symbolPrefixedVarName ref var
+
+    return s!"{baseTex}\\left[{valTex}/{varTex}\\right]"
+  | ref, .node _ catName #[
+      base@(.node _ catName₀ _),
+      .atom _ "^",
+      var@(.node _ symbolPrefixedVarName _),
+      .node _ `null level
+    ] => do
+    if catName != catName₀ then
+      throwUnsupportedSyntax
+
+    if !symbolPrefix.isPrefixOf catName then throwUnsupportedSyntax
+    if !symbolPrefix.isPrefixOf symbolPrefixedVarName then throwUnsupportedSyntax
+
+    let baseTex ← texElabSymbolOrJudgement catName ref base
+    let varTex ← texElabSymbolOrJudgement symbolPrefixedVarName ref var
+
+    if !(← getOptions).get lott.tex.locallyNameless.name lott.tex.locallyNameless.defValue then
+      return baseTex
+
+    if let some level := level[1]? then
+      let levelTex ← texElabIdx level
+      return s!"\{{baseTex}}^\{{varTex}#{levelTex}}"
+    else
+      return s!"\{{baseTex}}^\{{varTex}}"
+  | ref, .node _ catName #[
+      base@(.node _ catName₀ _),
+      .atom _ "^^",
+      val@(.node _ symbolPrefixedValName _),
+      .node _ `null level,
+      altRef@(.node _ `null locallyNamelessSubstAlternative)
+    ] => do
+    if catName != catName₀ then
+      throwUnsupportedSyntax
+
+    if !symbolPrefix.isPrefixOf catName then throwUnsupportedSyntax
+    if !symbolPrefix.isPrefixOf symbolPrefixedValName then throwUnsupportedSyntax
+
+    let baseTex ← texElabSymbolOrJudgement catName ref base
+    let valTex ← texElabSymbolOrJudgement symbolPrefixedValName ref val
+
+    if !(← getOptions).get lott.tex.locallyNameless.name lott.tex.locallyNameless.defValue then
+      let varTex ← match locallyNamelessSubstAlternative with
+        |  #[.atom _ "/", var@(.node _ symbolPrefixedVarName _)] =>
+          if !symbolPrefix.isPrefixOf symbolPrefixedVarName then
+            throwUnsupportedSyntax
+
+          texElabSymbolOrJudgement symbolPrefixedVarName ref var
+        | #[] =>
+          logErrorAt altRef
+            "variable name must be provided with '/x' for alternative tex substitution rendering when lott.tex.locallyNameless is set to false"
+          throwUnsupportedSyntax
+        | _ => throwUnsupportedSyntax
+      return s!"{baseTex}\\left[{valTex}/{varTex}\\right]"
+
+    if let some level := level[1]? then
+      let levelTex ← texElabIdx level
+      return s!"\{{baseTex}}^\{{valTex}#{levelTex}}"
+    else
+      return s!"\{{baseTex}}^\{{valTex}}"
+  | ref, .node _ catName #[
+      .atom _ "\\",
+      var@(.node _ symbolPrefixedVarName _),
+      .node _ `null level,
+      .atom _ "^",
+      base@(.node _ catName₀ _)
+    ] => do
+    if catName != catName₀ then
+      throwUnsupportedSyntax
+
+    if !symbolPrefix.isPrefixOf catName then throwUnsupportedSyntax
+    if !symbolPrefix.isPrefixOf symbolPrefixedVarName then throwUnsupportedSyntax
+
+    let baseTex ← texElabSymbolOrJudgement catName ref base
+    let varTex ← texElabSymbolOrJudgement symbolPrefixedVarName ref var
+
+    if !(← getOptions).get lott.tex.locallyNameless.name lott.tex.locallyNameless.defValue then
+      return s!"\{{baseTex}}"
+
+    if let some level := level[1]? then
+      let levelTex ← texElabIdx level
+      return s!"\\leftidx\{{varTex}#{levelTex}}\{{baseTex}}\{}"
+    else
+      return s!"\\leftidx\{{varTex}}\{{baseTex}}\{}"
+  | ref, .node _ parentCatName #[stx@(.node _ childCatName _)] => do
+    let some parentQualified := parentCatName.erasePrefix? symbolPrefix | throwUnsupportedSyntax
+    let some childQualified := childCatName.erasePrefix? symbolPrefix | throwUnsupportedSyntax
+    let some { parent, .. } := childExt.getState (← getEnv) |>.find? childQualified | throwUnsupportedSyntax
+    if parent != parentQualified then throwUnsupportedSyntax
+
+    texElabSymbolOrJudgement childCatName ref stx
+  | _, _ => throwUnsupportedSyntax
+
+def texElabSymbolOrJudgement (catName : Name) (ref stx : Syntax) : TermElabM String := do
+  let env ← getEnv
+  let texPrePost? := do
+    let qualified ← catName.erasePrefix? symbolPrefix
+    let { texPrePost?, .. } ← symbolExt.getState env |>.find? qualified
+    texPrePost?
+
+  let rawTex ← match lottTexElabAttribute.getEntries (← getEnv) catName with
+    | [] =>
+      try
+        (try texElabMetavar ref stx catch _ => texElabVariable ref stx)
+      catch _ =>
+        throwErrorAt ref
+          "tex elaboration function for '{catName}' has not been implemented{indentD stx}"
+    | elabFns =>
+      try texElabWithFns elabFns catch ex =>
+        (try texElabMetavar ref stx catch _ =>
+          (try texElabVariable ref stx catch _ => throw ex))
+
+  if let some (texPre, texPost) := texPrePost? then
+    return s!"{texPre} {rawTex} {texPost}"
+  else
+    return rawTex
+where
+  texElabWithFns
+    | [] => unreachable!
+    | [elabFn] => elabFn.value ref stx
+    | elabFn :: elabFns => do
+      try
+        elabFn.value ref stx
+      catch ex => match ex with
+        | .internal id _ =>
+          if id == unsupportedSyntaxExceptionId then texElabWithFns elabFns else throw ex
+        | _ => throw ex
+
+end
 
 private
 def resolveSymbol (symbolName : Ident) (allowSuffix := true) : CommandElabM Name := do
@@ -71,16 +313,7 @@ where
       resolveOpensNames name state acc decls
 
 private
-def variablePrefix := `Lott.Variable
-
-private
 def judgementPrefix := `Lott.Judgement
-
-private
-def _root_.Lean.Name.getFinal : Name → Name
-  | .anonymous => .anonymous
-  | .str _ s => .str .anonymous s
-  | .num _ n => .num .anonymous n
 
 partial
 def _root_.Lott.IR.ofStx (stx : TSyntax `stx) (l? : Option Ident := none) : CommandElabM IR := do
@@ -121,7 +354,7 @@ def _root_.Lean.Syntax.mkMap (collection pat body : Term) (mapName : Name) : Mac
   `($(collection).$(mkIdent mapName):ident fun $pat => $body)
 
 private partial
-def _root_.Lott.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binders : Array Name)
+def _root_.Lott.IR.toMacroSeqItems (ir : Array IR) (canon : Name) (ids binders : Array Name)
   : CommandElabM (TSyntaxArray ``Lean.Parser.Term.doSeqItem) :=
   ir.filterMapM fun
     | mk l (.category _) => do
@@ -133,7 +366,7 @@ def _root_.Lott.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binders : 
     | mk l (.sepBy ir sep) => do
       let catName := sepByPrefix ++ (← getCurrNamespace) ++ canon ++ l.getId |>.obfuscateMacroScopes
       let patternArgs ← IR.toPatternArgs ir
-      let seqItems ← IR.toTermSeqItems ir canon ids binders
+      let seqItems ← IR.toMacroSeqItems ir canon ids binders
       let exprArgs ← IR.toExprArgs ir ids binders
       let go ← mkFreshIdent l
 
@@ -176,9 +409,9 @@ def _root_.Lott.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binders : 
               pure x
           | none => pure <| mkIdent ``List.nil)
     | mk l (.optional ir) => do
-      let catName := sepByPrefix ++ (← getCurrNamespace) ++ canon ++ l.getId |>.obfuscateMacroScopes
+      let catName := optionalPrefix ++ (← getCurrNamespace) ++ canon ++ l.getId |>.obfuscateMacroScopes
       let patternArgs ← IR.toPatternArgs ir
-      let seqItems ← IR.toTermSeqItems ir canon ids binders
+      let seqItems ← IR.toMacroSeqItems ir canon ids binders
       let exprArgs ← IR.toExprArgs ir ids binders
       let go ← mkFreshIdent l
 
@@ -208,6 +441,95 @@ def _root_.Lott.IR.toTermSeqItems (ir : Array IR) (canon : Name) (ids binders : 
             else
               pure <| Lean.Syntax.mkCApp ``Option.some #[x]
           | none => pure <| mkIdent ``Option.none)
+
+private partial
+def _root_.Lott.IR.toTexSeqItems (ir : Array IR) (canon : Name)
+  : CommandElabM (TSyntaxArray ``Lean.Parser.Term.doSeqItem) :=
+  return Prod.fst <| ← ir.foldrM (init := (#[], false)) fun
+    | mk l (.category n), (items, lastWasNonAtom) => do
+      let space := if lastWasNonAtom then " \\;" else ""
+      let item ← `(doSeqItem| let $l ← (· ++ $(quote space)) <$> Lott.texElabSymbolOrJudgement $(quote <| symbolPrefix ++ n) ref $l)
+      return (items.push item, true)
+    | mk l (.atom s), (items, _) =>
+      return (items.push <| ← `(doSeqItem| let $l := $(quote <| atomToTex s)), false)
+    | mk l (.sepBy ir sep), (items, lastWasNonAtom) => do
+      let catName := sepByPrefix ++ (← getCurrNamespace) ++ canon ++ l.getId |>.obfuscateMacroScopes
+      let patternArgs ← IR.toPatternArgs ir
+      let seqItems ← IR.toTexSeqItems ir canon
+      let joinArgs := IR.toJoinArgs ir
+      let go ← mkFreshIdent l
+
+      let space := if lastWasNonAtom then " \\;" else ""
+
+      let item ← `(doSeqItem| let $l ← match (Syntax.getArgs $l)[0]? with
+          | some stx =>
+            let rec $go:ident : Lean.Syntax → Lean.Elab.Term.TermElabM String
+              | Lean.Syntax.node _ $(quote catName) #[
+                  Lean.Syntax.atom _ "</",
+                  symbol,
+                  Lean.Syntax.atom _ "//",
+                  pat,
+                  Lean.Syntax.atom _ "in",
+                  collection,
+                  Lean.Syntax.atom _ "/>"
+                ] => do
+                let symbolTex ← $go:ident symbol
+                -- TODO: Optionally include pat and collection here.
+                return s!"\\overline\{{symbolTex}}"
+              | Lean.Syntax.node _ $(quote catName) #[
+                  lhs@(Lean.Syntax.node _ $(quote catName) _),
+                  Lean.Syntax.atom _ $(quote sep.trim),
+                  rhs@(Lean.Syntax.node _ $(quote catName) _)
+                ] => do
+                let lhsTex ← $go:ident lhs
+                let rhsTex ← $go:ident rhs
+                return s!"{lhsTex} {$(quote <| atomToTex sep)} {rhsTex}"
+              | Lean.Syntax.node _ $(quote catName) #[$patternArgs,*] => do
+                $seqItems*
+                return " ".intercalate [$joinArgs,*]
+              | _ => Lean.Elab.throwUnsupportedSyntax
+            let tex ← $go:ident stx
+            pure <| tex ++ $(quote space)
+          | none => pure "")
+      return (items.push item, true)
+    | mk l (.optional ir), (items, lastWasNonAtom) => do
+      let catName := optionalPrefix ++ (← getCurrNamespace) ++ canon ++ l.getId |>.obfuscateMacroScopes
+      let patternArgs ← IR.toPatternArgs ir
+      let seqItems ← IR.toTexSeqItems ir canon
+      let joinArgs := IR.toJoinArgs ir
+      let go ← mkFreshIdent l
+
+      let space := if lastWasNonAtom then " \\;" else ""
+      let item ← `(doSeqItem| let $l ← match (Syntax.getArgs $l)[0]? with
+          | some stx =>
+            let rec $go:ident : Lean.Syntax → Lean.Elab.Term.TermElabM String
+              | Lean.Syntax.node _ $(quote catName) #[
+                  Lean.Syntax.atom _ "</",
+                  symbol,
+                  Lean.Syntax.atom _ "//",
+                  cond,
+                  Lean.Syntax.atom _ "/>"
+                ] => do
+                let symbolTex ← $go:ident symbol
+                -- TODO: Optionally include cond here.
+                return s!"\\overline\{{symbolTex}}"
+              | Lean.Syntax.node _ $(quote catName) #[$patternArgs,*] => do
+                $seqItems*
+                return " ".intercalate [$joinArgs,*]
+              | _ => Lean.Elab.throwUnsupportedSyntax
+            let tex ← $go:ident stx
+            pure <| tex ++ $(quote space)
+          | none => pure "")
+      return (items.push item, true)
+where
+  atomToTex (atom : String) :=
+    let leadingWs := atom.data[0]?.map Char.isWhitespace |>.getD false
+    let trailingWs := atom.data.getLast?.map Char.isWhitespace |>.getD false
+    let tex := if atom.trim.data.all (fun c => c.isAlpha || c.isSubscriptAlpha) then
+        s!"\\lottkw\{{atom.trim.texEscape}}"
+      else
+        s!"\\lottsym\{{atom.trim.texEscape}}"
+    (if leadingWs then "\\; " else "") ++ tex ++ (if trailingWs then " \\;" else "")
 
 private partial
 def _root_.Lott.IR.toIsChildCtor (prodIdent isIdent : Ident) (qualified pqualified : Name) (ir pir : Array IR)
@@ -598,37 +920,23 @@ def symbolEmbedIdent := mkIdent ``Lott.symbolEmbed
 
 @[macro Lott.symbolEmbed]
 private
-def identImpl : Macro := fun stx => do
-  let Syntax.node _ ``Lott.symbolEmbed #[
-    .atom _ "[[",
-    .node _ _ #[ident@(Lean.Syntax.ident ..)],
-    .atom _ "]]"
-  ] := stx | Macro.throwUnsupported
-  return ident
-
-@[macro symbolEmbed]
-private
-def appImpl : Macro := fun stx => do
-  let Syntax.node _ ``Lott.symbolEmbed #[
-    .atom _ "[[",
-    .node _ _ #[«fun», .atom _ "@", idx],
-    .atom _ "]]"
-  ] := stx | Macro.throwUnsupported
-  `(([[$(.mk «fun»):Lott.Symbol]] : _ → _) $(.mk idx):term)
-
-@[macro symbolEmbed]
-private
-def boundImpl : Macro := fun stx => do
-  let Lean.Syntax.node _ ``Lott.symbolEmbed #[
-    Lean.Syntax.atom _ "[[",
-    Lean.Syntax.node _ _ #[
-      Lean.Syntax.ident ..,
-      Lean.Syntax.atom _ "$",
-      num@(Lean.Syntax.node _ `num _)
-    ],
-    Lean.Syntax.atom _ "]]"
-  ] := stx | Macro.throwUnsupported
-  `(.bound $(.mk num))
+def metavarImpl : Macro := fun
+  | .node _ ``Lott.symbolEmbed #[
+      .atom _ "[[",
+      .node _ _ #[ident@(.ident ..)],
+      .atom _ "]]"
+    ] => return ident
+  | .node _ ``Lott.symbolEmbed #[
+      .atom _ "[[",
+      .node _ _ #[«fun», .atom _ "@", idx],
+      .atom _ "]]"
+    ] => `(([[$(.mk «fun»):Lott.Symbol]] : _ → _) $(.mk idx):term)
+  | .node _ ``Lott.symbolEmbed #[
+      .atom _ "[[",
+      .node _ _ #[.ident .., .atom _ "$", num@(.node _ `num _)],
+      .atom _ "]]"
+    ] => `(.bound $(.mk num))
+  | _ => Macro.throwUnsupported
 
 elab_rules : command | `($[locally_nameless%$ln]? metavar $names,*) => do
   let names := names.getElems.toList
@@ -710,23 +1018,119 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $names,*) => do
 
 @[macro symbolEmbed]
 private
-def variableImpl : Macro := fun stx => do
-  let Syntax.node _ ``Lott.symbolEmbed #[
-    .atom _ "[[",
-    .node _ _ #[.node _ _ #[ident@(Lean.Syntax.ident ..)] ],
-    .atom _ "]]"
-  ] := stx | Macro.throwUnsupported
-  return ident
+def nonTerminalImpl : Macro := fun
+  | .node _ ``Lott.symbolEmbed #[
+      .atom _ "[[",
+      .node _ _ #[.node _ _ #[ident@(.ident ..)] ],
+      .atom _ "]]"
+    ] => return ident
+  | .node _ ``Lott.symbolEmbed #[
+      .atom _ "[[",
+      .node info kind #[.node _ _ #[«fun», .atom _ "@", idx] ],
+      .atom _ "]]"
+    ] => `(($(Syntax.mkSymbolEmbed (.node info kind #[«fun»])) : _ → _) $(.mk idx))
+  -- NOTE: Could maybe make these even more resistant to false positives on user definitions by
+  -- adding special intermediate nodes; not really any need though unless people actually run into
+  -- problems.
+  | .node _ ``Lott.symbolEmbed #[
+      .atom _ "[[",
+      .node _ catName #[
+        base@(.node _ catName₀ _),
+        .atom _ "[",
+        val@(.node _ symbolPrefixedValName _),
+        .atom _ "/",
+        var@(.node _ symbolPrefixedVarName _),
+        .atom _ "]"
+      ],
+      .atom _ "]]"
+    ] => do
+    if catName != catName₀ then
+      Macro.throwUnsupported
 
-@[macro symbolEmbed]
-private
-def varAppImpl : Macro := fun stx => do
-  let Syntax.node _ ``Lott.symbolEmbed #[
-    .atom _ "[[",
-    .node info kind #[.node _ _ #[«fun», .atom _ "@", idx] ],
-    .atom _ "]]"
-  ] := stx | Macro.throwUnsupported
-  `(($(Syntax.mkSymbolEmbed (.node info kind #[«fun»])) : _ → _) $(.mk idx))
+    let some canonQualified := catName.erasePrefix? symbolPrefix | Macro.throwUnsupported
+    if !symbolPrefix.isPrefixOf symbolPrefixedValName then Macro.throwUnsupported
+    let some varName := symbolPrefixedVarName.erasePrefix? symbolPrefix | Macro.throwUnsupported
+
+    let (_, varName) := canonQualified.removeCommonPrefixes varName
+    let substName := canonQualified ++ varName.appendAfter "_subst"
+
+    return .mkCApp substName #[
+      Syntax.mkSymbolEmbed base,
+      Syntax.mkSymbolEmbed var,
+      Syntax.mkSymbolEmbed val
+    ]
+  | .node _ ``Lott.symbolEmbed #[
+      .atom _ "[[",
+      .node _ catName #[
+        base@(.node _ catName₀ _),
+        .atom _ "^",
+        var@(.node _ symbolPrefixedVarName _),
+        .node _ `null level
+      ],
+      .atom _ "]]"
+    ] => do
+    if catName != catName₀ then
+      Macro.throwUnsupported
+
+    let some canonQualified := catName.erasePrefix? symbolPrefix | Macro.throwUnsupported
+    let some varName := symbolPrefixedVarName.erasePrefix? symbolPrefix | Macro.throwUnsupported
+
+    let (_, varName) := canonQualified.removeCommonPrefixes varName
+    let openName := canonQualified ++ varName.appendAfter "_open"
+
+    return .mkCApp openName <| #[
+      Syntax.mkSymbolEmbed base,
+      Syntax.mkSymbolEmbed var
+    ] ++ (level[1]?.map TSyntax.mk).toArray
+  | .node _ ``Lott.symbolEmbed #[
+      .atom _ "[[",
+      .node _ catName #[
+        base@(.node _ catName₀ _),
+        .atom _ "^^",
+        val@(.node _ symbolPrefixedValName _),
+        .node _ `null level,
+        .node _ `null _
+      ],
+      .atom _ "]]"
+    ] => do
+    if catName != catName₀ then
+      Macro.throwUnsupported
+
+    let some canonQualified := catName.erasePrefix? symbolPrefix | Macro.throwUnsupported
+    let some valName := symbolPrefixedValName.erasePrefix? symbolPrefix | Macro.throwUnsupported
+
+    let (_, valName) := canonQualified.removeCommonPrefixes valName
+    let openName := canonQualified ++ valName.appendAfter "_open"
+
+    return .mkCApp openName <| #[
+      Syntax.mkSymbolEmbed base,
+      Syntax.mkSymbolEmbed val
+    ] ++ (level[1]?.map TSyntax.mk).toArray
+  | .node _ ``Lott.symbolEmbed #[
+      .atom _ "[[",
+      .node _ catName #[
+        .atom _ "\\",
+        var@(.node _ symbolPrefixedVarName _),
+        .node _ `null level,
+        .atom _ "^",
+        base@(.node _ catName₀ _)
+      ],
+      .atom _ "]]"
+    ] => do
+    if catName != catName₀ then
+      Macro.throwUnsupported
+
+    let some canonQualified := catName.erasePrefix? symbolPrefix | Macro.throwUnsupported
+    let some varName := symbolPrefixedVarName.erasePrefix? symbolPrefix | Macro.throwUnsupported
+
+    let (_, varName) := canonQualified.removeCommonPrefixes varName
+    let openName := canonQualified ++ varName.appendAfter "_close"
+
+    return .mkCApp openName <| #[
+      Syntax.mkSymbolEmbed base,
+      Syntax.mkSymbolEmbed var
+    ] ++ (level[1]?.map TSyntax.mk).toArray
+  | _ => Macro.throwUnsupported
 
 private
 structure BindConfig where
@@ -751,6 +1155,8 @@ structure Production where
   expand? : Option Term
   bindConfig? : Option BindConfig
   ids : Array Name
+  «notex» : Bool
+  tex? : Option Term
 
 private
 def Production.binders (prod : Production) : Array Name :=
@@ -763,6 +1169,7 @@ structure NonTerminal where
   prods : Array Production
   parent? : Option Ident
   substitutions? : Option (Array (Name × Name))
+  texPrePost? : Option (String × String)
 
 namespace NonTerminal
 
@@ -828,7 +1235,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
   -- following steps.
   let ns ← getCurrNamespace
   for nt in nts do
-    let `(NonTerminal| $[nosubst]? nonterminal $[(parent := $parent?)]? $[$names],* := $_*) := nt
+    let `(NonTerminal| $[nosubst]? nonterminal $[(parent := $parent?)]? $[(tex pre := $_, post := $_)]? $[$names],* := $_*) := nt
       | throwUnsupportedSyntax
     let names@(canonName :: _) := names.toList | throwUnsupportedSyntax
     let canon := ns ++ canonName.getId
@@ -841,13 +1248,13 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
   -- Transform syntax into non-terminal structure.
   let nts ← nts.mapM fun nt => do
-    let `(NonTerminal| $[nosubst%$ns]? nonterminal $[(parent := $parent?)]? $[$names],* := $prods*) := nt
+    let `(NonTerminal| $[nosubst%$ns]? nonterminal $[(parent := $parent?)]? $[(tex pre := $pre?, post := $post?)]? $[$names],* := $prods*) := nt
       | throwUnsupportedSyntax
     let some canon := names[0]? | throwUnsupportedSyntax
     let aliases := names.extract 1 names.size
 
     let prodAndSubsts ← prods.mapM fun prod => do
-      let `(Production| | $[$ps]* : $name $[nosubst%$ns?]? $[$bindConfig?]? $[(id $ids?,*)]? $[(expand := $expand?)]?) := prod
+      let `(Production| | $[$ps]* : $name $[nosubst%$ns?]? $[notex%$nt?]? $[(bind $of? $[in $in??,*]?)]? $[(id $ids?,*)]? $[(expand := $expand?)]? $[(tex := $tex?)]?) := prod
         | throwUnsupportedSyntax
       let ids := ids?.getD (.mk #[]) |>.getElems
 
@@ -865,17 +1272,23 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
             logWarningAt ns "unused nosubst; production is not a candidate for substitution"
           pure none
 
-      let bindConfig? ← bindConfig?.mapM fun stx => do
-        let `(BindConfig| (bind $of $[in $in',*]?)) := stx | throwUnsupportedSyntax
-        let res := { of, in' := in'.getD (.mk #[]) : BindConfig }
-        if let some x := ids.find? (res.find? ·.getId |>.isSome) then
-          throwErrorAt x "name {x} also appears in bind config"
-        for name in toStream res do
-          if !containsName ir name.getId then
-            logWarningAt name "name not found in syntax"
-        return res
+      let bindConfig? ← match of?, in?? with
+        | some of, some in? => do
+          let res := { of, in' := in?.getD (.mk #[]) : BindConfig }
+          if let some x := ids.find? (res.find? ·.getId |>.isSome) then
+            throwErrorAt x "name {x} also appears in bind config"
+          for name in toStream res do
+            if !containsName ir name.getId then
+              logWarningAt name "name not found in syntax"
+          pure <| some res
+        | none, none => pure none
+        | _, _ => unreachable!
 
-      return ({ name, ir, expand?, bindConfig?, ids := ids.map TSyntax.getId }, subst)
+      let ids := ids.map TSyntax.getId
+      return (
+        { name, ir, expand?, bindConfig?, ids, «notex» := nt?.isSome, tex? },
+        subst
+      )
 
     let (prods, substs) := prodAndSubsts.unzip
     let qualified := (← getCurrNamespace) ++ canon.getId
@@ -887,7 +1300,12 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
     let parent? ← parent?.mapM fun parent =>
       return mkIdentFrom parent <| ← resolveSymbol parent (allowSuffix := false)
 
-    return { canon, aliases, prods, parent?, substitutions? : NonTerminal }
+    let texPrePost? := match pre?, post? with
+      | some pre, some post => some (pre.getString, post.getString)
+      | none, none => none
+      | _, _ => unreachable!
+
+    return { canon, aliases, prods, parent?, substitutions?, texPrePost? : NonTerminal }
 
   -- Define mutual inductives and parser categories.
   let defsAndInductives ← nts.mapM fun nt@{ canon, prods, parent?, .. } => do
@@ -940,25 +1358,25 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         substitutions' := substitutions'.insert subst
     return { nt with substitutions? := substitutions'.toArray : NonTerminal }
 
-  for nt@{ canon, aliases, prods, parent?, substitutions? } in nts do
+  for nt@{ canon, aliases, prods, parent?, substitutions?, texPrePost? } in nts do
     -- Add symbol to environment extension before proceeding so that lookups of things within the
     -- current mutual still work properly.
     let normalProds := prods.foldl (init := mkNameMap _) fun acc { name, ir, expand?, .. } =>
       if expand?.isNone then acc.insert name.getId ir else acc
     setEnv <| symbolExt.addEntry (← getEnv)
-      { qualified := ← nt.qualified, normalProds, substitutions := substitutions?.getD #[] }
+      { qualified := ← nt.qualified, normalProds, substitutions := substitutions?.getD #[], texPrePost? }
 
   let isLocallyNameless (varName : Name) : CommandElabM Bool :=
     return metaVarExt.getState (← getEnv) |>.find! varName
 
-  for nt@{ canon, aliases, prods, parent?, substitutions? } in nts do
+  for nt@{ canon, aliases, prods, parent?, substitutions?, .. } in nts do
     -- Define production and substitution parsers.
     let canonName := canon.getId
     let attrIdent := mkIdent <| ← nt.parserAttrName
     if parent?.isNone then
       for { name, ir, .. } in prods do
         let (val, type) ← IR.toParser ir nt.canon.getId symbolPrefix
-        let parserIdent := mkIdentFrom name <| canonName ++ name.getId |>.appendAfter "_parser"
+        let parserIdent := mkIdentFrom name <| canonName ++ name.getId.appendAfter "_parser"
         elabCommand <| ←
           `(@[Lott.Symbol_parser, $attrIdent:ident]
             private
@@ -966,7 +1384,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
     let substitutions := substitutions?.getD #[]
     for (varName, valName) in substitutions do
-      let parserIdent := mkIdent <| canonName ++ varName |>.appendAfter "_subst_parser"
+      let parserIdent := mkIdent <| canonName ++ varName.appendAfter "_subst_parser"
       elabCommand <| ←
         `(@[Lott.Symbol_parser, $attrIdent:ident]
           private
@@ -979,7 +1397,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       if !(← isLocallyNameless varName) then
         continue
 
-      let parserIdent := mkIdent <| canonName ++ varName |>.appendAfter "_open_parser"
+      let parserIdent := mkIdent <| canonName ++ varName.appendAfter "_open_parser"
       elabCommand <| ←
         `(@[Lott.Symbol_parser, $attrIdent:ident]
           private
@@ -988,16 +1406,18 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
               checkNoWsBefore >> "^" >> categoryParser $(quote <| symbolPrefix ++ varName) 0 >>
                 Parser.optional (checkNoWsBefore >> "#" >> checkLineEq >> Parser.numLit))
 
-      let parserIdent := mkIdent <| canonName ++ valName |>.appendAfter "_open_parser"
+      let parserIdent := mkIdent <| canonName ++ valName.appendAfter "_open_parser"
       elabCommand <| ←
         `(@[Lott.Symbol_parser, $attrIdent:ident]
           private
           def $parserIdent : TrailingParser :=
             trailingNode $(quote <| ← nt.catName) Parser.maxPrec 0 <|
               checkNoWsBefore >> "^^" >> categoryParser $(quote <| symbolPrefix ++ valName) 0 >>
-                Parser.optional (checkNoWsBefore >> "#" >> checkLineEq >> Parser.numLit))
+                Parser.optional (checkNoWsBefore >> "#" >> checkLineEq >> Parser.numLit) >>
+                Parser.optional (checkNoWsBefore >> "/" >> checkLineEq >>
+                  categoryParser $(quote <| symbolPrefix ++ varName) 0))
 
-      let parserIdent := mkIdent <| canonName ++ varName |>.appendAfter "_close_parser"
+      let parserIdent := mkIdent <| canonName ++ varName.appendAfter "_close_parser"
       elabCommand <| ←
         `(@[Lott.Symbol_parser, $attrIdent:ident]
           private
@@ -1049,17 +1469,18 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
             leadingNode $(quote parentParserCatName) Parser.maxPrec <|
               categoryParser $(quote <| ← nt.catName) 0)
 
-    -- Define macros.
+    -- Define macros and tex elaborations.
     let catName ← nt.catName
     let catIdent := mkIdent catName
-    for prod@{ name, ir, expand?, ids, .. } in prods do
+    for prod@{ name, ir, expand?, ids, tex?, .. } in prods do
       let patternArgs ← IR.toPatternArgs ir
-      let seqItems ← IR.toTermSeqItems ir canon.getId ids prod.binders
+
+      let macroSeqItems ← IR.toMacroSeqItems ir canon.getId ids prod.binders
       let rest ← expand?.getDM do
         let exprArgs ← IR.toExprArgs ir ids prod.binders
         `(return Syntax.mkCApp $(quote <| ns ++ canonName ++ name.getId) #[$exprArgs,*])
 
-      let macroName := mkIdentFrom name <| canonName ++ name.getId |>.appendAfter "Impl"
+      let macroName := mkIdentFrom name <| canonName ++ name.getId.appendAfter "Impl"
       elabCommand <| ←
         `(@[macro $symbolEmbedIdent]
           private
@@ -1069,102 +1490,23 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
               Lean.Syntax.node _ $(quote catName) #[$patternArgs,*],
               Lean.Syntax.atom _ "]]"
             ] := stx | Macro.throwUnsupported
-            $seqItems*
+            $macroSeqItems*
             $rest:term)
 
-    -- TODO: Figure out how normal open and close should work when a varName appears more than once.
-    for (varName, valName) in substitutions do
-      let substName := ns ++ canonName ++ (← substName varName)
-      let macroName :=
-        mkIdentFrom canon <| canonName ++ varName ++ `Subst ++ valName |>.appendAfter "Impl"
-      elabCommand <| ←
-        `(@[macro $symbolEmbedIdent]
-          private
-          def $macroName : Macro := fun stx => do
-            let Lean.Syntax.node _ ``Lott.symbolEmbed #[
-              Lean.Syntax.atom _ "[[",
-              Lean.Syntax.node _ $(quote catName) #[
-                base@(Lean.Syntax.node _ $(quote catName) _),
-                Lean.Syntax.atom _ "[",
-                val@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ valName) _),
-                Lean.Syntax.atom _ "/",
-                var@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ varName) _),
-                Lean.Syntax.atom _ "]"
-              ],
-              Lean.Syntax.atom _ "]]"
-            ] := stx | Macro.throwUnsupported
-            return Syntax.mkCApp $(quote substName) #[
-              Lott.Syntax.mkSymbolEmbed base,
-              Lott.Syntax.mkSymbolEmbed var,
-              Lott.Syntax.mkSymbolEmbed val
-            ])
+      let texSeqItems ← IR.toTexSeqItems ir canon.getId
+      let rest ← tex?.getDM do
+        let joinArgs := IR.toJoinArgs ir
+        `(" ".intercalate [$joinArgs,*])
 
-      if !(← isLocallyNameless varName) then
-        continue
-
-      let macroName := mkIdentFrom canon <| canonName ++ varName ++ `Open |>.appendAfter "Impl"
-      let varOpenName := ns ++ canonName ++ (← openName varName)
+      let texElabName := mkIdentFrom name <| canonName ++ name.getId.appendAfter "TexElab"
       elabCommand <| ←
-        `(@[macro $symbolEmbedIdent]
+        `(@[lott_tex_elab $catIdent]
           private
-          def $macroName : Macro := fun stx => do
-            let Lean.Syntax.node _ ``Lott.symbolEmbed #[
-              Lean.Syntax.atom _ "[[",
-              Lean.Syntax.node _ $(quote catName) #[
-                base@(Lean.Syntax.node _ $(quote catName) _),
-                Lean.Syntax.atom _ "^",
-                var@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ varName) _),
-                Lean.Syntax.node _ `null level
-              ],
-              Lean.Syntax.atom _ "]]"
-            ] := stx | Macro.throwUnsupported
-            return Syntax.mkCApp $(quote varOpenName) <| #[
-              Lott.Syntax.mkSymbolEmbed base,
-              Lott.Syntax.mkSymbolEmbed var
-            ] ++ (level[1]?.map TSyntax.mk).toArray)
-
-      let macroName := mkIdentFrom canon <| canonName ++ valName ++ `Open |>.appendAfter "Impl"
-      let valOpenName := ns ++ canonName ++ (← openName valName)
-      elabCommand <| ←
-        `(@[macro $symbolEmbedIdent]
-          private
-          def $macroName : Macro := fun stx => do
-            let Lean.Syntax.node _ ``Lott.symbolEmbed #[
-              Lean.Syntax.atom _ "[[",
-              Lean.Syntax.node _ $(quote catName) #[
-                base@(Lean.Syntax.node _ $(quote catName) _),
-                Lean.Syntax.atom _ "^^",
-                val@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ valName) _),
-                Lean.Syntax.node _ `null level
-              ],
-              Lean.Syntax.atom _ "]]"
-            ] := stx | Macro.throwUnsupported
-            return Syntax.mkCApp $(quote valOpenName) <| #[
-              Lott.Syntax.mkSymbolEmbed base,
-              Lott.Syntax.mkSymbolEmbed val
-            ] ++ (level[1]?.map TSyntax.mk).toArray)
-
-      let macroName := mkIdentFrom canon <| canonName ++ varName ++ `Close |>.appendAfter "Impl"
-      let closeName := ns ++ canonName ++ (← closeName varName)
-      elabCommand <| ←
-        `(@[macro $symbolEmbedIdent]
-          private
-          def $macroName : Macro := fun stx => do
-            let Lean.Syntax.node _ ``Lott.symbolEmbed #[
-              Lean.Syntax.atom _ "[[",
-              Lean.Syntax.node _ $(quote catName) #[
-                Lean.Syntax.atom _ "\\",
-                var@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ varName) _),
-                Lean.Syntax.node _ `null level,
-                Lean.Syntax.atom _ "^",
-                base@(Lean.Syntax.node _ $(quote catName) _)
-              ],
-              Lean.Syntax.atom _ "]]"
-            ] := stx | Macro.throwUnsupported
-            return Syntax.mkCApp $(quote closeName) <| #[
-              Lott.Syntax.mkSymbolEmbed base,
-              Lott.Syntax.mkSymbolEmbed var
-            ] ++ (level[1]?.map TSyntax.mk).toArray)
+          def $texElabName : TexElab := fun ref stx => do
+            let Lean.Syntax.node _ $(quote catName) #[$patternArgs,*] := stx
+              | throwUnsupportedSyntax
+            $texSeqItems*
+            return $rest)
 
     if let some parent := parent? then
       let qualified ← nt.qualified
@@ -1204,7 +1546,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
     let varId ← mkFreshIdent varTypeId
     let valId ← mkFreshIdent valTypeId
 
-    let substDefs ← nts.filterMapM fun nt@{ canon, aliases, prods, parent?, substitutions? } => do
+    let substDefs ← nts.filterMapM fun nt@{ canon, prods, substitutions?, .. } => do
       if !(substitutions?.getD #[]).contains subst then
         return none
 
@@ -1249,7 +1591,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
     let idxId ← mkFreshIdent varTypeId
 
-    let varOpenDefs ← nts.filterMapM fun nt@{ canon, aliases, prods, parent?, substitutions? } => do
+    let varOpenDefs ← nts.filterMapM fun nt@{ canon, prods, substitutions?, .. } => do
       if !(substitutions?.getD #[]).contains subst then
         return none
 
@@ -1288,7 +1630,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
     elabMutualCommands varOpenDefs
 
-    let valOpenDefs ← nts.filterMapM fun nt@{ canon, aliases, prods, parent?, substitutions? } => do
+    let valOpenDefs ← nts.filterMapM fun nt@{ canon, prods, substitutions?, .. } => do
       if !(substitutions?.getD #[]).contains subst then
         return none
 
@@ -1331,7 +1673,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
     elabMutualCommands valOpenDefs
 
-    let closeDefs ← nts.filterMapM fun nt@{ canon, aliases, prods, parent?, substitutions? } => do
+    let closeDefs ← nts.filterMapM fun nt@{ canon, prods, substitutions?, .. } => do
       if !(substitutions?.getD #[]).contains subst then
         return none
 
@@ -1371,7 +1713,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
     elabMutualCommands closeDefs
 
     let freeDefs ←
-      nts.filterMapM fun nt@{ canon, aliases, prods, parent?, substitutions? } => do
+      nts.filterMapM fun nt@{ canon, prods, substitutions?, .. } => do
         if !(substitutions?.getD #[]).contains subst then
           return none
 
@@ -1384,19 +1726,36 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
     elabMutualCommands freeDefs
 
-    let locallyClosedInductives ←
-      nts.filterMapM fun nt@{ canon, aliases, prods, parent?, substitutions? } => do
-        if !(substitutions?.getD #[]).contains subst then
-          return none
+    let locallyClosedInductives ← nts.filterMapM fun nt@{ canon, prods, substitutions?, .. } => do
+      if !(substitutions?.getD #[]).contains subst then
+        return none
 
-        let locallyClosedId := mkIdent <| ← locallyClosedName varTypeName <| ← nt.qualified
-        let ctors ← prods.mapM fun prod@{ name, ir, expand?, ids, .. } => do
-          let none := expand? | return #[]
-          toLocallyClosedCtors name locallyClosedId idxId (← nt.qualified) ir subst ids prod.binders
-        return some <| ←
-          `(inductive $locallyClosedId : $canon → (optParam Nat 0) → Prop where $ctors.flatten*)
+      let locallyClosedId := mkIdent <| ← locallyClosedName varTypeName <| ← nt.qualified
+      let ctors ← prods.mapM fun prod@{ name, ir, expand?, ids, .. } => do
+        let none := expand? | return #[]
+        toLocallyClosedCtors name locallyClosedId idxId (← nt.qualified) ir subst ids prod.binders
+      return some <| ←
+        `(inductive $locallyClosedId : $canon → (optParam Nat 0) → Prop where $ctors.flatten*)
 
     elabMutualCommands locallyClosedInductives
+
+  -- Write tex output.
+  for nt@{ canon, aliases, prods, .. } in nts do
+    writeTexOutput (ns ++ canon.getId) do
+      let canonTex := canon.getId.getFinal.getString!.pascalToTitle.texEscape
+      let aliasesTex := "\\lottaliassep".intercalate <|
+        aliases.toList.map (s!"\\lottalias\{{·.getId.getFinal.getString!.texEscape}}")
+      let productionTexs ← prods.filterMapM fun { name, ir, «notex», .. } => do
+        if «notex» then return none
+
+        let canonQualified := ns ++ canon.getId
+        let catName ← nt.catName
+        let exampleStx := mkNode catName <| ← IR.toExampleSyntax ir canonQualified
+        let productionTex ← liftTermElabM <| texElabSymbolOrJudgement catName name exampleStx
+        return some s!"\\lottproduction\{{productionTex}}"
+      let productionsTex := "\\lottproductionsep".intercalate productionTexs.toList
+      return s!"\\lottnonterminal\{{canonTex}}\{{aliasesTex}}\{{productionsTex}}\n"
+
 
 elab_rules : command
   | `($nt:Lott.NonTerminal) => elabNonTerminals #[nt]
@@ -1404,7 +1763,7 @@ elab_rules : command
 
 /- Judgement syntax. -/
 
-elab_rules : command | `(judgement_syntax $[$ps]* : $name $[(id $ids?,*)]?) => do
+elab_rules : command | `(judgement_syntax $[$ps]* : $name $[(id $ids?,*)]? $[(tex := $tex?)]?) => do
   -- Declare syntax category.
   let ns ← getCurrNamespace
   let qualified := ns ++ name.getId
@@ -1428,9 +1787,11 @@ elab_rules : command | `(judgement_syntax $[$ps]* : $name $[(id $ids?,*)]?) => d
 
   -- Define macro.
   let patternArgs ← IR.toPatternArgs ir
-  let termSeqItems ← IR.toTermSeqItems ir name.getId ids #[]
+
+  let macroSeqItems ← IR.toMacroSeqItems ir name.getId ids #[]
   let exprArgs ← IR.toExprArgs ir ids #[]
   let catIdent := mkIdent catName
+
   let macroName := mkIdentFrom name <| name.getId.appendAfter "Impl"
   elabCommand <| ←
     `(@[macro $(mkIdent `Lott.judgementEmbed)]
@@ -1441,8 +1802,23 @@ elab_rules : command | `(judgement_syntax $[$ps]* : $name $[(id $ids?,*)]?) => d
           Lean.Syntax.node _ $(quote catName) #[$patternArgs,*],
           Lean.Syntax.atom _ "]]"
         ] := stx | Macro.throwUnsupported
-        $termSeqItems*
+        $macroSeqItems*
         return Syntax.mkApp (mkIdent $(quote qualified)) #[$exprArgs,*])
+
+  let texSeqItems ← IR.toTexSeqItems ir name.getId
+  let rest ← tex?.getDM do
+    let joinArgs := IR.toJoinArgs ir
+    `(term| " ".intercalate [$joinArgs,*])
+
+  let texElabName := mkIdentFrom name <| name.getId.appendAfter "TexElab"
+  elabCommand <| ←
+    `(@[lott_tex_elab $catIdent]
+      private
+      def $texElabName : TexElab := fun ref stx => do
+        let Lean.Syntax.node _ $(quote catName) #[$patternArgs,*] := stx
+          | throwUnsupportedSyntax
+        $texSeqItems*
+        return $rest)
 
 private
 def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
@@ -1450,24 +1826,50 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
   let inductives ← jds.mapM fun jd => do
     let `(JudgementDecl| judgement $name := $rules*) := jd | throwUnsupportedSyntax
 
-    let catName := ns ++ name.getId
-    let .some { ir, ids, .. } := judgementExt.getState (← getEnv) |>.byName.find? catName
+    let qualified := ns ++ name.getId
+    let .some { ir, ids, .. } := judgementExt.getState (← getEnv) |>.byName.find? qualified
       | throwError "judgement_syntax for {name} not given before use in judgement"
 
     let type ← IR.toTypeArrSeq ir (← `(term| Prop)) ids #[]
+    let catName := judgementPrefix ++ qualified
     let ctors ← rules.mapM fun rule => do
-      let `(InferenceRule| $jms:Lott.Judgement* $[─]* $name $binders* $conclusion:Lott.Judgement) := rule
+      let `(InferenceRule| $hyps:Lott.Judgement* $[─]* $name $binders* $[notex%$nt?]? $conclusion:Lott.Judgement) := rule
         | throwUnsupportedSyntax
       let conclusionKind := conclusion.raw.getKind
-      let expectedKind := judgementPrefix ++ catName
-      if conclusionKind != expectedKind then
+      if conclusionKind != catName then
         throwErrorAt conclusion
           "found conclusion judgement syntax kind{indentD conclusionKind}\
-          expected to find kind{indentD expectedKind}\
+          expected to find kind{indentD catName}\
           all conclusions of inference rules in a judgement declaration must be the judgement which is being defined"
-      let ctorType ← jms.foldrM (init := ← `(term| [[$conclusion:Lott.Judgement]]))
+
+      let ctorType ← hyps.foldrM (init := ← `(term| [[$conclusion:Lott.Judgement]]))
         fun «judgement» acc => `([[$«judgement»:Lott.Judgement]] → $acc)
       `(ctor| | $name:ident $binders* : $ctorType)
+
+    writeTexOutput qualified do
+      let nameTex := name.getId.getFinal.getString!.pascalToTitle.texEscape
+      let exampleStx := mkNode catName <| ← IR.toExampleSyntax ir qualified
+      let syntaxTex ← liftTermElabM <| texElabSymbolOrJudgement catName name exampleStx
+      let inferenceRuleTexs ← rules.filterMapM fun rule => do
+        let `(InferenceRule| $hyps:Lott.Judgement* $[─]* $name $_* $[notex%$nt?]? $conclusion:Lott.Judgement) := rule
+          | throwUnsupportedSyntax
+
+        if nt?.isSome then
+          return none
+
+        let nameTex := name.getId.getFinal.getString!.texEscape
+        let hypothesesTexs ← hyps.filterMapM fun
+          | `(Judgement| $_:Lott.Judgement notex) => return none
+          | hyp => do
+            let hypTex ← liftTermElabM <| texElabSymbolOrJudgement hyp.getKind hyp hyp
+            return s!"\\lotthypothesis\{{hypTex}}"
+        let hypothesesTex := "\\lotthypothesissep".intercalate hypothesesTexs.toList
+        let conclusionTex ← liftTermElabM <| texElabSymbolOrJudgement catName conclusion conclusion
+        return s!"\\lottinferencerule\{{nameTex}}\{{hypothesesTex}}\{{conclusionTex}}"
+
+      let inferenceRulesTex := "\\lottinferencerulesep".intercalate inferenceRuleTexs.toList
+      return s!"\\lottjudgement\{{nameTex}}\{{syntaxTex}}\{{inferenceRulesTex}}\n"
+
     `(inductive $name : $type where $ctors*)
   elabMutualCommands inductives
 
@@ -1477,29 +1879,41 @@ elab_rules : command
 
 /- Term embedding syntax. -/
 
-/-
-You can't put a hole inside an embedding to ignore something, so it's generally desirable to not be
-bugged about embedding pattern variables being unused.
--/
-register_option linter.unusedVariables.lottSymbolEmbeddingPatternVars : Bool := {
-  defValue := false
-  descr :=
-    "enable the 'unused variables' linter to mark unused lott symbol embedding pattern variables"
-}
+@[macro qualifiedSymbolEmbed]
+def qualifiedSymbolEmbedImpl : Macro := fun stx =>
+  return Lott.Syntax.mkSymbolEmbed <| stx.getArg 3
 
-def getLinterUnusedVariablesLottSymbolEmbeddingPatternVars (o : Options) : Bool :=
-  o.get linter.unusedVariables.lottSymbolEmbeddingPatternVars.name
-    (Lean.Linter.getLinterUnusedVariables o &&
-      linter.unusedVariables.lottSymbolEmbeddingPatternVars.defValue)
+/- External interaction syntax. -/
 
-@[unused_variables_ignore_fn]
-private
-def symbolEmbeddingPatternVars : Lean.Linter.IgnoreFunction := fun _ stack opts =>
-  !getLinterUnusedVariablesLottSymbolEmbeddingPatternVars opts && (
-    let stackBeforeMatchAlt := stack.takeWhile fun (stx, _) =>
-      !stx.isOfKind ``Lean.Parser.Term.matchAlt
-    stackBeforeMatchAlt.length != stack.length &&
-      stackBeforeMatchAlt.any fun (stx, _) => stx.isOfKind ``Lott.symbolEmbed
-  )
+elab_rules : command
+  | `(#filter $inputName:str $[$outputName?:str]?) => do
+    let some parent := FilePath.parent <| ← getFileName
+      | throwError "failed to resolve parent of current file"
+    let input ← readFile <| parent / inputName.getString
+
+    let s := mkParserState input
+    let ictx := mkInputContext input inputName.getString
+    let env ← getEnv
+    let s := filterParserFn.run ictx { env, options := {} } (getTokenTable env) s
+    if !s.allErrors.isEmpty then
+      throwError s.toErrorMsg ictx
+    else if !ictx.input.atEnd s.pos then
+      throwError s.mkError "end of input" |>.toErrorMsg ictx
+
+    let output ← s.stxStack.toSubarray.toArray.filterMapM fun
+      | .node _ `Lott.NonEmbed #[.atom _ s] => return s
+      | stx => do
+        let s ← liftTermElabM <| texElabSymbolOrJudgement stx.getKind inputName stx
+        return "$" ++ s ++ "$"
+
+    let some outputName := outputName?.map TSyntax.getString |>.orElse
+      fun () => inputName.getString.dropSuffix? ".lotttmpl" |>.map Substring.toString
+      | throwErrorAt inputName
+          "#filter input name must end with '.lotttmpl' if output name is omitted"
+    let outputName := parent / outputName
+
+    -- TODO: Make the output path here relative if possible.
+    writeMakeDeps outputName
+    liftIO <| writeFile outputName <| String.join output.toList
 
 end Lott

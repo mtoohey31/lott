@@ -5,7 +5,7 @@ import Lott.Elab.UniversalJudgement
 
 namespace LottExamples.STLC
 
-nonterminal Type', τ :=
+nonterminal «Type», τ :=
   | τ₀ " → " τ₁ : arr
 
 locally_nameless
@@ -19,7 +19,7 @@ nonterminal Term, e :=
   | x             : var
   | "λ " x ". " e : lam (bind x in e)
   | e₀ e₁         : app
-  | "(" e ")"     : paren (expand := return e)
+  | "(" e ")"     : paren notex (expand := return e)
 
 namespace Term
 
@@ -84,7 +84,7 @@ end Term.NotInFreeVars
 nonterminal Environment, Γ :=
   | "ε"              : empty
   | Γ ", " x " : " τ : ext (id x)
-  | Γ₀ ", " Γ₁       : append (expand := return .mkCApp `LottExamples.STLC.Environment.append #[Γ₀, Γ₁])
+  | Γ₀ ", " Γ₁       : append notex (expand := return .mkCApp `LottExamples.STLC.Environment.append #[Γ₀, Γ₁])
 
 namespace Environment
 
@@ -338,8 +338,8 @@ x : τ ∈ Γ
 ───────── var
 Γ ⊢ x : τ
 
-∀ x ∉ (I : List _), Γ, x : τ₀ ⊢ e^x : τ₁
-──────────────────────────────────────── lam
+∀ x ∉ I, Γ, x : τ₀ ⊢ e^x : τ₁
+───────────────────────────── lam {I : List VarId}
 Γ ⊢ λ x. e : τ₀ → τ₁
 
 Γ ⊢ e₀ : τ₀ → τ₁
@@ -428,8 +428,8 @@ e₁ ↦ e₁'
 ────────────── appr
 e₀ e₁ ↦ e₀ e₁'
 
-───────────────── lamApp
-(λ x. e) v ↦ e^^v
+─────────────────── lamApp
+(λ x. e) v ↦ e^^v/x
 
 namespace Reduction
 

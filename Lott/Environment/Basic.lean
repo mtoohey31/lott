@@ -38,9 +38,15 @@ structure Symbol where
   qualified : Name
   normalProds : NameMap (Array IR)
   substitutions : Array (Name × Name)
+  texPrePost? : Option (String × String)
 
 instance : Inhabited Symbol where
-  default := { qualified := default, normalProds := default, substitutions := default }
+  default := {
+    qualified := default
+    normalProds := default
+    substitutions := default
+    texPrePost? := default
+  }
 
 abbrev SymbolState := NameMap Symbol
 
