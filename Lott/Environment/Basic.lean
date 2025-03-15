@@ -10,8 +10,9 @@ open Lean.Data
 structure Alias where
   canon : Name
   alias : Name
+  tex? : Option String
 
-instance : Inhabited Alias where default := { canon := default, alias := default }
+instance : Inhabited Alias where default := { canon := default, alias := default, tex? := default }
 
 structure AliasState where
   byAlias : Trie Alias
@@ -38,9 +39,15 @@ structure Symbol where
   qualified : Name
   normalProds : NameMap (Array IR)
   substitutions : Array (Name × Name)
+  texPrePost? : Option (String × String)
 
 instance : Inhabited Symbol where
-  default := { qualified := default, normalProds := default, substitutions := default }
+  default := {
+    qualified := default
+    normalProds := default
+    substitutions := default
+    texPrePost? := default
+  }
 
 abbrev SymbolState := NameMap Symbol
 

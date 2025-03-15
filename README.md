@@ -4,7 +4,7 @@ An [ott](https://github.com/ott-lang/ott)-like DSL embedded in Lean.
 
 ![lott](https://github.com/user-attachments/assets/671b89f7-fba0-4a90-bfed-dd01c0f8c9db)
 
-See the [`LottExamples`](LottExamples) directory for usage examples. Latex output is still a work in progress.
+See the [`LottExamples`](LottExamples) directory for usage examples.
 
 ## References
 
