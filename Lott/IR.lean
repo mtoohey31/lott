@@ -1,5 +1,7 @@
 import Lean
+import Lott.Data.Option
 import Lott.Environment.MetaVar
+import Lott.Parser
 
 namespace Lott
 
@@ -11,9 +13,13 @@ open Lean.Parser
 open Lean.Parser.Command
 open Lean.Parser.Term
 
+def optionalPrefix := `Lott.Optional
+
 def symbolPrefix := `Lott.Symbol
 
 def sepByPrefix := `Lott.SepBy
+
+def variablePrefix := `Lott.Variable
 
 -- Useful for avoiding "un-uniqueification" resulting from the use of `eraseMacroScopes`.
 def _root_.Lean.Name.obfuscateMacroScopes (n : Name) : Name :=
@@ -73,8 +79,9 @@ def toParser' (canon : Name) : IR → CommandElabM Term
         private
         def $comprehensionIdent : Parser :=
           leadingNode $(quote catName) Parser.maxPrec <|
-            "</ " >> withPosition (categoryParser $(quote catName) 0) >>
-              " // " >> termParser >> " in " >> termParser >> " />")
+            "</ " >> withPosition (categoryParser $(quote catName) 0) >> " // " >>
+              optional (atomic strLitTexConfig) >> termParser >> " in " >> termParser >>
+              optional " notex" >> " />")
 
     let sepIdent := mkIdentFrom l <| canon'.appendAfter "_sep_parser"
     elabCommand <| ←
@@ -87,13 +94,13 @@ def toParser' (canon : Name) : IR → CommandElabM Term
     ``(Parser.optional (categoryParser $(quote catName) 0))
   | mk l (.optional ir) => do
     let canon' := canon ++ l.getId |>.obfuscateMacroScopes
-    let catName := sepByPrefix ++ (← getCurrNamespace) ++ canon'
+    let catName := optionalPrefix ++ (← getCurrNamespace) ++ canon'
     let parserAttrName := catName.appendAfter "_parser"
 
     setEnv <| ← Parser.registerParserCategory (← getEnv) parserAttrName catName .symbol
 
     let attrIdent := mkIdent parserAttrName
-    let (val, type) ← toParser ir canon' sepByPrefix
+    let (val, type) ← toParser ir canon' optionalPrefix
     if type != (← `(term| Parser)) then throwError "invalid left recursive optional syntax"
     let parserIdent := mkIdentFrom l <| canon'.appendAfter "_parser"
     elabCommand <| ←
@@ -107,8 +114,8 @@ def toParser' (canon : Name) : IR → CommandElabM Term
         private
         def $comprehensionIdent : Parser :=
           leadingNode $(quote catName) Parser.maxPrec <|
-            "</ " >> withPosition (categoryParser $(quote catName) 0) >>
-              " // " >> termParser >> " />")
+            "</ " >> withPosition (categoryParser $(quote catName) 0) >> " // " >>
+              optional (atomic strLitTexConfig) >> termParser >> optional " notex" >> " />")
 
     ``(Parser.optional (categoryParser $(quote catName) 0))
 
@@ -181,7 +188,21 @@ def toPatternArg : IR → CommandElabM Term
 def toPatternArgs (ir : Array IR) : CommandElabM (TSepArray `term ",") :=
   ir.mapM IR.toPatternArg
 
-def toJoinArgs (ir : Array IR) : TSepArray `term "," := ir.map (β := Term) fun | mk l _ => l
+def toJoinArgs (ir : Array IR) : TSepArray `term "," := Id.run do
+  let (elems, _) := ir.foldl (init := (#[], false))
+    fun | (acc, lastWasNonAtom), mk l ir =>
+          let nonAtom := match ir with | .atom _ => false | _ => true
+          (
+            acc ++ (Option.someIf (Syntax.mkStrLit "\\,") (lastWasNonAtom && nonAtom)).toArray
+              |>.push l,
+            nonAtom,
+          )
+  let mut elemsAndSeps := #[]
+  for (elem, i) in elems.zipIdx do
+    if i != 0 then
+      elemsAndSeps := elemsAndSeps.push <| mkAtom ","
+    elemsAndSeps := elemsAndSeps.push elem
+  return .mk elemsAndSeps
 
 def foldrProd (as : Array Term) : MacroM Term := if let some a := as.back? then
     as.foldrM (init := a) (start := as.size - 1) fun a acc => `(($a, $acc))

@@ -1,0 +1,1 @@
+This is a test of embedding symbols like [[λ x. e]] and judgements like [[λ x. e x$0 ->η e]].

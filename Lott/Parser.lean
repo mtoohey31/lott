@@ -37,60 +37,75 @@ def identPrefix.formatter (_ : String) :=
 
 /- Metavariable syntax. -/
 
-syntax "locally_nameless"? "metavar " ident,+ : command
+def texPrePostConfig :=
+  "(" >> nonReservedSymbol "tex " >> nonReservedSymbol "pre" >> " := " >> strLit >> ", " >>
+    nonReservedSymbol "post" >> " := " >> strLit >> ") "
+
+syntax "locally_nameless "? "metavar " (texPrePostConfig)? ident,+ : command
 
 /- Non-terminal syntax. -/
 
 declare_syntax_cat Lott.Symbol
-declare_syntax_cat Lott.BindConfig
-declare_syntax_cat Lott.IdConfig
-declare_syntax_cat Lott.ExpandConfig
 declare_syntax_cat Lott.Production
 declare_syntax_cat Lott.NonTerminal
 
-private
-def bind := nonReservedSymbol "bind"
-
-syntax "(" bind ident (" in " ident,+)? ")" : Lott.BindConfig
-
-private
-def id := nonReservedSymbol "id"
-
-syntax "(" id ident,+ ")" : Lott.IdConfig
-
-private
-def expand := nonReservedSymbol "expand"
-
-syntax "(" expand " := " term ")" : Lott.ExpandConfig
-
-def prodArg  := leading_parser
+def prodArg := leading_parser
   Parser.optional (atomic (ident >> checkNoWsBefore "no space before ':'" >> ":")) >> syntaxParser argPrec
 
-syntax " | " prodArg+ " : " withPosition(ident (lineEq "nosubst")?) atomic(Lott.BindConfig)? atomic(Lott.IdConfig)? (Lott.ExpandConfig)? : Lott.Production
+def bindConfig :=
+  " (" >> nonReservedSymbol "bind " >> ident >> optional (" in " >> sepBy1 ident ", ") >> ")"
+
+def idConfig := " (" >> nonReservedSymbol "id " >> sepBy1 ident ", " >> ")"
+
+def expandConfig := " (" >> nonReservedSymbol "expand" >> " := " >> termParser >> ")"
+
+def texConfig := " (" >> nonReservedSymbol "tex" >> " := " >> termParser >> ")"
+
+def strLitTexConfig := " (" >> nonReservedSymbol "tex" >> " := " >> strLit >> ")"
+
+syntax ppLine "|" (ppSpace prodArg)+ " : " withPosition(ident (lineEq " nosubst")? " notex"?) atomic(bindConfig)? atomic(idConfig)? atomic(expandConfig)? (texConfig)? : Lott.Production
 
 private
 def parent := nonReservedSymbol "parent"
 
-syntax "nosubst"? "nonterminal " ("(" parent " := " ident ")")? ident,+ " := " Lott.Production* : Lott.NonTerminal
+syntax "nosubst "? "nonterminal " atomic("(" parent " := " ident ") ")? (texPrePostConfig)? (ident (strLitTexConfig)?),+ " := " Lott.Production* : Lott.NonTerminal
 
 syntax Lott.NonTerminal : command
 
 /- Judgement syntax. -/
 
 declare_syntax_cat Lott.Judgement
+declare_syntax_cat Lott.InferenceRuleUpper
 declare_syntax_cat Lott.InferenceRule
+declare_syntax_cat Lott.JudgementDeclRHS
 declare_syntax_cat Lott.JudgementDecl
 
-syntax "judgement_syntax " stx+ " : " ident (Lott.IdConfig)? : command
+syntax "judgement_syntax" (ppSpace stx)+ " : " ident atomic(idConfig)? (texConfig)? : command
 
 private
 def bracketedBinder := Term.bracketedBinder
 
-syntax withPosition(Lott.Judgement)* "─"+ withPosition(ident (lineEq bracketedBinder)*) withPosition(Lott.Judgement) : Lott.InferenceRule
+syntax Lott.Judgement : Lott.InferenceRuleUpper
 
-syntax "judgement " ident " := " Lott.InferenceRule* : Lott.JudgementDecl
+syntax ident " := " Lott.Symbol : Lott.InferenceRuleUpper
+
+def commentConfig := " (" >> nonReservedSymbol "comment" >> " := " >> strLit >> ")"
+
+syntax withPosition(ppLine Lott.InferenceRuleUpper)* ppLine "─"+ withPosition(ident atomic(lineEq commentConfig)? (lineEq bracketedBinder)* (lineEq " notex")?) withPosition(ppLine Lott.Judgement) : Lott.InferenceRule
+
+syntax " where" ppLine Lott.InferenceRule* : Lott.JudgementDeclRHS
+
+syntax " := " term : Lott.JudgementDeclRHS
+
+syntax "judgement " ident Lott.JudgementDeclRHS : Lott.JudgementDecl
 
 syntax Lott.JudgementDecl : command
+
+syntax (name := zetaReduce) "zeta_reduce% " term : term
+
+/- Conditional syntax. -/
+
+syntax "termonly " command : command
 
 /- Term embedding syntax. -/
 
@@ -108,7 +123,7 @@ def parserOfStackFn (offset : Nat) : ParserFn := fun c s => Id.run do
   if stack.size < offset + 1 then
     return s.mkUnexpectedError "failed to determine parser using syntax stack, stack is too small"
   let .ident _ _ parserName _ := stack.get! (stack.size - offset - 1)
-    | s.mkUnexpectedError "failed to determine parser using syntax stack, the specified element on the stack is not an identifier"
+    | s.mkUnexpectedError s!"failed to determine parser using syntax stack, the specified element on the stack is not an identifier: {stack.get! (stack.size - offset)} {stack.get! (stack.size - offset - 1)} {stack.get! (stack.size - offset - 2)} {stack.get! (stack.size - offset - 3)}"
   let parserName := mkIdent <| `Lott.Symbol ++ parserName
   let oldStackSize := s.stackSize
   let s ← match c.resolveParserName ⟨parserName⟩ with
@@ -143,6 +158,38 @@ def parserOfStack.parenthesizer (offset : Nat) (_prec : Nat := 0) : Parenthesize
 private
 def lottSymbolParser := incQuotDepth (parserOfStack 1)
 
-macro "[[" ident "|" symbol:lottSymbolParser "]]" : term => `([[$(.mk symbol.raw):Lott.Symbol]])
+@[term_parser]
+def qualifiedSymbolEmbed := leading_parser
+  "[[" >> ident >> "| " >> lottSymbolParser >> "]]"
+
+/- External interaction syntax. -/
+
+private
+def embedCloseFn : ParserFn := fun c s =>
+  if c.input.substrEq s.pos "]]" 0 2 then
+    s.setPos <| s.pos + "]]".endPos
+  else
+    s.mkUnexpectedErrorAt "expected ']]'" s.pos
+
+private partial
+def filterParserFnAux (startPos : String.Pos) : ParserFn := fun c s =>
+  if h : c.input.atEnd s.pos then
+    mkNodeToken `Lott.NonEmbed startPos c s
+  else if c.input.substrEq s.pos "[[" 0 2 then
+    let s := mkNodeToken `Lott.NonEmbed startPos c s
+    let s := s.setPos <| s.pos + "[[".endPos
+    let s := orelseFn
+      (atomicFn (andthenFn (withPosition (categoryParser `Lott.Symbol 0)).fn embedCloseFn))
+      (andthenFn (withPosition (categoryParser `Lott.Judgement 0)).fn embedCloseFn) c s
+    if s.hasError then
+      s
+    else
+      filterParserFnAux s.pos c s
+  else
+    filterParserFnAux startPos c <| s.next' c.input s.pos h
+
+def filterParserFn : ParserFn := fun c s => filterParserFnAux s.pos c s
+
+syntax "#filter " str (str)? : command
 
 end Lott

@@ -1,0 +1,86 @@
+\documentclass{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{unicode-math-input}
+
+\usepackage{amsmath}
+\usepackage{mathpartir}
+\usepackage{mathtools}
+
+\newcommand{\lottalias}[1]{#1}
+\newcommand{\lottaliassep}{,}
+\newcommand{\lottproduction}[1]{#1}
+\newcommand{\lottkw}[1]{\textbf{#1}}
+\newcommand{\lottsym}[1]{{#1}}
+\newcommand{\lottproductionsep}{\mid}
+\setlength\tabcolsep{2pt} % For tabular environment spacing.
+\newcommand{\lottnonterminal}[3]{#1 & $#2$ & $\Coloneqq$ & $#3$}
+\newcommand{\lotthypothesis}[1]{#1}
+\newcommand{\lottinferencerule}[3]{\inferrule[#1]{#2}{#3}}
+\newcommand{\lottinferencerulesep}{\and}
+\newcommand{\lottjudgement}[3]{
+\noindent\fbox{$#2$}\hfill\emph{#1}
+\nopagebreak
+\begin{mathparpagebreakable}
+#3
+\end{mathparpagebreakable}
+}
+
+\begin{document}
+
+\section{Lambda}
+
+\begin{tabular}{l @{\hspace{2em}} r c l}
+	\input{Lambda/term.tex}
+\end{tabular}
+
+\medskip
+
+\input{Lambda/BetaReduction.tex}
+
+\input{Lambda/EtaReduction.tex}
+
+\input{Lambda/intro.tex}
+
+\section{STLC}
+
+\begin{tabular}{l @{\hspace{2em}} r c l}
+	\input{STLC/Term.tex} \\
+	\input{STLC/Type.tex} \\
+	\input{STLC/Environment.tex} \\
+	\input{STLC/Value.tex}
+\end{tabular}
+
+\medskip
+
+\input{STLC/Environment/VarIn.tex}
+
+\input{STLC/Environment/WellFormedness.tex}
+
+\input{STLC/Typing.tex}
+
+\input{STLC/Reduction.tex}
+
+\section{System F}
+
+\begin{tabular}{l @{\hspace{2em}} r c l}
+	\input{SystemF/Term.tex} \\
+	\input{SystemF/Type.tex} \\
+	\input{SystemF/Environment.tex} \\
+	\input{SystemF/Value.tex}
+\end{tabular}
+
+\medskip
+
+\input{SystemF/EnvironmentWellFormedness.tex}
+
+\input{SystemF/TypeVarInEnvironment.tex}
+
+\input{SystemF/TermVarInEnvironment.tex}
+
+\input{SystemF/Typing.tex}
+
+\input{SystemF/OperationalSemantics.tex}
+
+\end{document}

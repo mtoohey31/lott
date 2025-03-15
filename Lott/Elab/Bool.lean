@@ -8,7 +8,7 @@ open Lean.Parser
 
 declare_syntax_cat Lott.Symbol.Bool
 
-run_cmd setEnv <| aliasExt.addEntry (← getEnv) { canon := `Bool, alias := `b }
+run_cmd setEnv <| aliasExt.addEntry (← getEnv) { canon := `Bool, alias := `b, tex? := none }
 
 @[Lott.Symbol.Bool_parser]
 private
