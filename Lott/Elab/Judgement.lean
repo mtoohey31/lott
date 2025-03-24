@@ -157,7 +157,9 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
               let hypTex ← liftTermElabM <| texElabSymbolOrJudgement hyp.raw.getKind hyp hyp
               return s!"\\lotthypothesis\{{hypTex}}"
             | _ => throwUnsupportedSyntax
-          let hypothesesTex := " \\\\ ".intercalate hypothesesTexs.toList
+          let mut hypothesesTex := " \\\\ ".intercalate hypothesesTexs.toList
+          if hypothesesTex == "" then
+            hypothesesTex := "\\\\\\\\"
           let conclusionTex ← liftTermElabM <|
             texElabSymbolOrJudgement catName conclusion conclusion
           if let some comment := comment? then
