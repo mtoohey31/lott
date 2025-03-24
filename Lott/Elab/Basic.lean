@@ -77,9 +77,22 @@ def texElabIdx : Syntax → TermElabM String
 
 private
 def texElabMetavar : TexElab := fun
-  | _, .node _ _ #[.ident _ _ val _]
-  | _, .node _ _ #[.ident _ _ val _, .atom _ "$", .node _ `num _] =>
-    return val.toString false |>.texEscape
+  | _, .node _ catName #[.ident _ _ val _]
+  | _, .node _ catName #[.ident _ _ val _, .atom _ "$", .node _ `num _] => do
+    let ns ← getCurrNamespace
+    let some qualified := catName.erasePrefix? symbolPrefix | throwUnsupportedSyntax
+
+    let valString := val.toString false
+    let some { canon, alias, tex? := some tex } :=
+      aliasExt.getState (← getEnv) |>.byAlias.matchPrefix (ns ++ val).toString 0
+      | return valString.texEscape
+    if qualified != canon then
+      return valString.texEscape
+    let some aliasUnqualified := alias.erasePrefix? ns | return valString.texEscape
+    let some suffix := valString.dropPrefix? <| aliasUnqualified.toString false
+      | return valString.texEscape
+
+    return tex ++ suffix.toString.texEscape
   | ref, .node _ _ #[«fun», .atom _ "@", idx] => do
     let funTex ← texElabMetavar ref «fun»
     let idxTex ← texElabIdx idx
