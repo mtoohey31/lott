@@ -142,7 +142,7 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
 
           let nameTex := name.getId.getFinal.getString!.texEscape
           let hypothesesTexs ← upper.filterMapM fun
-            | `(InferenceRuleUpper| $_:Lott.Judgement notex) => return none
+            | `(InferenceRuleUpper| notex $_:Lott.Judgement) => return none
             | `(InferenceRuleUpper| $i:ident := $sym) => do
               let catName := sym.raw.getKind
               let env ← getEnv

@@ -2,6 +2,6 @@ import Lott.Parser
 
 namespace Lott
 
-syntax (name := noTexJudgement) Lott.Judgement " notex" : Lott.Judgement
+syntax (name := noTexJudgement) "notex " Lott.Judgement : Lott.Judgement
 
 end Lott
