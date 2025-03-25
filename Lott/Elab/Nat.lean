@@ -4,18 +4,21 @@ namespace Lott
 
 open Lean
 open Lean.Elab
+open Lean.Elab.Command
 open Lean.Parser
 
 declare_syntax_cat Lott.Symbol.Nat
 
-run_cmd setEnv <| aliasExt.addEntry (← getEnv) { canon := `Nat, alias := `i, tex? := none }
-run_cmd setEnv <| aliasExt.addEntry (← getEnv) { canon := `Nat, alias := `j, tex? := none }
-run_cmd setEnv <| aliasExt.addEntry (← getEnv) { canon := `Nat, alias := `n, tex? := none }
+def addNatAlias (alias : Name) : CommandElabM Unit := do
+  setEnv <| aliasExt.addEntry (← getEnv) { canon := `Nat, alias, tex? := none }
+  let parserIdent := mkIdent <| `nat ++ (alias.appendAfter "_parser")
+  elabCommand <| ←
+    `(@[Lott.Symbol.Nat_parser]
+      private
+      def $parserIdent : Parser :=
+        leadingNode `Lott.Symbol.Nat maxPrec <| identPrefix $(quote <| alias.toString))
 
-@[Lott.Symbol.Nat_parser]
-private
-def nat.identPrefix_parser : Parser :=
-  leadingNode `Lott.Symbol.Nat maxPrec (identPrefix "i" <|> identPrefix "j" <|> identPrefix "n")
+run_cmd addNatAlias `n
 
 @[Lott.Symbol.Nat_parser]
 private
