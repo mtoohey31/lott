@@ -169,6 +169,21 @@ theorem map_shift {f : Nat → α} (h : j ≤ m)
     rw [← Nat.sub_add_cancel h, ← Nat.sub_sub, ← Nat.sub_right_comm] at this
     exact Nat.lt_of_sub_pos this
 
+theorem map_shift' {f : Nat → α}
+  : [m:n].map (fun i => f i) = [m + j:n + j].map fun i => f (i - j) := by
+  rw [map, map, toList]
+  apply Eq.symm
+  rw [toList]
+  apply Eq.symm
+  simp only
+  split
+  · case isTrue h' =>
+    rw [if_pos <| Nat.add_lt_add_right h' _, List.map_cons, List.map_cons, Nat.add_sub_self_right,
+        Nat.add_assoc, Nat.add_comm j 1, ← Nat.add_assoc, ← map, ← map, map_shift']
+  · case isFalse h' =>
+    rw [List.map_nil, if_neg <| Nat.not_lt_of_le <| Nat.add_le_add_right (Nat.le_of_not_lt h') _,
+        List.map_nil]
+
 theorem map_append {f : Nat → α} (h₁ : l ≤ m) (h₂ : m ≤ n)
   : List.map f [l:m] ++ List.map f [m:n] = List.map f [l:n] := by
   rw [← List.map_append, toList_append h₁ h₂]
@@ -253,5 +268,37 @@ theorem skolem [Inhabited α] {p : Nat → α → Prop}
       exact h''
     · case isFalse h''' =>
       exact h' i ⟨mem.lower, Nat.lt_of_le_of_ne (Nat.le_of_lt_succ mem.upper) h''', Nat.mod_one _⟩
+
+theorem mem_zip_map {f : Nat → α} {g : Nat → β}
+  : x ∈ ([m:n].map f).zip ([m:n].map g) → ∃ i ∈ [m:n], x = (f i, g i) := by
+  intro mem
+  rw [map, map, toList] at mem
+  split at mem
+  case isFalse h => nomatch mem
+  case isTrue h =>
+  rw [List.map_cons, List.map_cons, List.zip_cons_cons] at mem
+  cases mem with
+  | head => exact ⟨m, ⟨Nat.le.refl, h, Nat.mod_one _⟩, rfl⟩
+  | tail _ mem' =>
+    let ⟨i, imem, eq⟩ := mem_zip_map mem'
+    simp at *
+    exact ⟨i, ⟨Nat.le_trans Nat.le.refl.step imem.lower, imem.upper, Nat.mod_one _⟩, eq⟩
+termination_by n - m
+decreasing_by
+  all_goals simp_arith
+  apply Nat.sub_succ_lt_self
+  assumption
+
+theorem map_eq_cons_of_lt (mltn : m < n) : [m:n].map f = f m :: [m+1:n].map f := by
+  rw [map, toList, if_pos mltn, List.map_cons, ← map]
+
+theorem map_same_eq_nil : [n:n].map f = [] := by
+  rw [map, toList, if_neg <| Nat.not_lt_of_le Nat.le.refl, List.map_nil]
+
+theorem map_eq_snoc_of_lt (mltn : m < n) : [m:n].map f = [m:n - 1].map f ++ [f (n - 1)] := by
+  let npos := Nat.lt_of_le_of_lt (Nat.zero_le _) mltn
+  rw [map, ← map_append (l := m) (m := n - 1) (n := n) (Nat.le_sub_one_of_lt mltn) (Nat.sub_le _ _),
+      ← map, ← map, map_eq_cons_of_lt <| Nat.sub_lt npos Nat.one_pos, Nat.sub_add_cancel npos,
+      map_same_eq_nil]
 
 end Std.Range
