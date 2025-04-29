@@ -22,9 +22,10 @@ def notExistentialJudgementTexElab : TexElab := fun ref stx => do
     | `(explicitBinders| $bis:binderIdent* $[: $_]?) => pure bis
     | `(explicitBinders| $[($bis* : $_)]*) => pure bis.flatten
     | _ => throwUnsupportedSyntax
-  let binderTexs := ", ".intercalate <| Array.toList <| binderIdents.map fun
-    | `(hole| _) => "_"
-    | `(ident| $i) => i.getId.toString false |>.texEscape
+  let binderTexs := ", ".intercalate <| Array.toList <| ← binderIdents.mapM fun
+    | `(binderIdent| _) => return "_"
+    | `(binderIdent| $i:ident) => return i.getId.toString false |>.texEscape
+    | _ => throwUnsupportedSyntax
   -- NOTE: type is intentionally omitted.
   let judgementTex ← texElabSymbolOrJudgement judgement.raw.getKind ref «judgement»
 
