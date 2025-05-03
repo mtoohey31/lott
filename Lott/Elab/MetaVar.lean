@@ -20,7 +20,7 @@ def metavarImpl : Macro := fun
       .atom _ "[[",
       .node _ _ #[«fun», .atom _ "@", idx],
       .atom _ "]]"
-    ] => `(([[$(.mk «fun»):Lott.Symbol]] : _ → _) $(.mk idx):term)
+    ] => `((↑[[$(.mk «fun»):Lott.Symbol]] : _ → _) $(.mk idx):term)
   | .node _ ``Lott.symbolEmbed #[
       .atom _ "[[",
       .node _ _ #[.ident .., .atom _ "$", num@(.node _ `num _)],

@@ -1,3 +1,4 @@
+import Lott.Data.Function
 import Lott.Data.Nat
 
 namespace List
@@ -72,6 +73,13 @@ theorem exists_gt (xs : List Nat)
 theorem exists_fresh (xs : List Nat) : ∃ n, n ∉ xs :=
   let ⟨nxs, nxsgt⟩ := xs.exists_gt
   .intro nxs fun nxsinxs => Nat.not_le_of_lt (nxsgt _ nxsinxs) <| Nat.le_refl _
+
+theorem exists_fresh_inj (xs : List Nat) : ∃ n : Nat → Nat, n.Injective' ∧ ∀ i, n i ∉ xs :=
+  let ⟨nxs, nxsgt⟩ := xs.exists_gt
+  .intro (fun i => nxs + i) ⟨
+    fun _ _ eq => Nat.add_left_cancel eq,
+    fun _ nxsinxs => Nat.not_le_of_lt (nxsgt _ nxsinxs) <| Nat.le_add_right _ _
+  ⟩
 
 theorem le_sum_of_mem' {as : List Nat} (h : a ∈ as) : a ≤ as.sum := by
   match h with
