@@ -68,7 +68,7 @@ syntax ppLine "|" (ppSpace prodArg)+ " : " withPosition(ident (lineEq " nosubst"
 private
 def parent := nonReservedSymbol "parent"
 
-syntax "nosubst "? "nonterminal " atomic("(" parent " := " ident ") ")? (texPrePostConfig)? (ident (strLitTexConfig)?),+ " := " Lott.Production* : Lott.NonTerminal
+syntax "nosubst "? "nonterminal " atomic("(" parent " := " ident ") ")? (texPrePostConfig)? (ident " notex"? (strLitTexConfig)?),+ " := " Lott.Production* : Lott.NonTerminal
 
 syntax Lott.NonTerminal : command
 

@@ -547,7 +547,7 @@ def Production.binders (prod : Production) : Array Name :=
 private
 structure NonTerminal where
   canon : Ident
-  aliases : Array (Ident × Option String)
+  aliases : Array (Ident × Bool × Option String)
   prods : Array Production
   parent? : Option Ident
   substitutions? : Option (Array (Name × Name))
@@ -610,7 +610,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
   -- following steps.
   let ns ← getCurrNamespace
   for nt in nts do
-    let `(NonTerminal| $[nosubst]? nonterminal $[(parent := $parent?)]? $[(tex pre := $_, post := $_)]? $[$names $[(tex := $nameTex?s)]?],* := $_*) := nt
+    let `(NonTerminal| $[nosubst]? nonterminal $[(parent := $parent?)]? $[(tex pre := $_, post := $_)]? $[$names $[notex]? $[(tex := $nameTex?s)]?],* := $_*) := nt
       | throwUnsupportedSyntax
     let names@(canonName :: _) := names.toList | throwUnsupportedSyntax
     let canon := ns ++ canonName.getId
@@ -624,10 +624,11 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
   -- Transform syntax into non-terminal structure.
   let nts ← nts.mapM fun nt => do
-    let `(NonTerminal| $[nosubst%$ns]? nonterminal $[(parent := $parent?)]? $[(tex pre := $pre?, post := $post?)]? $[$names $[(tex := $nameTex?s)]?],* := $prods*) := nt
+    let `(NonTerminal| $[nosubst%$ns]? nonterminal $[(parent := $parent?)]? $[(tex pre := $pre?, post := $post?)]? $[$names $[notex%$nameNt?s]? $[(tex := $nameTex?s)]?],* := $prods*) := nt
       | throwUnsupportedSyntax
     let some canon := names[0]? | throwUnsupportedSyntax
     let aliases := names.extract 1 names.size |>.zip <|
+      nameNt?s.extract 1 nameNt?s.size |>.map Option.isSome |>.zip <|
       nameTex?s.extract 1 nameTex?s.size |>.map <| Option.map TSyntax.getString
 
     let prodAndSubsts ← prods.mapM fun prod => do
@@ -1131,9 +1132,13 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
     writeTexOutput (ns ++ canon.getId) do
       let canonTex := canon.getId.getFinal.getString!.pascalToTitle.texEscape
       let (texPre, texPost) := texPrePost?.getD ("", "")
-      let aliasesTex := "\\lottaliassep".intercalate <| aliases.toList.map fun (alias, tex?) =>
-        let aliasTex := tex?.getD alias.getId.getFinal.getString!.texEscape
-        (s!"{texPre}\\lottalias\{{aliasTex}}{texPost}")
+      let aliasesTex := "\\lottaliassep".intercalate <| aliases.toList.filterMap
+        fun (alias, «notex», tex?) =>
+          if «notex» then
+            none
+          else
+            let aliasTex := tex?.getD alias.getId.getFinal.getString!.texEscape
+            s!"{texPre}\\lottalias\{{aliasTex}}{texPost}"
       let productionTexs ← prods.filterMapM fun { name, ir, «notex», .. } => do
         if «notex» then return none
 
