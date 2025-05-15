@@ -1132,13 +1132,13 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
     writeTexOutput (ns ++ canon.getId) do
       let canonTex := canon.getId.getFinal.getString!.pascalToTitle.texEscape
       let (texPre, texPost) := texPrePost?.getD ("", "")
-      let aliasesTex := "\\lottaliassep".intercalate <| aliases.toList.filterMap
+      let aliasesTex := "\\lottaliassep\n".intercalate <| aliases.toList.filterMap
         fun (alias, «notex», tex?) =>
           if «notex» then
             none
           else
             let aliasTex := tex?.getD alias.getId.getFinal.getString!.texEscape
-            s!"{texPre}\\lottalias\{{aliasTex}}{texPost}"
+            s!"{texPre}\\lottalias\{{aliasTex}}{texPost}\n"
       let productionTexs ← prods.filterMapM fun { name, ir, «notex», .. } => do
         if «notex» then return none
 
@@ -1146,9 +1146,9 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         let catName ← nt.catName
         let exampleStx := mkNode catName <| ← toExampleSyntax ir canonQualified
         let productionTex ← liftTermElabM <| texElabSymbolOrJudgement catName name exampleStx
-        return some s!"\\lottproduction\{{productionTex}}"
-      let productionsTex := "\\lottproductionsep".intercalate productionTexs.toList
-      return s!"\\lottnonterminal\{{canonTex}}\{{aliasesTex}}\{{productionsTex}}\n"
+        return some s!"\\lottproduction\{{productionTex}}\n"
+      let productionsTex := "\\lottproductionsep\n".intercalate productionTexs.toList
+      return s!"\\lottnonterminal\{{canonTex}}\{\n{aliasesTex}}\{\n{productionsTex}}\n"
 
 elab_rules : command
   | `($nt:Lott.NonTerminal) => elabNonTerminals #[nt]

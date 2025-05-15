@@ -152,22 +152,22 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
                   symbolExt.getState env |>.find? qualified then
                   idTex := s!"{texPre} {idTex} {texPost}"
               let symTex ← liftTermElabM <| texElabSymbolOrJudgement catName sym sym
-              return s!"\\lottlet\{{idTex}}\{{symTex}}"
+              return s!"\n\\lottlet\{{idTex}}\{{symTex}}"
             | `(InferenceRuleUpper| $hyp:Lott.Judgement) => do
               let hypTex ← liftTermElabM <| texElabSymbolOrJudgement hyp.raw.getKind hyp hyp
-              return s!"\\lotthypothesis\{{hypTex}}"
+              return s!"\n\\lotthypothesis\{{hypTex}}"
             | _ => throwUnsupportedSyntax
-          let mut hypothesesTex := " \\\\ ".intercalate hypothesesTexs.toList
+          let mut hypothesesTex := "\\\\".intercalate hypothesesTexs.toList
           if hypothesesTex == "" then
-            hypothesesTex := "\\\\\\\\"
+            hypothesesTex := "\n\\\\\\\\"
           let conclusionTex ← liftTermElabM <|
             texElabSymbolOrJudgement catName conclusion conclusion
           if let some comment := comment? then
-            return s!"\\lottinferencerulecommented\{{nameTex}}\{{comment.getString}}\{{hypothesesTex}}\{{conclusionTex}}"
-          return s!"\\lottinferencerule\{{nameTex}}\{{hypothesesTex}}\{{conclusionTex}}"
+            return s!"\\lottinferencerulecommented\{{nameTex}}\{{comment.getString}}\{{hypothesesTex}\n}\{{conclusionTex}}\n"
+          return s!"\\lottinferencerule\{{nameTex}}\{{hypothesesTex}\n}\{{conclusionTex}}\n"
 
-        let inferenceRulesTex := " \\lottinferencerulesep ".intercalate inferenceRuleTexs.toList
-        return s!"\\lottjudgement\{{nameTex}}\{{syntaxTex}}\{{inferenceRulesTex}}\n"
+        let inferenceRulesTex := "\\lottinferencerulesep\n".intercalate inferenceRuleTexs.toList
+        return s!"\\lottjudgement\{{nameTex}}\{{syntaxTex}}\{\n{inferenceRulesTex}}\n"
 
 elab_rules : command
   | `($jd:Lott.JudgementDecl) => elabJudgementDecls #[jd]
