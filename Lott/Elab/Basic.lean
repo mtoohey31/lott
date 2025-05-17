@@ -3,7 +3,6 @@ import Lott.Data.List
 import Lott.Data.Name
 import Lott.Data.Option
 import Lott.Data.String
-import Lott.Elab.NoTexJudgement
 import Lott.Elab.Options
 import Lott.Environment
 import Lott.Parser
@@ -59,7 +58,7 @@ def writeTexOutput (name : Name) (mkTex : CommandElabM String) : CommandElabM Un
   writeMakeDeps outputName
   writeFile outputName <| ← mkTex
 
-abbrev TexElab := (ref : Syntax) → Syntax → TermElabM String
+abbrev TexElab := (profile : Name) → (ref : Syntax) → Syntax → TermElabM String
 
 private unsafe
 def mkLottTexElabAttributeUnsafe (ref : Name) : IO (KeyedDeclsAttribute TexElab) := do
@@ -77,8 +76,8 @@ def texElabIdx : Syntax → TermElabM String
 
 private
 def texElabMetavar : TexElab := fun
-  | _, .node _ catName #[.ident _ _ val _]
-  | _, .node _ catName #[.ident _ _ val _, .atom _ "$", .node _ `num _] => do
+  | _, _, .node _ catName #[.ident _ _ val _]
+  | _, _, .node _ catName #[.ident _ _ val _, .atom _ "$", .node _ `num _] => do
     let ns ← getCurrNamespace
     let some qualified := catName.erasePrefix? symbolPrefix | throwUnsupportedSyntax
 
@@ -93,17 +92,17 @@ def texElabMetavar : TexElab := fun
       | return valString.texEscape
 
     return tex ++ suffix.toString.texEscape
-  | ref, .node _ _ #[«fun», .atom _ "@", idx] => do
-    let funTex ← texElabMetavar ref «fun»
+  | profile, ref, .node _ _ #[«fun», .atom _ "@", idx] => do
+    let funTex ← texElabMetavar profile ref «fun»
     let idxTex ← texElabIdx idx
     return s!"\{{funTex}}_\{{idxTex}}"
-  | _, _ => throwUnsupportedSyntax
+  | _, _, _ => throwUnsupportedSyntax
 
 mutual
 
 private partial
 def texElabVariable : TexElab := fun
-  | _, .node _ catName #[.node _ _ #[.ident _ _ val _] ] => do
+  | _, _, .node _ catName #[.node _ _ #[.ident _ _ val _] ] => do
     let ns ← getCurrNamespace
     let some qualified := catName.erasePrefix? symbolPrefix | throwUnsupportedSyntax
 
@@ -118,11 +117,11 @@ def texElabVariable : TexElab := fun
       | return valString.texEscape
 
     return tex ++ suffix.toString.texEscape
-  | ref, .node info kind #[.node _ _ #[«fun», .atom _ "@", idx] ] => do
-    let funTex ← texElabVariable ref <| .node info kind #[«fun»]
+  | profile, ref, .node info kind #[.node _ _ #[«fun», .atom _ "@", idx] ] => do
+    let funTex ← texElabVariable profile ref <| .node info kind #[«fun»]
     let idxTex ← texElabIdx idx
     return s!"\{{funTex}}_\{{idxTex}}"
-  | ref, .node _ catName #[
+  | profile, ref, .node _ catName #[
       base@(.node _ catName₀ _),
       .atom _ "[",
       val@(.node _ symbolPrefixedValName _),
@@ -137,12 +136,12 @@ def texElabVariable : TexElab := fun
     if !symbolPrefix.isPrefixOf symbolPrefixedValName then throwUnsupportedSyntax
     if !symbolPrefix.isPrefixOf symbolPrefixedVarName then throwUnsupportedSyntax
 
-    let baseTex ← texElabSymbolOrJudgement catName ref base
-    let valTex ← texElabSymbolOrJudgement symbolPrefixedValName ref val
-    let varTex ← texElabSymbolOrJudgement symbolPrefixedVarName ref var
+    let baseTex ← texElabSymbolOrJudgement catName profile ref base
+    let valTex ← texElabSymbolOrJudgement symbolPrefixedValName profile ref val
+    let varTex ← texElabSymbolOrJudgement symbolPrefixedVarName profile ref var
 
     return s!"{baseTex}\\left[{valTex}/{varTex}\\right]"
-  | ref, .node _ catName #[
+  | profile, ref, .node _ catName #[
       base@(.node _ catName₀ _),
       .atom _ "^",
       var@(.node _ symbolPrefixedVarName _),
@@ -154,8 +153,8 @@ def texElabVariable : TexElab := fun
     if !symbolPrefix.isPrefixOf catName then throwUnsupportedSyntax
     if !symbolPrefix.isPrefixOf symbolPrefixedVarName then throwUnsupportedSyntax
 
-    let baseTex ← texElabSymbolOrJudgement catName ref base
-    let varTex ← texElabSymbolOrJudgement symbolPrefixedVarName ref var
+    let baseTex ← texElabSymbolOrJudgement catName profile ref base
+    let varTex ← texElabSymbolOrJudgement symbolPrefixedVarName profile ref var
 
     if !(← getOptions).get lott.tex.locallyNameless.name lott.tex.locallyNameless.defValue then
       return baseTex
@@ -165,7 +164,7 @@ def texElabVariable : TexElab := fun
       return s!"\{{baseTex}}^\{{varTex}#{levelTex}}"
     else
       return s!"\{{baseTex}}^\{{varTex}}"
-  | ref, .node _ catName #[
+  | profile, ref, .node _ catName #[
       base@(.node _ catName₀ _),
       .atom _ "^^",
       val@(.node _ symbolPrefixedValName _),
@@ -178,8 +177,8 @@ def texElabVariable : TexElab := fun
     if !symbolPrefix.isPrefixOf catName then throwUnsupportedSyntax
     if !symbolPrefix.isPrefixOf symbolPrefixedValName then throwUnsupportedSyntax
 
-    let baseTex ← texElabSymbolOrJudgement catName ref base
-    let valTex ← texElabSymbolOrJudgement symbolPrefixedValName ref val
+    let baseTex ← texElabSymbolOrJudgement catName profile ref base
+    let valTex ← texElabSymbolOrJudgement symbolPrefixedValName profile ref val
 
     if !(← getOptions).get lott.tex.locallyNameless.name lott.tex.locallyNameless.defValue then
       let varTex ← match locallyNamelessSubstAlternative with
@@ -187,7 +186,7 @@ def texElabVariable : TexElab := fun
           if !symbolPrefix.isPrefixOf symbolPrefixedVarName then
             throwUnsupportedSyntax
 
-          texElabSymbolOrJudgement symbolPrefixedVarName ref var
+          texElabSymbolOrJudgement symbolPrefixedVarName profile ref var
         | #[] =>
           logErrorAt altRef
             "variable name must be provided with '/x' for alternative tex substitution rendering when lott.tex.locallyNameless is set to false"
@@ -200,7 +199,7 @@ def texElabVariable : TexElab := fun
       return s!"\{{baseTex}}^\{{valTex}#{levelTex}}"
     else
       return s!"\{{baseTex}}^\{{valTex}}"
-  | ref, .node _ catName #[
+  | profile, ref, .node _ catName #[
       .atom _ "\\",
       var@(.node _ symbolPrefixedVarName _),
       .node _ `null level,
@@ -213,8 +212,8 @@ def texElabVariable : TexElab := fun
     if !symbolPrefix.isPrefixOf catName then throwUnsupportedSyntax
     if !symbolPrefix.isPrefixOf symbolPrefixedVarName then throwUnsupportedSyntax
 
-    let baseTex ← texElabSymbolOrJudgement catName ref base
-    let varTex ← texElabSymbolOrJudgement symbolPrefixedVarName ref var
+    let baseTex ← texElabSymbolOrJudgement catName profile ref base
+    let varTex ← texElabSymbolOrJudgement symbolPrefixedVarName profile ref var
 
     if !(← getOptions).get lott.tex.locallyNameless.name lott.tex.locallyNameless.defValue then
       return s!"\{{baseTex}}"
@@ -224,17 +223,18 @@ def texElabVariable : TexElab := fun
       return s!"\\leftidx\{{varTex}#{levelTex}}\{{baseTex}}\{}"
     else
       return s!"\\leftidx\{{varTex}}\{{baseTex}}\{}"
-  | ref, .node _ parentCatName #[stx@(.node _ childCatName _)] => do
+  | profile, ref, .node _ parentCatName #[stx@(.node _ childCatName _)] => do
     let some parentQualified := parentCatName.erasePrefix? symbolPrefix | throwUnsupportedSyntax
     let some childQualified := childCatName.erasePrefix? symbolPrefix | throwUnsupportedSyntax
     let some { parent, .. } := childExt.getState (← getEnv) |>.find? childQualified | throwUnsupportedSyntax
     if parent != parentQualified then throwUnsupportedSyntax
 
-    texElabSymbolOrJudgement childCatName ref stx
-  | _, _ => throwUnsupportedSyntax
+    texElabSymbolOrJudgement childCatName profile ref stx
+  | _, _, _ => throwUnsupportedSyntax
 
 partial
-def texElabSymbolOrJudgement (catName : Name) (ref stx : Syntax) : TermElabM String := do
+def texElabSymbolOrJudgement (catName : Name) (profile : Name) (ref stx : Syntax)
+  : TermElabM String := do
   let env ← getEnv
   let texPrePost? := do
     let qualified ← catName.erasePrefix? symbolPrefix
@@ -244,14 +244,14 @@ def texElabSymbolOrJudgement (catName : Name) (ref stx : Syntax) : TermElabM Str
   let rawTex ← match lottTexElabAttribute.getEntries (← getEnv) catName with
     | [] =>
       try
-        (try texElabMetavar ref stx catch _ => texElabVariable ref stx)
+        (try texElabMetavar profile ref stx catch _ => texElabVariable profile ref stx)
       catch _ =>
         throwErrorAt ref
           "tex elaboration function for '{catName}' has not been implemented{indentD stx}"
     | elabFns =>
       try texElabWithFns elabFns catch ex =>
-        (try texElabMetavar ref stx catch _ =>
-          (try texElabVariable ref stx catch _ => throw ex))
+        (try texElabMetavar profile ref stx catch _ =>
+          (try texElabVariable profile ref stx catch _ => throw ex))
 
   if let some (texPre, texPost) := texPrePost? then
     return s!"{texPre} {rawTex} {texPost}"
@@ -260,10 +260,10 @@ def texElabSymbolOrJudgement (catName : Name) (ref stx : Syntax) : TermElabM Str
 where
   texElabWithFns
     | [] => unreachable!
-    | [elabFn] => elabFn.value ref stx
+    | [elabFn] => elabFn.value profile ref stx
     | elabFn :: elabFns => do
       try
-        elabFn.value ref stx
+        elabFn.value profile ref stx
       catch ex => match ex with
         | .internal id _ =>
           if id == unsupportedSyntaxExceptionId then texElabWithFns elabFns else throw ex
@@ -457,7 +457,8 @@ def _root_.Lott.IR.toTexSeqItems (ir : Array IR) (canon : Name)
   : CommandElabM (TSyntaxArray ``Lean.Parser.Term.doSeqItem) :=
   ir.mapM fun
     | mk l (.category n) => do
-      `(doSeqItem| let $l ← Lott.texElabSymbolOrJudgement $(quote <| symbolPrefix ++ n) ref $l)
+      `(doSeqItem|
+        let $l ← Lott.texElabSymbolOrJudgement $(quote <| symbolPrefix ++ n) profile ref $l)
     | mk l (.atom s) =>
       `(doSeqItem| let $l := $(quote <| atomToTex s))
     | mk l (.sepBy ir sep) => do
@@ -561,7 +562,7 @@ where
     (if leadingWs then "\\, " else "") ++ tex ++ (if trailingWs then " \\," else "")
 
 partial
-def toExampleSyntax (ir : Array IR) (canonQualified : Name) (enclosingSepBys := 0)
+def toExampleSyntax (ir : Array IR) (canonQualified profile : Name) (enclosingSepBys := 0)
   : CommandElabM (Array Syntax) := do
   let inline := (← getOptions).get lott.tex.example.singleProductionInline.name
     lott.tex.example.singleProductionInline.defValue
@@ -579,7 +580,7 @@ def toExampleSyntax (ir : Array IR) (canonQualified : Name) (enclosingSepBys := 
         if let some { normalProds, .. } := symbolExt.getState env |>.find? n then
           if normalProds.size == 1 then
             return mkNode (symbolPrefix ++ n) <|
-              ← toExampleSyntax normalProds.toArray[0]!.snd n enclosingSepBys
+              ← toExampleSyntax normalProds.toArray[0]!.snd n profile enclosingSepBys
 
       return mkNode (symbolPrefix ++ n) #[
         sepByIdxStrings.foldl (init := mkNode (variablePrefix ++ n) #[l]) (stop := enclosingSepBys)
@@ -594,7 +595,7 @@ def toExampleSyntax (ir : Array IR) (canonQualified : Name) (enclosingSepBys := 
       return mkNullNode #[
         mkNode catName #[
           mkAtom "</",
-          mkNode catName <| ← toExampleSyntax ir canonQualified enclosingSepBys.succ,
+          mkNode catName <| ← toExampleSyntax ir canonQualified profile enclosingSepBys.succ,
           mkAtom "//",
           mkNullNode,
           .ident (.original ⟨patString, 0, 0⟩ 0 ⟨patString, ⟨1⟩, ⟨1⟩⟩ ⟨1⟩)
@@ -621,7 +622,7 @@ def toExampleSyntax (ir : Array IR) (canonQualified : Name) (enclosingSepBys := 
       return mkNullNode #[
         mkNode catName #[
           mkAtom "</",
-          mkNode catName <| ← toExampleSyntax ir canonQualified enclosingSepBys,
+          mkNode catName <| ← toExampleSyntax ir canonQualified profile enclosingSepBys,
           mkAtom "//",
           mkNullNode,
           .ident (.original ⟨condString, 0, 0⟩ 0 ⟨condString, ⟨1⟩, ⟨1⟩⟩ ⟨1⟩)

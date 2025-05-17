@@ -30,7 +30,7 @@ elab_rules : command
     let output ← s.stxStack.toSubarray.toArray.filterMapM fun
       | .node _ `Lott.NonEmbed #[.atom _ s] => return s
       | stx => do
-        let s ← liftTermElabM <| texElabSymbolOrJudgement stx.getKind inputName stx
+        let s ← liftTermElabM <| texElabSymbolOrJudgement stx.getKind default inputName stx
         return "$" ++ s ++ "$"
 
     let some outputName := outputName?.map TSyntax.getString |>.orElse

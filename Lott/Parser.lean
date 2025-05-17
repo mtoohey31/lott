@@ -59,7 +59,7 @@ def idConfig := " (" >> nonReservedSymbol "id " >> sepBy1 ident ", " >> ")"
 
 def expandConfig := " (" >> nonReservedSymbol "expand" >> " := " >> termParser >> ")"
 
-def texConfig := " (" >> nonReservedSymbol "tex" >> " := " >> termParser >> ")"
+def texConfig := " (" >> nonReservedSymbol "tex" >> optional ident >> " := " >> termParser >> ")"
 
 def strLitTexConfig := " (" >> nonReservedSymbol "tex" >> " := " >> strLit >> ")"
 
@@ -80,7 +80,7 @@ declare_syntax_cat Lott.InferenceRule
 declare_syntax_cat Lott.JudgementDeclRHS
 declare_syntax_cat Lott.JudgementDecl
 
-syntax "judgement_syntax" (ppSpace stx)+ " : " ident atomic(idConfig)? (texConfig)? : command
+syntax "judgement_syntax" (ppSpace stx)+ " : " ident atomic(idConfig)? (texConfig)* : command
 
 private
 def bracketedBinder := Term.bracketedBinder
@@ -89,9 +89,12 @@ syntax Lott.Judgement : Lott.InferenceRuleUpper
 
 syntax ident " := " Lott.Symbol : Lott.InferenceRuleUpper
 
-def commentConfig := " (" >> nonReservedSymbol "comment" >> " := " >> strLit >> ")"
+syntax "notex " ("for " ident)? Lott.InferenceRuleUpper : Lott.InferenceRuleUpper
 
-syntax withPosition(ppLine Lott.InferenceRuleUpper)* ppLine "─"+ withPosition(ident atomic(lineEq commentConfig)? (lineEq bracketedBinder)* (lineEq " notex")?) withPosition(ppLine Lott.Judgement) : Lott.InferenceRule
+def commentConfig :=
+  " (" >> nonReservedSymbol "comment" >> optional ident >> optional (" := " >> strLit) >> ")"
+
+syntax withPosition(ppLine Lott.InferenceRuleUpper)* ppLine "─"+ withPosition(ident atomic(lineEq commentConfig)* (lineEq bracketedBinder)* (lineEq " notex")?) withPosition(ppLine Lott.Judgement) : Lott.InferenceRule
 
 syntax " where" ppLine Lott.InferenceRule* : Lott.JudgementDeclRHS
 

@@ -15,10 +15,10 @@ def judgementComprehensionImpl : Macro := fun stx => do
 
 @[lott_tex_elab judgementComprehension]
 private
-def judgementComprehensionTexElab : TexElab := fun ref stx => do
+def judgementComprehensionTexElab : TexElab := fun profile ref stx => do
   let `(judgementComprehension| </ $«judgement»:Lott.Judgement // $[(tex := $tex?)]? $pat:term in $collection:term $[notex%$nt]? />) := stx
     | throwUnsupportedSyntax
-  let judgementTex ← texElabSymbolOrJudgement «judgement».raw.getKind ref «judgement»
+  let judgementTex ← texElabSymbolOrJudgement «judgement».raw.getKind profile ref «judgement»
   if nt.isSome then
     if let some tex := tex? then
       logWarningAt tex "notex takes precedence over tex"

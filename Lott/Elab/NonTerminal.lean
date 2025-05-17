@@ -888,7 +888,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         elabCommand <| ←
           `(@[lott_tex_elab $catIdent]
             private
-            def $texElabName : TexElab := fun ref stx => do
+            def $texElabName : TexElab := fun profile ref stx => do
               let Lean.Syntax.node _ $(quote catName) #[$patternArgs,*] := stx
                 | throwUnsupportedSyntax
               $texSeqItems*
@@ -1144,8 +1144,9 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
         let canonQualified := ns ++ canon.getId
         let catName ← nt.catName
-        let exampleStx := mkNode catName <| ← toExampleSyntax ir canonQualified
-        let productionTex ← liftTermElabM <| texElabSymbolOrJudgement catName name exampleStx
+        let exampleStx := mkNode catName <| ← toExampleSyntax ir canonQualified default
+        let productionTex ← liftTermElabM <|
+          texElabSymbolOrJudgement catName default name exampleStx
         return some s!"\\lottproduction\{{productionTex}}\n"
       let productionsTex := "\\lottproductionsep\n".intercalate productionTexs.toList
       return s!"\\lottnonterminal\{{canonTex}}\{\n{aliasesTex}}\{\n{productionsTex}}\n"

@@ -64,6 +64,7 @@ structure Judgement where
   name : Name
   ir : Array IR
   ids : Array Name
+  profiles : Array Name
 
 structure JudgementState where
   byName : NameMap Judgement

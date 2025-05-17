@@ -19,7 +19,7 @@ def universalJudgementImpl : Macro
 
 @[lott_tex_elab universalJudgement]
 private
-def universalJudgementTexElab : TexElab := fun ref stx => do
+def universalJudgementTexElab : TexElab := fun profile ref stx => do
   let `(universalJudgement| ∀ $binders* $[$type?]?, $«judgement»:Lott.Judgement) := stx
     | throwUnsupportedSyntax
   let binderTexs := ", ".intercalate <| Array.toList <| binders.map fun
@@ -29,7 +29,7 @@ def universalJudgementTexElab : TexElab := fun ref stx => do
       | `(ident| $i) => i.getId.toString false |>.texEscape
     | `(ident| $i) => i.getId.toString false |>.texEscape
   -- NOTE: type is intentionally omitted.
-  let judgementTex ← texElabSymbolOrJudgement judgement.raw.getKind ref «judgement»
+  let judgementTex ← texElabSymbolOrJudgement judgement.raw.getKind profile ref «judgement»
 
   let opts ← getOptions
   let locallyNameless := opts.get lott.tex.locallyNameless.name lott.tex.locallyNameless.defValue
@@ -41,14 +41,14 @@ def universalJudgementTexElab : TexElab := fun ref stx => do
 @[lott_tex_elab universalPredJudgement]
 private
 def universalPredJudgementTexElab : TexElab
-  | ref, `(universalPredJudgement| ∀ $i:ident $bp:binderPred, $«judgement»:Lott.Judgement) => do
+  | profile, ref, `(universalPredJudgement| ∀ $i:ident $bp:binderPred, $«judgement»:Lott.Judgement) => do
     let identTex := i.getId.toString false |>.texEscape
     let bpSym := bp.raw.getArg 0 |>.getAtomVal
     let some bpTermSubstring :=
       bp.raw.getArg 1 |>.getSubstring? (withLeading := false) (withTrailing := false)
       | throwUnsupportedSyntax
     let bpTermTex := bpTermSubstring.toString.texEscape
-    let judgementTex ← texElabSymbolOrJudgement judgement.raw.getKind ref «judgement»
+    let judgementTex ← texElabSymbolOrJudgement judgement.raw.getKind profile ref «judgement»
 
     let opts ← getOptions
     let locallyNameless := opts.get lott.tex.locallyNameless.name lott.tex.locallyNameless.defValue
@@ -56,6 +56,6 @@ def universalPredJudgementTexElab : TexElab
       return judgementTex
 
     return s!"\\lottsym\{∀} \\, {identTex} \\, \\lottsym\{{bpSym}} \\, {bpTermTex}, {judgementTex}"
-  | _, _ => throwUnsupportedSyntax
+  | _, _, _ => throwUnsupportedSyntax
 
 end Lott

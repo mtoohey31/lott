@@ -15,7 +15,7 @@ def existentialJudgementImpl : Macro
 
 @[lott_tex_elab notExistentialJudgement]
 private
-def notExistentialJudgementTexElab : TexElab := fun ref stx => do
+def notExistentialJudgementTexElab : TexElab := fun profile ref stx => do
   let `(notExistentialJudgement| ∄ $binders, $«judgement»:Lott.Judgement) := stx
     | throwUnsupportedSyntax
   let binderIdents ← match binders with
@@ -27,7 +27,7 @@ def notExistentialJudgementTexElab : TexElab := fun ref stx => do
     | `(binderIdent| $i:ident) => return i.getId.toString false |>.texEscape
     | _ => throwUnsupportedSyntax
   -- NOTE: type is intentionally omitted.
-  let judgementTex ← texElabSymbolOrJudgement judgement.raw.getKind ref «judgement»
+  let judgementTex ← texElabSymbolOrJudgement judgement.raw.getKind profile ref «judgement»
 
   return s!"\\lottsym\{∄} \\, {binderTexs}, {judgementTex}"
 
