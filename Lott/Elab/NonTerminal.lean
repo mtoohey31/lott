@@ -538,7 +538,7 @@ structure Production where
   bindConfig? : Option BindConfig
   ids : Array Name
   «notex» : Bool
-  tex? : Option Term
+  profileTex : NameMap Term
 
 private
 def Production.binders (prod : Production) : Array Name :=
@@ -604,6 +604,7 @@ where
 
 end NonTerminal
 
+set_option maxHeartbeats 2000000 in
 private
 def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
   -- Populate alias map immediately so we can resolve stuff within the current mutual throughout the
@@ -632,7 +633,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       nameTex?s.extract 1 nameTex?s.size |>.map <| Option.map TSyntax.getString
 
     let prodAndSubsts ← prods.mapM fun prod => do
-      let `(Production| | $[$ps]* : $name $[nosubst%$ns?]? $[notex%$nt?]? $[(bind $of? $[in $in??,*]?)]? $[(id $ids?,*)]? $[(expand := $expand?)]? $[(tex := $tex?)]?) := prod
+      let `(Production| | $[$ps]* : $name $[nosubst%$ns?]? $[notex%$nt?]? $[(bind $of? $[in $in??,*]?)]? $[(id $ids?,*)]? $[(expand := $expand?)]? $[(tex $[$texProfile?s]? := $tex?s)]*) := prod
         | throwUnsupportedSyntax
       let ids := ids?.getD (.mk #[]) |>.getElems
 
@@ -663,8 +664,15 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         | _, _ => unreachable!
 
       let ids := ids.map TSyntax.getId
+
+      let (_, defaults) := texProfile?s.zip tex?s |>.partition fun (p?, _) => p?.isSome
+      if defaults.size > 1 then
+        throwUnsupportedSyntax
+      let profileTex := RBMap.fromArray (cmp := Name.quickCmp) <| texProfile?s.zip tex?s |>.map
+        fun (profile?, tex) => (profile?.map TSyntax.getId |>.getD default, tex)
+
       return (
-        { name, ir, expand?, bindConfig?, ids, «notex» := nt?.isSome, tex? },
+        { name, ir, expand?, bindConfig?, ids, «notex» := nt?.isSome, profileTex },
         subst
       )
 
@@ -856,7 +864,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
     -- Define macros and tex elaborations.
     let catName ← nt.catName
     let catIdent := mkIdent catName
-    for prod@{ name, ir, expand?, ids, tex?, .. } in prods do
+    for prod@{ name, ir, expand?, ids, profileTex, .. } in prods do
       let patternArgs ← IR.toPatternArgs ir
 
       if ← getTerm then
@@ -880,7 +888,11 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
       if ← getTexOutputSome then
         let texSeqItems ← IR.toTexSeqItems ir canon.getId
-        let rest ← tex?.getDM do
+        let profileAlternatives ← profileTex.toArray.filterMapM fun (profile, tex) => do
+          if profile == default then
+            return none
+          return some <| ← `(doSeqItem| if profile == $(quote profile) then return $tex)
+        let rest ← profileTex.find? default |>.getDM do
           let joinArgs := IR.toJoinArgs ir
           `(" ".intercalate [$joinArgs,*])
 
@@ -892,6 +904,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
               let Lean.Syntax.node _ $(quote catName) #[$patternArgs,*] := stx
                 | throwUnsupportedSyntax
               $texSeqItems*
+              $profileAlternatives*
               return $rest)
 
     if ← getTerm then

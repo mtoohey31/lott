@@ -63,7 +63,7 @@ def texConfig := " (" >> nonReservedSymbol "tex" >> optional ident >> " := " >> 
 
 def strLitTexConfig := " (" >> nonReservedSymbol "tex" >> " := " >> strLit >> ")"
 
-syntax ppLine "|" (ppSpace prodArg)+ " : " withPosition(ident (lineEq " nosubst")? " notex"?) atomic(bindConfig)? atomic(idConfig)? atomic(expandConfig)? (texConfig)? : Lott.Production
+syntax ppLine "|" (ppSpace prodArg)+ " : " withPosition(ident (lineEq " nosubst")? " notex"?) atomic(bindConfig)? atomic(idConfig)? atomic(expandConfig)? (texConfig)* : Lott.Production
 
 private
 def parent := nonReservedSymbol "parent"
