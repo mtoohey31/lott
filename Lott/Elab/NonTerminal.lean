@@ -447,7 +447,8 @@ def nonTerminalImpl : Macro := fun
         base@(.node _ catName₀ _),
         .atom _ "^",
         var@(.node _ symbolPrefixedVarName _),
-        .node _ `null level
+        .node _ `null level,
+        .node _ `null _
       ],
       .atom _ "]]"
     ] => do
@@ -796,7 +797,9 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
           def $parserIdent : TrailingParser :=
             trailingNode $(quote <| ← nt.catName) Parser.maxPrec 0 <|
               checkNoWsBefore >> "^" >> categoryParser $(quote <| symbolPrefix ++ varName) 0 >>
-                Parser.optional (checkNoWsBefore >> "#" >> checkLineEq >> Parser.numLit))
+                Parser.optional (checkNoWsBefore >> "#" >> checkLineEq >> Parser.numLit) >>
+                Parser.optional (checkNoWsBefore >> "/" >> checkLineEq >>
+                  categoryParser $(quote <| symbolPrefix ++ varName) 0))
 
       let parserIdent := mkIdent <| canonName ++ valName.appendAfter "_open_parser"
       elabCommand <| ←

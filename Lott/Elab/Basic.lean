@@ -145,7 +145,8 @@ def texElabVariable : TexElab := fun
       base@(.node _ catName₀ _),
       .atom _ "^",
       var@(.node _ symbolPrefixedVarName _),
-      .node _ `null level
+      .node _ `null level,
+      node _ `null locallyNamelessSubstAlternative
     ] => do
     if catName != catName₀ then
       throwUnsupportedSyntax
@@ -157,7 +158,15 @@ def texElabVariable : TexElab := fun
     let varTex ← texElabSymbolOrJudgement symbolPrefixedVarName profile ref var
 
     if !(← getOptions).get lott.tex.locallyNameless.name lott.tex.locallyNameless.defValue then
-      return baseTex
+      match locallyNamelessSubstAlternative with
+      |  #[.atom _ "/", var@(.node _ symbolPrefixedVarName _)] =>
+        if !symbolPrefix.isPrefixOf symbolPrefixedVarName then
+          throwUnsupportedSyntax
+
+        let oldVarTex ← texElabSymbolOrJudgement symbolPrefixedVarName profile ref var
+        return s!"{baseTex}\\left[{varTex}/{oldVarTex}\\right]"
+      | #[] => return baseTex
+      | _ => throwUnsupportedSyntax
 
     if let some level := level[1]? then
       let levelTex ← texElabIdx level
