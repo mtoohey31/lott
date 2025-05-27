@@ -553,6 +553,7 @@ structure NonTerminal where
   parent? : Option Ident
   substitutions? : Option (Array (Name × Name))
   texPrePost? : Option (String × String)
+  profiles : Array Name
 
 namespace NonTerminal
 
@@ -577,7 +578,7 @@ def varParserAttrName (nt : NonTerminal) : CommandElabM Name :=
   return (← nt.varCatName).appendAfter "_parser"
 
 private partial
-def shallowClosure (nt : NonTerminal) (qualifiedLocalMap : NameMap NonTerminal)
+def shallowSubstitutionClosure (nt : NonTerminal) (qualifiedLocalMap : NameMap NonTerminal)
   : CommandElabM NameSet := do
   let mut res := .empty |>.insert (← nt.qualified)
   let mut queue := #[nt]
@@ -595,6 +596,37 @@ def shallowClosure (nt : NonTerminal) (qualifiedLocalMap : NameMap NonTerminal)
         let some nt := qualifiedLocalMap.find? name | continue
         queue := queue.push nt
   return res
+where
+  irClosure : IR → NameSet
+    | .mk _ (.category n) => .empty |>.insert n
+    | .mk _ (.atom _) => .empty
+    | .mk _ (.sepBy ir _)
+    | .mk _ (.optional ir) => irsClosure ir
+  irsClosure ir := ir.foldl (·.union <| irClosure ·) .empty
+
+private partial
+def profileClosure (nt : NonTerminal) (qualifiedLocalMap : NameMap NonTerminal)
+  : CommandElabM (Array Name) := do
+  let mut res : NameSet := RBTree.fromArray nt.profiles Name.quickCmp
+  let mut visited : NameSet := .empty |>.insert <| ← nt.qualified
+  let mut queue := #[nt]
+  repeat do
+    let some nt := queue.back? | break
+    queue := queue.pop
+
+    for { ir, .. } in nt.prods do
+      for name in irsClosure ir do
+        if visited.contains name then
+          continue
+
+        visited := visited.insert name
+
+        if let some nt@{ profiles, .. } := qualifiedLocalMap.find? name then
+          res := res.union <| .fromArray profiles Name.quickCmp
+          queue := queue.push nt
+        else if let some { profiles, .. } := symbolExt.getState (← getEnv) |>.find? name then
+          res := res.union <| .fromArray profiles Name.quickCmp
+  return res.toArray
 where
   irClosure : IR → NameSet
     | .mk _ (.category n) => .empty |>.insert n
@@ -633,7 +665,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       nameNt?s.extract 1 nameNt?s.size |>.map Option.isSome |>.zip <|
       nameTex?s.extract 1 nameTex?s.size |>.map <| Option.map TSyntax.getString
 
-    let prodAndSubsts ← prods.mapM fun prod => do
+    let prodSubstAndProfiles ← prods.mapM fun prod => do
       let `(Production| | $[$ps]* : $name $[nosubst%$ns?]? $[notex%$nt?]? $[(bind $of? $[in $in??,*]?)]? $[(id $ids?,*)]? $[(expand := $expand?)]? $[(tex $[$texProfile?s]? := $tex?s)]*) := prod
         | throwUnsupportedSyntax
       let ids := ids?.getD (.mk #[]) |>.getElems
@@ -674,10 +706,12 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
       return (
         { name, ir, expand?, bindConfig?, ids, «notex» := nt?.isSome, profileTex },
-        subst
+        subst,
+        texProfile?s.filterMap id
       )
 
-    let (prods, substs) := prodAndSubsts.unzip
+    let (prods, substAndProfiles) := prodSubstAndProfiles.unzip
+    let (substs, profiless) := substAndProfiles.unzip
     let qualified := (← getCurrNamespace) ++ canon.getId
     let substitutions? := if parent?.isSome || ns.isSome then
         none
@@ -692,7 +726,10 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       | none, none => none
       | _, _ => unreachable!
 
-    return { canon, aliases, prods, parent?, substitutions?, texPrePost? : NonTerminal }
+    let profiles := RBTree.toArray <| RBTree.fromArray (cmp := Name.quickCmp) <|
+      profiless.flatten.map TSyntax.getId
+
+    return { canon, aliases, prods, parent?, substitutions?, texPrePost?, profiles : NonTerminal }
 
   -- Define parser categories.
   for nt in nts do
@@ -740,7 +777,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       return nt
 
     let mut substitutions' := RBTree.empty (cmp := namePairCmp)
-    for n in ← nt.shallowClosure ntsMap do
+    for n in ← nt.shallowSubstitutionClosure ntsMap do
       let substitutions? ← match ntsMap.find? n with
         | some { substitutions?, .. } => pure substitutions?
         | none =>
@@ -751,13 +788,21 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         substitutions' := substitutions'.insert subst
     return { nt with substitutions? := substitutions'.toArray : NonTerminal }
 
-  for nt@{ canon, aliases, prods, parent?, substitutions?, texPrePost? } in nts do
+  let nts ← nts.mapM fun nt => do
+    return { nt with profiles := ← nt.profileClosure ntsMap : NonTerminal }
+
+  for nt@{ canon, aliases, prods, parent?, substitutions?, texPrePost?, profiles } in nts do
     -- Add symbol to environment extension before proceeding so that lookups of things within the
     -- current mutual still work properly.
     let normalProds := prods.foldl (init := mkNameMap _) fun acc { name, ir, expand?, .. } =>
       if expand?.isNone then acc.insert name.getId ir else acc
-    setEnv <| symbolExt.addEntry (← getEnv)
-      { qualified := ← nt.qualified, normalProds, substitutions := substitutions?.getD #[], texPrePost? }
+    setEnv <| symbolExt.addEntry (← getEnv) {
+      qualified := ← nt.qualified,
+      normalProds,
+      substitutions := substitutions?.getD #[],
+      texPrePost?,
+      profiles
+    }
 
   let isLocallyNameless (varName : Name) : CommandElabM Bool :=
     return metaVarExt.getState (← getEnv) |>.find! varName
@@ -1144,28 +1189,29 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       elabMutualCommands locallyClosedInductives
 
   -- Write tex output.
-  for nt@{ canon, aliases, prods, texPrePost?, .. } in nts do
-    writeTexOutput (ns ++ canon.getId) do
-      let canonTex := canon.getId.getFinal.getString!.pascalToTitle.texEscape
-      let (texPre, texPost) := texPrePost?.getD ("", "")
-      let aliasesTex := "\\lottaliassep\n".intercalate <| aliases.toList.filterMap
-        fun (alias, «notex», tex?) =>
-          if «notex» then
-            none
-          else
-            let aliasTex := tex?.getD alias.getId.getFinal.getString!.texEscape
-            s!"{texPre}\\lottalias\{{aliasTex}}{texPost}\n"
-      let productionTexs ← prods.filterMapM fun { name, ir, «notex», .. } => do
-        if «notex» then return none
+  for nt@{ canon, aliases, prods, texPrePost?, profiles, .. } in nts do
+    for profile in profiles.push default do
+      writeTexOutput (ns ++ canon.getId ++ profile) do
+        let canonTex := canon.getId.getFinal.getString!.pascalToTitle.texEscape
+        let (texPre, texPost) := texPrePost?.getD ("", "")
+        let aliasesTex := "\\lottaliassep\n".intercalate <| aliases.toList.filterMap
+          fun (alias, «notex», tex?) =>
+            if «notex» then
+              none
+            else
+              let aliasTex := tex?.getD alias.getId.getFinal.getString!.texEscape
+              s!"{texPre}\\lottalias\{{aliasTex}}{texPost}\n"
+        let productionTexs ← prods.filterMapM fun { name, ir, «notex», .. } => do
+          if «notex» then return none
 
-        let canonQualified := ns ++ canon.getId
-        let catName ← nt.catName
-        let exampleStx := mkNode catName <| ← toExampleSyntax ir canonQualified default
-        let productionTex ← liftTermElabM <|
-          texElabSymbolOrJudgement catName default name exampleStx
-        return some s!"\\lottproduction\{{productionTex}}\n"
-      let productionsTex := "\\lottproductionsep\n".intercalate productionTexs.toList
-      return s!"\\lottnonterminal\{{canonTex}}\{\n{aliasesTex}}\{\n{productionsTex}}\n"
+          let canonQualified := ns ++ canon.getId
+          let catName ← nt.catName
+          let exampleStx := mkNode catName <| ← toExampleSyntax ir canonQualified profile
+          let productionTex ← liftTermElabM <|
+            texElabSymbolOrJudgement catName profile name exampleStx
+          return some s!"\\lottproduction\{{productionTex}}\n"
+        let productionsTex := "\\lottproductionsep\n".intercalate productionTexs.toList
+        return s!"\\lottnonterminal\{{canonTex}}\{\n{aliasesTex}}\{\n{productionsTex}}\n"
 
 elab_rules : command
   | `($nt:Lott.NonTerminal) => elabNonTerminals #[nt]

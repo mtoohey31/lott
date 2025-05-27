@@ -77,7 +77,7 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $[(tex pre := $pre?, p
     | none, none => pure none
     | _, _ => unreachable!
   setEnv <| symbolExt.addEntry (← getEnv)
-    { qualified, normalProds := .empty, substitutions := #[], texPrePost? }
+    { qualified, normalProds := .empty, substitutions := #[], texPrePost?, profiles := #[] }
 
   -- Declare syntax category. For metavariables we just declare the alias name parsers directly in
   -- the syntax category. This differs from variable parsers for non-terminals, for which we declare

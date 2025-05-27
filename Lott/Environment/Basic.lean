@@ -40,6 +40,7 @@ structure Symbol where
   normalProds : NameMap (Array IR)
   substitutions : Array (Name × Name)
   texPrePost? : Option (String × String)
+  profiles : Array Name
 
 instance : Inhabited Symbol where
   default := {
@@ -47,6 +48,7 @@ instance : Inhabited Symbol where
     normalProds := default
     substitutions := default
     texPrePost? := default
+    profiles := default
   }
 
 abbrev SymbolState := NameMap Symbol
