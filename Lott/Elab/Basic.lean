@@ -651,6 +651,6 @@ elab_rules : command | `(termonly $c) => do if ← getTerm then elabCommand c
 
 @[macro qualifiedSymbolEmbed]
 def qualifiedSymbolEmbedImpl : Macro := fun stx =>
-  return Lott.Syntax.mkSymbolEmbed <| stx.getArg 3
+  return Lott.Syntax.mkSymbolEmbed <| stx.getArg 1 |>.getArg 2
 
 end Lott

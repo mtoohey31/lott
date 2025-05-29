@@ -15,7 +15,7 @@
           inherit system;
         };
         inherit (pkgs) clangStdenv mkShell texlab texliveFull;
-        inherit (pkgs.lean) Init lean-all;
+        inherit (pkgs.lean) Init Lake lean-all;
       in
       {
         # TODO: Add overlay and package output.
@@ -24,7 +24,7 @@
           default = (mkShell.override { stdenv = clangStdenv; }) {
             packages = [ lean-all ];
             shellHook = ''
-              export LEAN_SRC_PATH=${Init.src}
+              export LEAN_SRC_PATH=${Init.src}:${Lake.src}
             '';
           };
 

@@ -158,12 +158,12 @@ def parserOfStack.parenthesizer (offset : Nat) (_prec : Nat := 0) : Parenthesize
   let stx := st.stxTrav.parents.back!.getArg (st.stxTrav.idxs.back! - offset)
   parenthesizerForKind stx.getKind
 
-private
-def lottSymbolParser := incQuotDepth (parserOfStack 1)
+def qualifiedSymbolParser := leadingNode `Lott.QualifiedSymbol Parser.maxPrec <|
+  ident >> "| " >> incQuotDepth (parserOfStack 1)
 
 @[term_parser]
 def qualifiedSymbolEmbed := leading_parser
-  "[[" >> ident >> "| " >> lottSymbolParser >> "]]"
+  "[[" >> qualifiedSymbolParser >> "]]"
 
 /- External interaction syntax. -/
 
