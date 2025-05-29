@@ -1,5 +1,5 @@
 import Lott.Elab.Basic
-import Lott.Parser
+import Lott.Parser.Filter
 
 namespace Lott
 
