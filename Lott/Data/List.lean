@@ -16,6 +16,11 @@ def mapMemIdx (as : List α) (f : Nat → (a : α) → a ∈ as → β) : List �
   | [] => []
   | a :: as' => f as'.length a (.head _) :: as'.mapMemIdx (f · · <| ·.tail _)
 
+@[specialize]
+def mapMemM [Monad m] (as : List α) (f : (a : α) → a ∈ as → m β) : m (List β) := match as with
+  | [] => return []
+  | a :: as' => return (← f a (.head _)) :: (← as'.mapMemM (f · <| ·.tail _))
+
 @[simp]
 theorem mapMem_eq_map {as : List α} : as.mapMem (fun a _ => f a) = as.map f := by
   match as with
