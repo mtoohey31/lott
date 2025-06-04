@@ -35,10 +35,10 @@ inductive Filterable where
 Filter files containing nonterminal or judgement syntax
 
 USAGE:
-  lake run lott-filter <target> [<filterable>...]
+  lake run lott-filter <target> <namespace> [<filterable>...]
 -/
 script «lott-filter» args do
-  let spec :: filterables := args |
+  let spec :: «namespace» :: filterables := args |
     IO.eprintln "USAGE: lake run lott-filter <target> [<filterables>...]"
     return 2
   let currentDir ← IO.currentDir
@@ -49,7 +49,8 @@ script «lott-filter» args do
       if isDir then
         let rest ← parseFilterables filterables
         return rest.map (s!"#filter {mkAbs input |>.toString.quote}\n" ++ ·)
-      let output :: filterables := filterables | return .error "no output path following non-directory input"
+      let output :: filterables := filterables
+        | return .error "no output path following non-directory input"
       let rest ← parseFilterables filterables
       return rest.map
         (s!"#filter {mkAbs input |>.toString.quote} {mkAbs output |>.toString.quote}\n" ++ ·)
@@ -74,7 +75,8 @@ script «lott-filter» args do
       Lean.searchPathRef.set ws.augmentedLeanPath
       enableInitializersExecution
 
-      let input := s!"import Lott.Elab.Filter\nimport {spec}\n" ++ inputCommands
+      let input := s!"import Lott.Elab.Filter\nimport {spec}\nnamespace {«namespace»}\n" ++
+        inputCommands
       let opts := Lean.KVMap.empty.insert `lott.tex.output.dir <| .ofString "/dev/null"
       let (_, ok) ← Lean.Elab.runFrontend input opts "LottFilterScript.lean" `LottFilterScript
       return (!ok).toUInt32
