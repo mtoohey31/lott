@@ -61,7 +61,8 @@ script «lott-filter» args do
     return 2
   | .ok inputCommands =>
     let ws ← getWorkspace
-    match parseTargetSpec ws spec with
+    let filter := "Lott.Elab.Filter"
+    match parseTargetSpecs ws [filter, spec] with
     | .error cliError =>
       IO.eprintln cliError
       return 1
@@ -75,7 +76,7 @@ script «lott-filter» args do
       Lean.searchPathRef.set ws.augmentedLeanPath
       enableInitializersExecution
 
-      let input := s!"import Lott.Elab.Filter\nimport {spec}\nnamespace {«namespace»}\n" ++
+      let input := s!"import {filter}\nimport {spec}\nnamespace {«namespace»}\n" ++
         inputCommands
       let opts := Lean.KVMap.empty.insert `lott.tex.output.dir <| .ofString "/dev/null"
       let (_, ok) ← Lean.Elab.runFrontend input opts "LottFilterScript.lean" `LottFilterScript
