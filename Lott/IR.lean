@@ -53,10 +53,11 @@ def containsName (ir : Array IR) (name : Name) : Bool :=
       | _ => false
 
 mutual
+
 private partial
-def toParser' (canon : Name) : IR → CommandElabM Term
+def toParser' (canon : Name) : IR → CommandElabM (Option Term)
   | mk _ (.category n) => ``(categoryParser $(quote <| symbolPrefix ++ n) Parser.maxPrec)
-  | mk _ (.atom s) => ``(symbol $(mkStrLit s))
+  | mk _ (.atom s) => if s == "" then return none else ``(symbol $(mkStrLit s))
   | mk l (.sepBy ir sep) => do
     let canon' := canon ++ l.getId |>.obfuscateMacroScopes
     let catName := sepByPrefix ++ (← getCurrNamespace) ++ canon'
@@ -121,11 +122,13 @@ def toParser' (canon : Name) : IR → CommandElabM Term
 
 private partial
 def toParserSeq (canon : Name) (ir : Array IR) : CommandElabM Term := do
-  if ir.size == 0 then
+  let parserTerms ← ir.filterMapM <| toParser' canon
+
+  if parserTerms.size == 0 then
     throwUnsupportedSyntax
 
-  ir.foldlM (start := 1) (init := ← ir[0]!.toParser' canon)
-    fun acc ir => do ``($acc >> checkLineEq >> $(← ir.toParser' canon))
+  parserTerms.foldlM (start := 1) (init := parserTerms[0]!)
+    fun acc t => do ``($acc >> checkLineEq >> $t)
 
 partial
 def toParser (ir : Array IR) (canon catPrefix : Name) : CommandElabM (Term × Term) := do
@@ -144,6 +147,7 @@ def toParser (ir : Array IR) (canon catPrefix : Name) : CommandElabM (Term × Te
 
   let rest ← toParserSeq canon ir
   return (← ``(leadingNode $(quote catName) Parser.maxPrec $rest), ← ``(Parser))
+
 end
 
 mutual
@@ -179,22 +183,25 @@ def toTypeArrSeq (ir : Array IR) (init : Term) (ids binders : Array Name) : Comm
   (← ir.filterMapM <| IR.toType ids binders) |> foldrArrow (init := init)
 
 private
-def toPatternArg : IR → CommandElabM Term
+def toPatternArg : IR → CommandElabM (Option Term)
   | mk l (.category n) => `($l@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ n) _))
-  | mk l (.atom s) => `($l@(Lean.Syntax.atom _ $(quote s.trim)))
+  | mk l (.atom s) => if s == "" then return none else `($l@(Lean.Syntax.atom _ $(quote s.trim)))
   | mk l (.sepBy ..) => `($l@(Lean.Syntax.node _ `null _))
   | mk l (.optional ..) => `($l@(Lean.Syntax.node _ `null _))
 
 def toPatternArgs (ir : Array IR) : CommandElabM (TSepArray `term ",") :=
-  ir.mapM IR.toPatternArg
+  ir.filterMapM IR.toPatternArg
 
 def toJoinArgs (ir : Array IR) : TSepArray `term "," := Id.run do
   let (elems, _) := ir.foldl (init := (#[], false))
     fun | (acc, lastWasNonAtom), mk l ir =>
-          let nonAtom := match ir with | .atom _ => false | _ => true
+          let (nonAtom, emptyAtom) := match ir with
+            | .atom s => (false, s == "")
+            | _ => (true, false)
           (
-            acc ++ (Option.someIf (Syntax.mkStrLit "\\,") (lastWasNonAtom && nonAtom)).toArray
-              |>.push l,
+            if emptyAtom then acc else
+              acc ++ (Option.someIf (Syntax.mkStrLit "\\,") (lastWasNonAtom && nonAtom)).toArray
+                |>.push l,
             nonAtom,
           )
   let mut elemsAndSeps := #[]

@@ -577,11 +577,11 @@ def toExampleSyntax (ir : Array IR) (canonQualified profile : Name) (enclosingSe
     lott.tex.example.singleProductionInline.defValue
   let «notex» := (← getOptions).get lott.tex.example.comprehensionNoTex.name
     lott.tex.example.comprehensionNoTex.defValue
-  ir.mapM fun (mk l ir) => match ir with
+  ir.filterMapM fun (mk l ir) => match ir with
     | .category n => do
       let env ← getEnv
       if metaVarExt.getState env |>.contains n then
-        return sepByIdxStrings.foldl (init := mkNode (symbolPrefix ++ n) #[l])
+        return some <| sepByIdxStrings.foldl (init := mkNode (symbolPrefix ++ n) #[l])
           (stop := enclosingSepBys)
           (mkNode (symbolPrefix ++ n) #[·, mkAtom "@", mkIdent <| .str .anonymous ·])
 
@@ -595,7 +595,7 @@ def toExampleSyntax (ir : Array IR) (canonQualified profile : Name) (enclosingSe
         sepByIdxStrings.foldl (init := mkNode (variablePrefix ++ n) #[l]) (stop := enclosingSepBys)
           (mkNode (variablePrefix ++ n) #[·, mkAtom "@", mkIdent <| .str .anonymous ·])
       ]
-    | .atom s => return mkAtom s.trim
+    | .atom s => return if s == "" then none else mkAtom s.trim
     | .sepBy ir _ => do
       let catName := sepByPrefix ++ canonQualified ++ l.getId |>.obfuscateMacroScopes
       let some patString := sepByIdxStrings[enclosingSepBys]?
