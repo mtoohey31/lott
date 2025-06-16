@@ -199,8 +199,6 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
                 return s!"\n\\lotthypothesis\{{hypTex}}"
               | _ => throwUnsupportedSyntax
             let mut hypothesesTex := "\\\\".intercalate hypothesesTexs.toList
-            if hypothesesTex == "" then
-              hypothesesTex := "\n\\\\\\\\"
             let conclusionTex ← liftTermElabM <|
               texElabSymbolOrJudgement catName profile conclusion conclusion
             let (alts, defaults) := commentProfile?s.zip comment?s |>.partition fun (profile?, _) =>
