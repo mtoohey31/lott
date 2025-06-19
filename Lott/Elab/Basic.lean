@@ -95,7 +95,7 @@ def texElabMetavar : TexElab := fun
   | profile, ref, .node _ _ #[«fun», .atom _ "@", idx] => do
     let funTex ← texElabMetavar profile ref «fun»
     let idxTex ← texElabIdx idx
-    return s!"\{{funTex}}_\{{idxTex}}"
+    return s!"{funTex}_\{{idxTex}}"
   | _, _, _ => throwUnsupportedSyntax
 
 mutual
@@ -120,7 +120,7 @@ def texElabVariable : TexElab := fun
   | profile, ref, .node info kind #[.node _ _ #[«fun», .atom _ "@", idx] ] => do
     let funTex ← texElabVariable profile ref <| .node info kind #[«fun»]
     let idxTex ← texElabIdx idx
-    return s!"\{{funTex}}_\{{idxTex}}"
+    return s!"{funTex}_\{{idxTex}}"
   | profile, ref, .node _ catName #[
       base@(.node _ catName₀ _),
       .atom _ "[",
