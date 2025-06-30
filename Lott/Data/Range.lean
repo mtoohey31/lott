@@ -202,6 +202,33 @@ decreasing_by
   apply Nat.sub_succ_lt_self
   assumption
 
+theorem getElem_toList (mlt : m < n - l)
+  : [l:n].toList[m]'(by rw [length_toList]; exact mlt) = l + m := by
+  rw [List.getElem_eq_iff]
+  rw [toList]
+  split
+  · case isTrue h =>
+    simp only
+    rw [List.getElem?_cons]
+    split
+    · case isTrue h =>
+      cases h
+      rfl
+    · case isFalse h =>
+      have := getElem_toList (l := l + 1) (m := m - 1) (n := n) <| by
+        apply Nat.lt_sub_of_add_lt
+        rw [Nat.add_comm l, ← Nat.add_assoc, Nat.sub_add_cancel <| Nat.pos_of_ne_zero h]
+        exact Nat.add_lt_of_lt_sub mlt
+      rw [List.getElem_eq_iff] at this
+      rw [Nat.add_assoc l 1 (m - 1), Nat.add_comm 1 (m - 1),
+          Nat.sub_add_cancel <| Nat.pos_of_ne_zero h] at this
+      exact this
+  · case isFalse h =>
+    simp at h
+    have := Nat.add_lt_of_lt_sub mlt
+    rw [Nat.add_comm] at this
+    nomatch Nat.not_le.mpr (Nat.lt_of_add_right_lt this) h
+
 theorem map_get!_eq [Inhabited α] {as : List α} : [:as.length].map as.get! = as := by
   match as with
   | [] =>

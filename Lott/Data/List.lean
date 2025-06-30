@@ -237,4 +237,9 @@ theorem cofinite_skolem {p : Nat → α → Prop} {I : List Nat}
     exact ⟨y, fun _ => h'⟩
   · case neg xmem => exact ⟨a', fun xnmem => nomatch xmem xnmem⟩
 
+theorem sizeOf_append [SizeOf α] {l₁ l₂ : List α}
+  : sizeOf (l₁ ++ l₂) + 1 = sizeOf l₁ + sizeOf l₂ := by
+  induction l₁ <;> simp_arith
+  assumption
+
 end List
