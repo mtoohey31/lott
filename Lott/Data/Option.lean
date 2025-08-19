@@ -31,6 +31,15 @@ theorem someIf_eq : someIf x b₀ = someIf y b₁ → b₀ = b₁ := by
   | true => exact eq_of_someIf_eq_some h |>.right
   | false => exact eq_of_someIf_eq_none h
 
+theorem isSome_someIf : isSome (someIf x b) = b := by
+  rw [someIf]
+  split
+  · case isTrue h =>
+    cases h
+    rw [isSome]
+  · case isFalse h =>
+    rw [Bool.not_eq_true _ |>.mp h, isSome]
+
 def keepIf (x : Option α) (b : Bool) : Option α := if b then x else none
 
 def mapMem (a? : Option α) (f : (a : α) → a ∈ a? → β) : Option β := match a? with
