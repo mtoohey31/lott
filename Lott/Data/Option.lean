@@ -48,4 +48,6 @@ def mapMem (a? : Option α) (f : (a : α) → a ∈ a? → β) : Option β := ma
 
 theorem mapMem_eq_map {a? : Option α} : a?.mapMem (fun a _ => f a) = a?.map f := by cases a? <;> rfl
 
+theorem map_someIf : Option.map f (someIf x b) = someIf (f x) b := by cases b <;> simp [someIf]
+
 end Option
