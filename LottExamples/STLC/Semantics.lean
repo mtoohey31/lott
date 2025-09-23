@@ -96,6 +96,9 @@ x : τ ∈ Γ
 ──────────────── app
 Γ ⊢ e₀ e₁ : τ₁
 
+───────────── unit
+Γ ⊢ () : Unit
+
 judgement_syntax e " ↦ " e' : Reduction
 
 judgement Reduction where

@@ -88,6 +88,10 @@ theorem append_inr : [[x : τ ∈ Γ₁]] → [[x : τ ∈ Γ₀, Γ₁]]
   | head => head
   | ext xinΓ₁' xnex' => xinΓ₁'.append_inr.ext xnex'
 
+theorem VarInDom_of : [[x : τ ∈ Γ]] → [[x ∈ dom(Γ)]]
+  | .head => .head _
+  | .ext xinΓ' ne => .tail _ xinΓ'.VarInDom_of
+
 end VarIn
 
 theorem VarNotIn.append : [[x ∉ Γ₀, Γ₁]] ↔ [[x ∉ Γ₀]] ∧ [[x ∉ Γ₁]] where
@@ -163,6 +167,8 @@ theorem exchange : [[x ∉ dom(Γ₀, x' : τ, Γ₁, Γ₂)]] → [[x ∉ dom(�
     let ⟨xnindomΓ₁, xnindomΓ₂⟩ := append.mp xnindomΓ₁Γ₂
     append.mpr ⟨xnindomΓ₀, append.mpr ⟨ext.mpr ⟨xnex', xnindomΓ₁⟩, xnindomΓ₂⟩⟩
 
+theorem not_VarIn : [[x ∉ dom(Γ)]] → [[x ∉ Γ]] := (· <| VarIn.VarInDom_of (τ := ·) ·)
+
 end VarNotInDom
 
 namespace WellFormedness
@@ -202,11 +208,19 @@ theorem exchange : [[⊢ Γ₀, x : τ, Γ₁, Γ₂]] → [[⊢ Γ₀, Γ₁, x
     let .ext Γ₀xΓ₁Γ₂'wf x'ninΓ₀xΓ₁Γ₂' := Γ₀xΓ₁Γ₂wf
     Γ₀xΓ₁Γ₂'wf.exchange.ext x'ninΓ₀xΓ₁Γ₂'.exchange
 
+theorem append_elim : [[⊢ Γ₀, Γ₁]] → [[⊢ Γ₀]] ∧ [[⊢ Γ₁]] := fun Γ₀Γ₁wf =>
+  match Γ₁ with
+  | .empty => ⟨Γ₀Γ₁wf, .empty⟩
+  | .ext .. =>
+    let .ext Γ₀Γ₁'wf xninΓ₀Γ₁' := Γ₀Γ₁wf
+    let ⟨Γ₀wf, Γ₁'wf⟩ := Γ₀Γ₁'wf.append_elim
+    ⟨Γ₀wf, .ext Γ₁'wf <| VarNotInDom.append.mp xninΓ₀Γ₁' |>.right⟩
+
 end WellFormedness
 
 theorem VarIn.exchange
   : [[x : τ ∈ Γ₀, x' : τ', Γ₁, Γ₂]] → [[⊢ Γ₀, x' : τ', Γ₁, Γ₂]] → [[x : τ ∈ Γ₀, Γ₁, x' : τ', Γ₂]] :=
-  fun xinΓ₀x'Γ₁Γ₂ _ =>
+  fun xinΓ₀x'Γ₁Γ₂ Γ₀x'Γ₁Γ₂wf =>
     match xinΓ₀x'Γ₁Γ₂.append_elim with
     | .inl ⟨xinΓ₀x', xninΓ₁Γ₂⟩ =>
       let ⟨xninΓ₁, xninΓ₂⟩ := VarNotIn.append.mp xninΓ₁Γ₂
@@ -216,9 +230,12 @@ theorem VarIn.exchange
         xinΓ₀.append_inl <| VarNotIn.append.mpr ⟨VarNotIn.ext.mpr ⟨xnex', xninΓ₁⟩, xninΓ₂⟩
     | .inr xinΓ₁Γ₂ => match xinΓ₁Γ₂.append_elim with
       | .inl ⟨xinΓ₁, xninΓ₂⟩ =>
-        let f xeqx' :=
-          let .refl _ := xeqx'
-          VarIn.head.append_inl xninΓ₂
+        let f xeqx' := by
+          subst xeqx'
+          rw [Environment.append_assoc] at Γ₀x'Γ₁Γ₂wf
+          let .ext _ xninΓ₀Γ₁ := Γ₀x'Γ₁Γ₂wf.append_elim.left.exchange (Γ₂ := .empty)
+          let xninΓ₁ := VarNotInDom.append.mp xninΓ₀Γ₁ |>.right
+          nomatch xninΓ₁.not_VarIn _ xinΓ₁
         Classical.byCases (p := x = x') f (xinΓ₁.ext · |>.append_inl xninΓ₂) |>.append_inr
       | .inr xinΓ₂ => xinΓ₂.append_inr.append_inr
 
@@ -243,11 +260,13 @@ theorem toVarLocallyClosed : [[Γ ⊢ e : τ]] → e.VarLocallyClosed
     let e'ty := e'ty x xnin
     .lam <| e'ty.toVarLocallyClosed.weakening (Nat.le_succ 0) |>.Var_open_drop <| Nat.zero_lt_succ _
   | app e₀ty e₁ty => .app e₀ty.toVarLocallyClosed e₁ty.toVarLocallyClosed
+  | unit => .unit
 
 theorem exchange : [[Γ₀, x : τ, Γ₁, Γ₂ ⊢ e : τ']] → [[Γ₀, Γ₁, x : τ, Γ₂ ⊢ e : τ']]
   | var Γ₀xΓ₁Γ₂wf x'inΓ₀xΓ₁Γ₂ => var Γ₀xΓ₁Γ₂wf.exchange <| x'inΓ₀xΓ₁Γ₂.exchange Γ₀xΓ₁Γ₂wf
   | lam e'ty => lam fun x' x'nin => let e'ty := e'ty x' x'nin; e'ty.exchange (Γ₂ := Γ₂.ext x' _)
   | app e₀ty e₁ty => app e₀ty.exchange e₁ty.exchange
+  | unit => unit
 
 theorem weakening : [[Γ₀ ⊢ e : τ]] → [[⊢ Γ₀, Γ₁]] → [[Γ₀, Γ₁ ⊢ e : τ]]
   | var _ xinΓ₀, Γ₀Γ₁wf =>
@@ -259,6 +278,7 @@ theorem weakening : [[Γ₀ ⊢ e : τ]] → [[⊢ Γ₀, Γ₁]] → [[Γ₀, �
       have := e'ty.weakening (Γ₀Γ₁wf.insert xnindomΓ₀Γ₁)
       exact this.exchange (Γ₂ := .empty)
   | app e₀ty e₁ty, Γ₀Γ₁wf => app (e₀ty.weakening Γ₀Γ₁wf) (e₁ty.weakening Γ₀Γ₁wf)
+  | unit, _ => unit
 
 theorem opening
   (e₁ty : Typing ((Γ₀.ext x τ₀).append Γ₁) (e₁.Var_open x n) τ₁) (e₀ty : [[Γ₀ ⊢ e₀ : τ₀]])
@@ -297,6 +317,9 @@ theorem opening
   | [[e₁₀ e₁₁]] =>
     let .app e₁₀ty e₁₁ty := e₁ty
     exact .app (e₁₀ty.opening e₀ty xninΓ₁ xninfve₁.app₀) (e₁₁ty.opening e₀ty xninΓ₁ xninfve₁.app₁)
+  | [[()]] =>
+    let .unit := e₁ty
+    exact unit
 
 end Typing
 
@@ -321,6 +344,7 @@ theorem progress (ty : [[ε ⊢ e : τ]]) : e.IsValue ∨ ∃ e', [[e ↦ e']] :
         .inr <| .intro _ <| .lamApp (v := v₁)
       | .inr ⟨_, e₁ree₁'⟩ => .inr <| .intro _ <| .appr e₁ree₁'
     | .inr ⟨_, e₀ree₀'⟩ => .inr <| .intro _ <| .appl e₀ree₀'
+  | [[()]], .unit => .inl .unit
 
 end Reduction
 

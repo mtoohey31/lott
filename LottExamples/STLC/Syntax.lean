@@ -6,6 +6,7 @@ set_option lott.tex.example.singleProductionInline false
 
 nonterminal «Type», τ :=
   | τ₀ " → " τ₁ : arr
+  | "Unit"      : unit
 
 locally_nameless
 metavar Var, x
@@ -14,6 +15,7 @@ nonterminal Term, e :=
   | x             : var
   | "λ " x ". " e : lam (bind x in e)
   | e₀ e₁         : app
+  | "(" ")"       : unit
   | "(" e ")"     : paren notex (expand := return e)
 
 nonterminal Environment, Γ :=
@@ -23,5 +25,6 @@ nonterminal Environment, Γ :=
 
 nonterminal (parent := Term) Value, v :=
   | "λ " x ". " e : lam (bind x in e)
+  | "(" ")"       : unit
 
 end LottExamples.STLC
