@@ -337,12 +337,12 @@ theorem preservation (ty : [[Γ ⊢ e : τ]]) (re : [[e ↦ e']]) : [[Γ ⊢ e' 
 theorem progress (ty : [[ε ⊢ e : τ]]) : e.IsValue ∨ ∃ e', [[e ↦ e']] := match e, ty with
   | [[λ x. e₀]], _ => .inl .lam
   | [[e₀ e₁]], .app e₀ty e₁ty => match progress e₀ty with
-    | .inl _ => match progress e₁ty with
+    | .inl e₀IsValue => match progress e₁ty with
       | .inl e₁IsValue =>
         let [[λ x. e₀']] := e₀
         let v₁ : Value := ⟨e₁, e₁IsValue⟩
         .inr <| .intro _ <| .lamApp (v := v₁)
-      | .inr ⟨_, e₁ree₁'⟩ => .inr <| .intro _ <| .appr e₁ree₁'
+      | .inr ⟨_, e₁ree₁'⟩ => .inr <| .intro _ <| .appr e₁ree₁' (v := ⟨_, e₀IsValue⟩)
     | .inr ⟨_, e₀ree₀'⟩ => .inr <| .intro _ <| .appl e₀ree₀'
   | [[()]], .unit => .inl .unit
 

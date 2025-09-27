@@ -2,8 +2,6 @@ import Lott
 
 namespace LottExamples.STLC
 
-set_option lott.tex.example.singleProductionInline false
-
 nonterminal «Type», τ :=
   | τ₀ " → " τ₁ : arr
   | "Unit"      : unit
