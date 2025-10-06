@@ -3,8 +3,6 @@ import LottExamples.STLC.Syntax
 
 namespace LottExamples.STLC
 
-set_option lott.tex.example.singleProductionInline false
-
 judgement_syntax x " ≠ " x' : VarId.Ne (id x, x')
 
 judgement VarId.Ne := fun (x x' : VarId) => x ≠ x'
