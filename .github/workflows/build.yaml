@@ -3,15 +3,10 @@ on:
   push:
     branches: ["**"]
 jobs:
-  Build:
+  build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/cache@v4
+    - uses: leanprover/lean-action@v1
       with:
-        key: ${{ runner.os }}-lean-${{ hashFiles('lean-toolchain', 'lakefile.lean', 'lake-manifest.json') }}
-        path: .lake
-    - uses: Julian/setup-lean@v1
-      with:
-        default-toolchain-file: lean-toolchain
-    - run: lake build Lott LottExamples
+        build-args: Lott LottExamples
