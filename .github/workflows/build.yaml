@@ -8,5 +8,3 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: leanprover/lean-action@v1
-      with:
-        build-args: Lott LottExamples

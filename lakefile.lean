@@ -15,8 +15,10 @@ package lott where
 
 require aesop from git "https://github.com/leanprover-community/aesop" @ "v4.17.0"
 
+@[default_target]
 lean_lib Lott
 
+@[test_driver]
 lean_lib LottExamples where
   leanOptions := (if noterm then #[⟨`lott.term, false⟩] else #[]) ++
     if notex then #[] else #[⟨`lott.tex.output.sourceRelative, false⟩]
