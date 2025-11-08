@@ -8,7 +8,7 @@ metavar TypeVar, a
 nonterminal «Type», A, B :=
   | a                    : var
   | A " → " B            : arr
-  | "∀ " a ". " A        : forall' (bind a in A)
+  | "∀ " a ". " A        : «forall» (bind a in A)
   | "(" A ")"            : paren notex (expand := return A)
 
 locally_nameless

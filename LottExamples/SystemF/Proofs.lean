@@ -371,7 +371,7 @@ theorem arr : [[a ∉ ftv(A → B)]] ↔ [[a ∉ ftv(A)]] ∧ [[a ∉ ftv(B)]] w
     | .inl ainA => aninA ainA
     | .inr ainB => aninB ainB
 
-theorem forall' : [[a ∉ ftv(∀ a'. A)]] → [[a ∉ ftv(A)]] := (· ·)
+theorem «forall» : [[a ∉ ftv(∀ a'. A)]] → [[a ∉ ftv(A)]] := (· ·)
 
 theorem TypeVar_open_of_ne (h : a ≠ a') : [[a ∉ ftv(A)]] → [[a ∉ ftv(A^a')]] :=
   (· <| ·.of_TypeVar_open h)
@@ -418,7 +418,7 @@ theorem TypeVar_open_inj_of {A B : «Type»} (aninftvA : [[a ∉ ftv(A)]]) (anin
         (arr.mp aninftvA).right.TypeVar_open_inj_of (arr.mp aninftvB).right B'opeqB''op]
   | [[∀ a. A']], [[∀ a. A'']] =>
     rw [Type.TypeVar_open, Type.TypeVar_open] at AopeqBop
-    rw [aninftvA.forall'.TypeVar_open_inj_of aninftvB.forall' <| Type.forall'.inj AopeqBop]
+    rw [aninftvA.forall.TypeVar_open_inj_of aninftvB.forall <| Type.forall.inj AopeqBop]
 
 theorem TypeVar_open_TypeVar_subst_eq_Type_open_of
   : [[a ∉ ftv(A)]] → (A.TypeVar_open a n).TypeVar_subst a B = A.Type_open B n := fun aninftvA => by
@@ -441,7 +441,7 @@ theorem TypeVar_open_TypeVar_subst_eq_Type_open_of
         arr.mp aninftvA |>.right.TypeVar_open_TypeVar_subst_eq_Type_open_of, ← Type.Type_open]
   | [[∀ a. A']] =>
     rw [Type.TypeVar_open, Type.TypeVar_subst,
-        aninftvA.forall'.TypeVar_open_TypeVar_subst_eq_Type_open_of, ← Type.Type_open]
+        aninftvA.forall.TypeVar_open_TypeVar_subst_eq_Type_open_of, ← Type.Type_open]
 
 theorem TypeVar_close_eq_of {A : «Type»} : [[a ∉ ftv(A)]] → A.TypeVar_close a n = A :=
   fun aninftvA => by match A with
@@ -456,7 +456,7 @@ theorem TypeVar_close_eq_of {A : «Type»} : [[a ∉ ftv(A)]] → A.TypeVar_clos
   | [[A' → B]] =>
     rw [Type.TypeVar_close, arr.mp aninftvA |>.left.TypeVar_close_eq_of,
         arr.mp aninftvA |>.right.TypeVar_close_eq_of]
-  | [[∀ a. A']] => rw [Type.TypeVar_close, aninftvA.forall'.TypeVar_close_eq_of]
+  | [[∀ a. A']] => rw [Type.TypeVar_close, aninftvA.forall.TypeVar_close_eq_of]
 
 theorem TypeVar_close_TypeVar_open_of {A : «Type»}
   : [[a ∉ ftv(A)]] → (A.TypeVar_open a n).TypeVar_close a n = A := fun aninftvA => by match A with
@@ -471,7 +471,7 @@ theorem TypeVar_close_TypeVar_open_of {A : «Type»}
         arr.mp aninftvA |>.left.TypeVar_close_TypeVar_open_of,
         arr.mp aninftvA |>.right.TypeVar_close_TypeVar_open_of]
   | [[∀ a. A']] =>
-    rw [Type.TypeVar_open, Type.TypeVar_close, aninftvA.forall'.TypeVar_close_TypeVar_open_of]
+    rw [Type.TypeVar_open, Type.TypeVar_close, aninftvA.forall.TypeVar_close_TypeVar_open_of]
 
 theorem of_TypeVar_close {A : «Type»} : NotInFreeTypeVars a (A.TypeVar_close a n) := by
   match A with
@@ -572,8 +572,8 @@ theorem Type_open_eq_of_TypeVar_open_eq {A A' B : «Type»}
         Type_open_eq_of_TypeVar_open_eq h'' aninftvB'' aninftvB''' Blc]
   | [[∀ a. A'']], [[∀ a. A''']] =>
     rw [TypeVar_open, TypeVar_open] at h
-    rw [Type_open, Type_open, Type_open_eq_of_TypeVar_open_eq (forall'.inj h) aninftvA.forall'
-          aninftvA'.forall' Blc]
+    rw [Type_open, Type_open, Type_open_eq_of_TypeVar_open_eq (forall.inj h) aninftvA.forall
+          aninftvA'.forall Blc]
 
 theorem Type_open_TypeVar_subst_eq_of_TypeVar_open_eq {A A' B B' : «Type»}
   (h : A.TypeVar_open a n = A'.Type_open (B'.TypeVar_open a l) o) (Blc : B.TypeVarLocallyClosed o)
@@ -675,8 +675,8 @@ theorem Type_open_TypeVar_subst_eq_of_TypeVar_open_eq {A A' B B' : «Type»}
         Type_open]
   | [[∀ a. A'']], [[∀ a. A''']] =>
     rw [TypeVar_open, Type_open] at h
-    rw [Type_open, Type_open_TypeVar_subst_eq_of_TypeVar_open_eq (forall'.inj h)
-          (Blc.weakening (Nat.le_add_right ..)) aninftvA.forall' aninftvB', TypeVar_subst,
+    rw [Type_open, Type_open_TypeVar_subst_eq_of_TypeVar_open_eq (forall.inj h)
+          (Blc.weakening (Nat.le_add_right ..)) aninftvA.forall aninftvB', TypeVar_subst,
           Type_open]
   | [[A'' → B'']], var (.bound _) =>
     rw [TypeVar_open, Type_open] at h
@@ -853,7 +853,7 @@ theorem TermVar_drop (Bwf : [[Γ, x : A, Γ' ⊢ B]]) : [[Γ, Γ' ⊢ B]] := mat
     | .inl (.termVarExt ainΓ) => var ainΓ.append_inl
     | .inr ainΓ' => var ainΓ'.append_inr
   | .arr .., arr A'wf B'wf => arr A'wf.TermVar_drop B'wf.TermVar_drop
-  | .forall' _, forall' A'wf => forall' fun a anin => by
+  | .forall _, .forall A'wf => .forall fun a anin => by
     have := A'wf a anin
     rw [← Environment.append_typeVarExt] at this
     exact this.TermVar_drop
@@ -863,7 +863,7 @@ theorem TermVar_intro (Bwf : [[Γ, Γ' ⊢ B]]) : [[Γ, x : A, Γ' ⊢ B]] := ma
     | .inl ain' => ain'.termVarExt.append_inl
     | .inr ain' => ain'.append_inr
   | .arr .., arr A'wf B'wf => arr A'wf.TermVar_intro B'wf.TermVar_intro
-  | .forall' _, forall' A'wf => forall' fun a anin => by
+  | .forall _, .forall A'wf => .forall fun a anin => by
     have := A'wf a anin
     rw [← Environment.append_typeVarExt] at this
     exact this.TermVar_intro
@@ -880,7 +880,7 @@ theorem exchange : [[Γ, a, Γ' ⊢ A]] → [[Γ, Γ', a ⊢ A]]
         exact TypeVarInEnvironment.head.append_inr
       · case neg h => exact a'in'.append_inr.typeVarExt h
   | arr A'wf Bwf => arr A'wf.exchange Bwf.exchange
-  | forall' A'wf => forall' fun a' a'nin => by
+  | .forall A'wf => .forall fun a' a'nin => by
       have := A'wf a' a'nin
       rw [← Environment.append_typeVarExt] at this
       have := this.exchange
@@ -891,7 +891,7 @@ theorem exchange : [[Γ, a, Γ' ⊢ A]] → [[Γ, Γ', a ⊢ A]]
 theorem weakening (Awf : [[Γ ⊢ A]]) : [[Γ', Γ, Γ'' ⊢ A]] := match Awf with
   | var ain => var ain.append_inl.append_inr
   | arr A'wf Bwf => arr A'wf.weakening Bwf.weakening
-  | forall' A'wf => forall' fun a anin => by
+  | .forall A'wf => .forall fun a anin => by
       rw [← Environment.append_typeVarExt, ← Environment.append_typeVarExt]
       have := A'wf a anin |>.weakening (Γ' := Γ') (Γ := Γ.typeVarExt a) (Γ'' := Γ'')
       rw [Environment.append_assoc, Environment.append_typeVarExt] at this
@@ -902,10 +902,10 @@ theorem TypeVarLocallyClosed_of : [[Γ ⊢ A]] → A.TypeVarLocallyClosed 0 := f
   match A, Awf with
   | _, .var _ => .var_free
   | .arr _ _, .arr A'wf Bwf => .arr A'wf.TypeVarLocallyClosed_of Bwf.TypeVarLocallyClosed_of
-  | [[∀ a. A']], .forall' A'wf (I := I) => by
+  | [[∀ a. A']], .forall A'wf (I := I) => by
     let ⟨a, anin⟩ := I.exists_fresh
     have := A'wf a anin |>.TypeVarLocallyClosed_of
-    exact .forall' <| this.weakening (Nat.le_add_right ..) |>.TypeVar_open_drop <|
+    exact .forall <| this.weakening (Nat.le_add_right ..) |>.TypeVar_open_drop <|
       Nat.lt_succ_self _
 
 theorem Type_open_preservation {A : «Type»} {Γ : Environment} (aninftvA : [[a ∉ ftv(A)]])
@@ -937,14 +937,14 @@ theorem Type_open_preservation {A : «Type»} {Γ : Environment} (aninftvA : [[a
       (Type_open_preservation (Type.NotInFreeTypeVars.arr.mp aninftvA).right Bwf B'wf)
   | [[∀ a. A']] =>
     rw [Type.TypeVar_open] at Aopwf
-    let .forall' A'wf (I := I) := Aopwf
-    exact .forall' (I := a :: I) <| fun a' a'nin => by
+    let .forall A'wf (I := I) := Aopwf
+    exact .forall (I := a :: I) <| fun a' a'nin => by
       have a'nea := List.ne_of_not_mem_cons a'nin
       have := A'wf a' <| List.not_mem_of_not_mem_cons a'nin
       rw [← Bwf.TypeVarLocallyClosed_of.TypeVar_open_Type_open_comm (Nat.zero_ne_add_one _)]
       rw [A'.TypeVar_open_comm (Nat.succ_ne_zero _),
           ← Environment.append_typeVarExt] at this
-      exact Type_open_preservation (aninftvA.forall'.TypeVar_open_of_ne a'nea.symm) Bwf this
+      exact Type_open_preservation (aninftvA.forall.TypeVar_open_of_ne a'nea.symm) Bwf this
 
 theorem TypeVar_subst_preservation {A : «Type»} {Γ : Environment} (Bwf : [[ε ⊢ B]])
   : [[ε, a, Γ ⊢ A]] → [[Γ [B / a] ⊢ A [B / a] ]] :=
@@ -967,9 +967,9 @@ theorem TypeVar_subst_preservation {A : «Type»} {Γ : Environment} (Bwf : [[ε
     exact .arr (TypeWellFormedness.TypeVar_subst_preservation Bwf A'wf)
       (TypeWellFormedness.TypeVar_subst_preservation Bwf B'wf)
   | [[∀ a. A']] =>
-    let .forall' A'wf (I := I) := Aopwf
+    let .forall A'wf (I := I) := Aopwf
     rw [Type.TypeVar_subst]
-    exact .forall' (I := a :: I) fun a' a'nin => by
+    exact .forall (I := a :: I) fun a' a'nin => by
       have a'nea := List.ne_of_not_mem_cons a'nin
       have := A'wf a' <| List.not_mem_of_not_mem_cons a'nin
       rw [← Environment.TypeVar_subst,
@@ -1127,7 +1127,7 @@ theorem TypeWellFormedness.TypeVar_intro : [[Γ, Γ' ⊢ A]] → [[Γ, a, Γ' �
         exact ain'.typeVarExt h |>.append_inl
     | .inr ain' => ain'.append_inr
   | arr A'wf Bwf => arr A'wf.TypeVar_intro Bwf.TypeVar_intro
-  | forall' A'wf => forall' fun a' a'nin => by
+  | .forall A'wf => .forall fun a' a'nin => by
       rw [← Environment.append_typeVarExt]
       have := A'wf a' a'nin
       rw [← Environment.append_typeVarExt] at this
@@ -1191,10 +1191,10 @@ theorem TypeWellFormedness_of : [[Γ ⊢ E : A]] → [[Γ ⊢ A]] := fun EtyA =>
     let .arr _ Awf := E'ty.TypeWellFormedness_of
     exact Awf
   | [[Λ a. E']], [[∀ a. A']], .typeGen E'ty =>
-    exact .forall' (E'ty · · |>.TypeWellFormedness_of)
+    exact .forall (E'ty · · |>.TypeWellFormedness_of)
   | [[E' [B] ]], A, EtyA =>
     let .typeApp E'ty Bwf (A := A') := EtyA
-    let .forall' A'wf (I := I) := E'ty.TypeWellFormedness_of
+    let .forall A'wf (I := I) := E'ty.TypeWellFormedness_of
     let ⟨a, anin⟩ := A'.freeTypeVars ++ I |>.exists_fresh
     let ⟨aninA', aninI⟩ := List.not_mem_append'.mp anin
     exact .Type_open_preservation (Γ' := .empty) aninA' Bwf <| A'wf a aninI
@@ -1315,7 +1315,7 @@ theorem Type_open_preservation {E : Term} {A : «Type»}
       exact this.Type_open_preservation (Γ := Γ.typeVarExt a')
         (aninΓ.typeVarExt a'nea.symm)
         (aninftvE.typeGen.TypeVar_open_of_ne a'nea.symm)
-        (aninftvA.forall'.TypeVar_open_of_ne a'nea.symm) Bwf
+        (aninftvA.forall.TypeVar_open_of_ne a'nea.symm) Bwf
   | [[E' [B'] ]], A, EtyA =>
     rw [Term.Type_open]
     generalize A'eq : A.TypeVar_open a n = A' at EtyA
@@ -1328,7 +1328,7 @@ theorem Type_open_preservation {E : Term} {A : «Type»}
       Type.NotInFreeTypeVars.of_TypeVar_close Bwf
     let B'wf' := TypeWellFormedness.Type_open_preservation aninftvE.typeApp.right Bwf B'wf
     rw [Environment.empty_append] at B'wf'
-    let .forall' A''lc' := A''folc'
+    let .forall A''lc' := A''folc'
     rw [Type.TypeVar_close, Type.Type_open,
         A''lc'.TypeVar_close_Type_open_eq_TypeVar_subst] at E'ty'
     rw [Type.Type_open_TypeVar_subst_eq_of_TypeVar_open_eq A'eq Bwf.TypeVarLocallyClosed_of

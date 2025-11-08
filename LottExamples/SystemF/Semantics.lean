@@ -130,7 +130,7 @@ a ∈ Γ
 Γ ⊢ A → B
 
 ∀ a ∉ I, Γ, a ⊢ A^a
-────────────────────────────── forall' {I : List TypeVarId}
+────────────────────────────── «forall» {I : List TypeVarId}
 Γ ⊢ ∀ a. A
 
 judgement_syntax x " ∈ " "dom" "(" Γ ")" : TermVarInEnvironmentDomain (id x)
