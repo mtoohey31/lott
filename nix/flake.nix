@@ -24,7 +24,7 @@
           default = (mkShell.override { stdenv = clangStdenv; }) {
             packages = [ lean-all ];
             shellHook = ''
-              export LEAN_SRC_PATH=${Init.src}:${Lake.src}
+              export LEAN_SRC_PATH=${Init.sharedLib.src}:${Lake.sharedLib.src}
             '';
           };
 
