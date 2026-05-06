@@ -24,12 +24,12 @@ initialize aliasExt : PersistentEnvExtension Alias Alias AliasState ←
   registerPersistentEnvExtension {
   mkInitial := return default
   addImportedFn := fun aliasss => return {
-    byAlias :=
-      aliasss.flatten.foldl (init := .empty) fun acc a => acc.upsert a.alias.toString fun _ => a
+    byAlias := aliasss.flatten.foldl (init := .empty) fun acc a =>
+      acc.upsert (a.alias.toString false) fun _ => a
     allCanon := aliasss.flatten.map (·.canon) |> RBTree.fromArray (cmp := Name.quickCmp)
   }
   addEntryFn := fun { byAlias, allCanon } a => {
-    byAlias := byAlias.insert a.alias.toString a
+    byAlias := byAlias.insert (a.alias.toString false) a
     allCanon := allCanon.insert a.canon
   }
   exportEntriesFn := fun { byAlias, .. } => byAlias.values

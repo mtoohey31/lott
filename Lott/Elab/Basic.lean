@@ -83,7 +83,7 @@ def texElabMetavar : TexElab := fun
 
     let valString := val.toString false
     let some { canon, alias, tex? := some tex } :=
-      aliasExt.getState (← getEnv) |>.byAlias.matchPrefix (ns ++ val).toString 0
+      aliasExt.getState (← getEnv) |>.byAlias.matchPrefix ((ns ++ val).toString false) 0
       | return valString.texEscape
     if qualified != canon then
       return valString.texEscape
@@ -108,7 +108,7 @@ def texElabVariable : TexElab := fun
 
     let valString := val.toString false
     let some { canon, alias, tex? := some tex } :=
-      aliasExt.getState (← getEnv) |>.byAlias.matchPrefix (ns ++ val).toString 0
+      aliasExt.getState (← getEnv) |>.byAlias.matchPrefix ((ns ++ val).toString false) 0
       | return valString.texEscape
     if qualified != canon then
       return valString.texEscape
@@ -291,9 +291,9 @@ def resolveSymbol (symbolName : Ident) (allowSuffix := true) : CommandElabM Name
   let state := aliasExt.getState (← getEnv)
 
   let find (n : Name) := if allowSuffix then
-      state.byAlias.matchPrefix n.toString 0
+      state.byAlias.matchPrefix (n.toString false) 0
     else
-      state.byAlias.find? n.toString
+      state.byAlias.find? <| n.toString false
 
   -- First check if the name itself is present in the state.
   match find name with

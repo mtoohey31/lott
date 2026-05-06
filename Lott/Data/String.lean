@@ -31,6 +31,7 @@ def texEscape (s : String) : String :=
     | '~' => "\\textasciitilde"
     | '^' => "\\textasciicircum"
     | '\\' => "\\textbackslash"
+    | '«' | '»' => ""
     | c => c.toString
 
 /-
