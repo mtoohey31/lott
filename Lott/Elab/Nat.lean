@@ -27,7 +27,7 @@ def nat.num_parser : Parser := leadingNode `Lott.Symbol.Nat maxPrec numLit
 @[Lott.Symbol.Nat_parser]
 private
 def nat.term_parser : Parser :=
-  leadingNode `Lott.Symbol.Nat maxPrec <| "(" >> checkLineEq >> termParser >> checkLineEq >> ")"
+  leadingNode `Lott.Symbol.Nat maxPrec <| "{{" >> checkLineEq >> termParser >> checkLineEq >> "}}"
 
 @[macro symbolEmbed]
 private
@@ -44,7 +44,7 @@ def natImpl : Macro
     ]
   | .node _ `Lott.symbolEmbed #[
       .atom _ "[[",
-      .node _ `Lott.Symbol.Nat #[.atom _ "(", n, .atom _ ")"],
+      .node _ `Lott.Symbol.Nat #[.atom _ "{{", n, .atom _ "}}"],
       .atom _ "]]"
     ] => return n
   | _ => Macro.throwUnsupported
@@ -54,7 +54,7 @@ private
 def natTexElab : TexElab
   | _, _, .node _ `Lott.Symbol.Nat #[n@(.ident ..)]
   | _, _, .node _ `Lott.Symbol.Nat #[n@(.node _ `num _)] => texElabIdx n
-  | _, _, .node _ `Lott.Symbol.Nat #[.atom _ "(", n, .atom _ ")"] => do
+  | _, _, .node _ `Lott.Symbol.Nat #[.atom _ "{{", n, .atom _ "}}"] => do
     let some n := n.getSubstring? (withLeading := false) (withTrailing := false)
       | throwUnsupportedSyntax
     return s!"({n.toString.texEscape})"
