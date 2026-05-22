@@ -52,7 +52,7 @@ def universalPredJudgementTexElab : TexElab
 
     let opts ← getOptions
     let locallyNameless := opts.get lott.tex.locallyNameless.name lott.tex.locallyNameless.defValue
-    if bpSym == "∉" && !locallyNameless then
+    if bpSym matches "∉" | "∩" && !locallyNameless then
       return judgementTex
 
     return s!"\\lottsym\{∀} \\, {identTex} \\, \\lottsym\{{bpSym}} \\, {bpTermTex}, {judgementTex}"
