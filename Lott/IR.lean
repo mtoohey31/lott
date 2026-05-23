@@ -29,7 +29,6 @@ def _root_.Lean.Name.obfuscateMacroScopes (n : Name) : Name :=
 -- TODO: Is there a way to use Lean's existing parser resolution instead of this custom stuff?
 
 mutual
-private
 inductive IRType where
   | category (n : Name)
   | atom (s : String)
@@ -37,8 +36,9 @@ inductive IRType where
   | optional (ir : Array IR)
 deriving Inhabited, BEq
 
-inductive IR where
-  | mk (l : Ident) (t : IRType)
+structure IR where
+  l : Ident
+  t : IRType
 deriving Inhabited, BEq
 end
 
@@ -155,10 +155,10 @@ partial
 def toType (ids binders : Array Name) : IR → CommandElabM (Option Term)
   | IR.mk l (.category n) => do
     for binder in binders do
-      if l.getId == binder && (metaVarExt.getState (← getEnv)).find! n then
+      if l.getId == binder && (metaVarExt.getState (← getEnv)).get! n then
         return none
     for id in ids do
-      if l.getId == id && (metaVarExt.getState (← getEnv)).find! n then
+      if l.getId == id && (metaVarExt.getState (← getEnv)).get! n then
         return some <| mkIdent <| n.appendAfter "Id"
     return some <| mkIdent n
   | IR.mk _ (.atom _) => return none
@@ -185,7 +185,8 @@ def toTypeArrSeq (ir : Array IR) (init : Term) (ids binders : Array Name) : Comm
 private
 def toPatternArg : IR → CommandElabM (Option Term)
   | mk l (.category n) => `($l@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ n) _))
-  | mk l (.atom s) => if s == "" then return none else `($l@(Lean.Syntax.atom _ $(quote s.trim)))
+  | mk l (.atom s) =>
+    if s == "" then return none else `($l@(Lean.Syntax.atom _ $(quote s.trimAscii.toString)))
   | mk l (.sepBy ..) => `($l@(Lean.Syntax.node _ `null _))
   | mk l (.optional ..) => `($l@(Lean.Syntax.node _ `null _))
 

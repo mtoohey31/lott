@@ -33,7 +33,7 @@ elab_rules : command
         if extension entry.path != some "lottinput" then
           continue
 
-        let input ← String.trimRight <$> readFile entry.path
+        let input ← (String.Slice.toString ∘ String.trimAsciiEnd) <$> readFile entry.path
 
         let s := mkParserState input
         let ictx := mkInputContext input entry.path.toString
@@ -48,7 +48,7 @@ elab_rules : command
           logWarning s!"parse failure for `{input}` in {entry.fileName}: {s.toErrorMsg ictx}"
           failed := true
           continue
-        else if !ictx.input.atEnd s.pos then
+        else if !ictx.atEnd s.pos then
           let msg := s.mkError "end of input" |>.toErrorMsg ictx
           logWarning s!"parse failure for `{input}` in {entry.fileName}: {msg}"
           failed := true
@@ -74,7 +74,7 @@ elab_rules : command
         mkAbsolute outputName.getString
       else
         let some outputName := outputName?.map TSyntax.getString |>.orElse
-          fun () => inputName.getString.dropSuffix? ".lotttmpl" |>.map Substring.toString
+          fun () => inputName.getString.dropSuffix? ".lotttmpl" |>.map String.Slice.toString
           | throwErrorAt inputName
               "#filter input name must end with '.lotttmpl' if output name is omitted"
 
@@ -88,7 +88,7 @@ elab_rules : command
     let s := filterParserFn.run ictx { env, options := {} } (getTokenTable env) s
     if !s.allErrors.isEmpty then
       throwError s.toErrorMsg ictx
-    else if !ictx.input.atEnd s.pos then
+    else if !ictx.atEnd s.pos then
       throwError s.mkError "end of input" |>.toErrorMsg ictx
 
     let output ← s.stxStack.toSubarray.toArray.filterMapM fun

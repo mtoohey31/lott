@@ -530,7 +530,7 @@ def BindConfig.find? (bc : BindConfig) (n : Name) : Option Ident := Id.run do
 
   bc.in'.find? (·.getId == n)
 
-instance : ToStream BindConfig (Array Ident) where
+instance : Std.ToStream BindConfig (Array Ident) where
   toStream | { of, in' } => in'.push of
 
 private
@@ -609,7 +609,7 @@ where
 private partial
 def profileClosure (nt : NonTerminal) (qualifiedLocalMap : NameMap NonTerminal)
   : CommandElabM (Array Name) := do
-  let mut res : NameSet := RBTree.fromArray nt.profiles Name.quickCmp
+  let mut res : NameSet := Std.TreeSet.ofArray nt.profiles Name.quickCmp
   let mut visited : NameSet := .empty |>.insert <| ← nt.qualified
   let mut queue := #[nt]
   repeat do
@@ -624,10 +624,10 @@ def profileClosure (nt : NonTerminal) (qualifiedLocalMap : NameMap NonTerminal)
         visited := visited.insert name
 
         if let some nt@{ profiles, .. } := qualifiedLocalMap.find? name then
-          res := res.union <| .fromArray profiles Name.quickCmp
+          res := res.union <| .ofArray profiles Name.quickCmp
           queue := queue.push nt
         else if let some { profiles, .. } := symbolExt.getState (← getEnv) |>.find? name then
-          res := res.union <| .fromArray profiles Name.quickCmp
+          res := res.union <| .ofArray profiles Name.quickCmp
   return res.toArray
 where
   irClosure : IR → NameSet
@@ -691,7 +691,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
           let res := { of, in' := in?.getD (.mk #[]) : BindConfig }
           if let some x := ids.find? (res.find? ·.getId |>.isSome) then
             throwErrorAt x "name {x} also appears in bind config"
-          for name in toStream res do
+          for name in Std.toStream res do
             if !containsName ir name.getId then
               logWarningAt name "name not found in syntax"
           pure <| some res
@@ -703,7 +703,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       let (_, defaults) := texProfile?s.zip tex?s |>.partition fun (p?, _) => p?.isSome
       if defaults.size > 1 then
         throwUnsupportedSyntax
-      let profileTex := RBMap.fromArray (cmp := Name.quickCmp) <| texProfile?s.zip tex?s |>.map
+      let profileTex := Std.TreeMap.ofArray (cmp := Name.quickCmp) <| texProfile?s.zip tex?s |>.map
         fun (profile?, tex) => (profile?.map TSyntax.getId |>.getD default, tex)
 
       return (
@@ -807,7 +807,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
     }
 
   let isLocallyNameless (varName : Name) : CommandElabM Bool :=
-    return metaVarExt.getState (← getEnv) |>.find! varName
+    return metaVarExt.getState (← getEnv) |>.get! varName
 
   for nt@{ canon, aliases, prods, parent?, substitutions?, .. } in nts do
     -- Define production and substitution parsers.
@@ -926,7 +926,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         let macroName := mkIdentFrom name <| canonName ++ name.getId.appendAfter "Impl"
         elabCommand <| ←
           `(@[macro $symbolEmbedIdent]
-            private
+            private partial
             def $macroName : Macro := fun stx => do
               let Lean.Syntax.node _ ``Lott.symbolEmbed #[
                 Lean.Syntax.atom _ "[[",
@@ -949,7 +949,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         let texElabName := mkIdentFrom name <| canonName ++ name.getId.appendAfter "TexElab"
         elabCommand <| ←
           `(@[lott_tex_elab $catIdent]
-            private
+            private partial
             def $texElabName : TexElab := fun profile ref stx => do
               let Lean.Syntax.node _ $(quote catName) #[$patternArgs,*] := stx
                 | throwUnsupportedSyntax
@@ -984,7 +984,9 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
   if ← getTerm then
     let allSubstitutions := nts.map (·.substitutions?.getD #[])
     let uniqueSubstitutions :=
-      allSubstitutions.flatten.foldl Std.HashSet.insert Std.HashSet.empty |>.toArray
+      allSubstitutions.flatten.foldl Std.TreeSet.insert
+        (Std.TreeSet.empty
+          (cmp := fun x y => Name.quickCmp x.1 y.1 |>.then <| Name.quickCmp x.2 y.2)) |>.toArray
     for subst@(varTypeName, valTypeName) in uniqueSubstitutions do
       let locallyNameless ← isLocallyNameless varTypeName
 

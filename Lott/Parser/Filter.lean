@@ -6,29 +6,45 @@ open Lean.Parser
 
 private
 def embedCloseFn : ParserFn := fun c s =>
-  if c.input.substrEq s.pos "]]" 0 2 then
-    s.setPos <| s.pos + "]]".endPos
+  let p := s.pos
+  if h : c.atEnd p then
+    s.mkUnexpectedErrorAt "expected ']]'" p
+  else if c.get' p h == ']' then
+    let s := s.next' c p h
+    if h : c.atEnd s.pos then
+      s.mkUnexpectedErrorAt "expected ']]'" p
+    else if c.get' s.pos h == ']' then
+      s.next' c s.pos h
+    else
+      s.mkUnexpectedErrorAt "expected ']]'" p
   else
-    s.mkUnexpectedErrorAt "expected ']]'" s.pos
+    s.mkUnexpectedErrorAt "expected ']]'" p
 
 private partial
-def filterParserFnAux (startPos : String.Pos) : ParserFn := fun c s =>
-  if h : c.input.atEnd s.pos then
-    mkNodeToken `Lott.NonEmbed startPos c s
-  else if c.input.substrEq s.pos "[[" 0 2 then
-    let s := mkNodeToken `Lott.NonEmbed startPos c s
-    let s := s.setPos <| s.pos + "[[".endPos
-    let s := orelseFn
-      (orelseFn
-        (atomicFn (andthenFn qualifiedSymbolParser.fn embedCloseFn))
-        (atomicFn (andthenFn (withPosition (categoryParser `Lott.Symbol 0)).fn embedCloseFn)))
-      (andthenFn (withPosition (categoryParser `Lott.Judgement 0)).fn embedCloseFn) c s
-    if s.hasError then
-      s
+def filterParserFnAux (startPos : String.Pos.Raw) : ParserFn := fun c s =>
+  let p := s.pos
+  if h : c.atEnd p then
+    (mkNodeToken `Lott.NonEmbed startPos) c s
+  else if c.get' p h = '[' then
+    let s' := s.next' c p h
+    if h : c.atEnd s'.pos then
+      filterParserFnAux startPos c s'
+    else if c.get' s'.pos h == '[' then
+      let s := s'.next' c s'.pos h
+      let s := (mkNodeToken `Lott.NonEmbed startPos) c s
+      let s := orelseFn
+        (orelseFn
+          (atomicFn (andthenFn qualifiedSymbolParser.fn embedCloseFn))
+          (atomicFn (andthenFn (withPosition (categoryParser `Lott.Symbol 0)).fn embedCloseFn)))
+        (andthenFn (withPosition (categoryParser `Lott.Judgement 0)).fn embedCloseFn) c s
+      if s.hasError then
+        s
+      else
+        filterParserFnAux p c s
     else
-      filterParserFnAux s.pos c s
+      filterParserFnAux startPos c s'
   else
-    filterParserFnAux startPos c <| s.next' c.input s.pos h
+    filterParserFnAux startPos c <| s.next' c p h
 
 def filterParserFn : ParserFn := fun c s => filterParserFnAux s.pos c s
 

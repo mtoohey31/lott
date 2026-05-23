@@ -1,23 +1,21 @@
-import Lott.Data.Substring
-
 namespace String
 
 private
 def toPascalParts (s : String) : Array String := Id.run do
-  let rawParts := s.data.splitBy (·.isUpper == ·.isUpper)
+  let rawParts := s.toList.splitBy (·.isUpper == ·.isUpper)
   let mut parts : Array String := #[]
   for rawPart in rawParts do
     if rawPart[0]!.isLower then
       if let some last := parts.back? then
-        parts := parts.pop.push <| last ++ ⟨rawPart⟩
+        parts := parts.pop.push <| last ++ String.ofList rawPart
       else
-        parts := parts.push ⟨rawPart⟩
+        parts := parts.push <| .ofList rawPart
       continue
 
     if rawPart.length > 1 then
-      parts := parts ++ #[⟨rawPart.dropLast⟩, rawPart.getLast!.toString]
+      parts := parts ++ #[.ofList rawPart.dropLast, rawPart.getLast!.toString]
     else
-      parts := parts.push ⟨rawPart⟩
+      parts := parts.push <| .ofList rawPart
   return parts
 
 def pascalToSnake (s : String) : String :=
@@ -26,7 +24,7 @@ def pascalToSnake (s : String) : String :=
 def pascalToTitle (s : String) : String := " ".intercalate s.toPascalParts.toList
 
 def texEscape (s : String) : String :=
-  join <| s.data.map fun
+  join <| s.toList.map fun
     | c@'&' | c@'%' | c@'$' | c@'#' | c@'_' | c@'{' | c@'}' => "\\" ++ c.toString
     | '~' => "\\textasciitilde"
     | '^' => "\\textasciicircum"
@@ -41,7 +39,7 @@ imperfect as some special characters can't be escaped.
 def makeEscape (s : String) : String := Id.run do
   let mut res := ""
   let mut slashes := 0
-  for c in s.data do
+  for c in s.toList do
     match c with
     | '\\' => slashes := slashes + 1
     | '$' =>
@@ -65,6 +63,10 @@ def makeEscape (s : String) : String := Id.run do
     res := res.push c
   res
 
-def dropPrefixes (s pre : String) : Substring := s.toSubstring.dropPrefixes pre.toSubstring
+partial def Slice.dropPrefixes (s pre : Slice) : Slice := match s.dropPrefix? pre with
+  | some s' => s'.dropPrefixes pre
+  | none => s
+
+def dropPrefixes (s pre : String) : Slice := s.toSlice.dropPrefixes pre
 
 end String

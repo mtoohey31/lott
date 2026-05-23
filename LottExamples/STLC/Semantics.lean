@@ -99,6 +99,8 @@ x : τ ∈ Γ
 
 judgement_syntax e " ↦ " e' : Reduction
 
+set_option pp.rawOnError true in
+
 judgement Reduction where
 
 e₀ ↦ e₀'

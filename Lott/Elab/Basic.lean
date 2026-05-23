@@ -33,7 +33,7 @@ def writeMakeDeps (filePath : FilePath) (extraDeps : List FilePath := []) : Comm
   if !(← getOptions).get lott.tex.output.makeDeps.name lott.tex.output.makeDeps.defValue then
     return
 
-  let sp ← liftIO <| initSrcSearchPath
+  let sp ← liftIO <| getSrcSearchPath
   let depPaths ← (← getEnv).allImportedModuleNames.mapM (findLean sp ·)
   let deps := " ".intercalate <| (depPaths.toList ++ extraDeps).map
     (·.toString.dropPrefixes "./" |>.toString)
@@ -361,9 +361,17 @@ def _root_.Lott.IR.toExprArgs (ir : Array IR) (ids binders : Array Name)
 def Syntax.mkSymbolEmbed (stx : Syntax) : Term :=
   .mk <| mkNode ``Lott.symbolEmbed #[mkAtom "[[", stx, mkAtom "]]"]
 
+elab "#test" t:term : command => logInfo <| toString t.raw.getArgs
+
 def _root_.Lean.Syntax.mkTypeAscription (stx type : Syntax) : Term :=
-  .mk <| mkNode ``Lean.Parser.Term.typeAscription
-    #[mkAtom "(", stx, mkAtom ":", mkNullNode #[type], mkAtom ")"]
+  .mk <| mkNode ``Lean.Parser.Term.typeAscription #[
+      mkNode ``Lean.Parser.Term.hygienicLParen
+      #[mkAtom "(", mkNode Lean.hygieneInfoKind #[mkIdent .anonymous] ],
+      stx,
+      mkAtom ":",
+      mkNullNode #[type],
+      mkAtom ")"
+    ]
 
 def _root_.Lean.Syntax.mkMap (collection pat body : Term) (mapName : Name) : MacroM Term :=
   `($(collection).$(mkIdent mapName):ident fun $pat => $body)
@@ -404,7 +412,7 @@ def _root_.Lott.IR.toMacroSeqItems (ir : Array IR) (canon : Name) (ids binders :
                 return (false, ← Lean.Syntax.mkMap (.mk collection) (.mk pat) (.mk symbol) mapName)
               | Lean.Syntax.node _ $(quote catName) #[
                   lhs@(Lean.Syntax.node _ $(quote catName) _),
-                  Lean.Syntax.atom _ $(quote sep.trim),
+                  Lean.Syntax.atom _ $(quote sep.trimAscii.toString),
                   rhs@(Lean.Syntax.node _ $(quote catName) _)
                 ] => do
                 let (lhsSingleton, lhs) ← $go:ident lhs
@@ -464,13 +472,11 @@ def _root_.Lott.IR.toMacroSeqItems (ir : Array IR) (canon : Name) (ids binders :
 partial
 def _root_.Lott.IR.toTexSeqItems (ir : Array IR) (canon : Name)
   : CommandElabM (TSyntaxArray ``Lean.Parser.Term.doSeqItem) :=
-  ir.mapM fun
-    | mk l (.category n) => do
-      `(doSeqItem|
-        let $l ← Lott.texElabSymbolOrJudgement $(quote <| symbolPrefix ++ n) profile ref $l)
-    | mk l (.atom s) =>
-      `(doSeqItem| let $l := $(quote <| atomToTex s))
-    | mk l (.sepBy ir sep) => do
+  ir.mapM fun ir => ir.casesOn fun l t => t.casesOn
+    (fun n => `(doSeqItem|
+        let $l ← Lott.texElabSymbolOrJudgement $(quote <| symbolPrefix ++ n) profile ref $l))
+    (fun s => `(doSeqItem| let $l := $(quote <| atomToTex s)))
+    (fun ir sep => do
       let catName := sepByPrefix ++ (← getCurrNamespace) ++ canon ++ l.getId |>.obfuscateMacroScopes
       let patternArgs ← IR.toPatternArgs ir
       let seqItems ← IR.toTexSeqItems ir canon
@@ -510,7 +516,7 @@ def _root_.Lott.IR.toTexSeqItems (ir : Array IR) (canon : Name)
                 return s!"\\lottsepbycomprehensionpatcollection\{{symbolTex}}\{{patTex}}\{{collectionTex}}"
               | Lean.Syntax.node _ $(quote catName) #[
                   lhs@(Lean.Syntax.node _ $(quote catName) _),
-                  Lean.Syntax.atom _ $(quote sep.trim),
+                  Lean.Syntax.atom _ $(quote sep.trimAscii.toString),
                   rhs@(Lean.Syntax.node _ $(quote catName) _)
                 ] => do
                 let lhsTex ← $go:ident lhs
@@ -521,8 +527,8 @@ def _root_.Lott.IR.toTexSeqItems (ir : Array IR) (canon : Name)
                 return " ".intercalate [$joinArgs,*]
               | _ => Lean.Elab.throwUnsupportedSyntax
             $go:ident stx
-          | none => pure "")
-    | mk l (.optional ir) => do
+          | none => pure ""))
+    (fun ir => do
       let catName := optionalPrefix ++ (← getCurrNamespace) ++ canon ++ l.getId |>.obfuscateMacroScopes
       let patternArgs ← IR.toPatternArgs ir
       let seqItems ← IR.toTexSeqItems ir canon
@@ -559,15 +565,15 @@ def _root_.Lott.IR.toTexSeqItems (ir : Array IR) (canon : Name)
                 return " ".intercalate [$joinArgs,*]
               | _ => Lean.Elab.throwUnsupportedSyntax
             $go:ident stx
-          | none => pure "")
+          | none => pure ""))
 where
   atomToTex (atom : String) :=
-    let leadingWs := atom.data[0]?.map Char.isWhitespace |>.getD false
-    let trailingWs := atom.data.getLast?.map Char.isWhitespace |>.getD false
-    let tex := if atom.trim.data.all (fun c => c.isAlpha || c.isSubscriptAlpha) then
-        s!"\\lottkw\{{atom.trim.texEscape}}"
+    let leadingWs := atom.toList[0]?.map Char.isWhitespace |>.getD false
+    let trailingWs := atom.toList.getLast?.map Char.isWhitespace |>.getD false
+    let tex := if atom.trimAscii.all (fun c => c.isAlpha || c.isSubscriptAlpha) then
+        s!"\\lottkw\{{atom.trimAscii.toString.texEscape}}"
       else
-        s!"\\lottsym\{{atom.trim.texEscape}}"
+        s!"\\lottsym\{{atom.trimAscii.toString.texEscape}}"
     (if leadingWs then "\\, " else "") ++ tex ++ (if trailingWs then " \\," else "")
 
 partial
@@ -595,7 +601,7 @@ def toExampleSyntax (ir : Array IR) (canonQualified profile : Name) (enclosingSe
         sepByIdxStrings.foldl (init := mkNode (variablePrefix ++ n) #[l]) (stop := enclosingSepBys)
           (mkNode (variablePrefix ++ n) #[·, mkAtom "@", mkIdent <| .str .anonymous ·])
       ]
-    | .atom s => return if s == "" then none else mkAtom s.trim
+    | .atom s => return if s == "" then none else mkAtom s.trimAscii.toString
     | .sepBy ir _ => do
       let catName := sepByPrefix ++ canonQualified ++ l.getId |>.obfuscateMacroScopes
       let some patString := sepByIdxStrings[enclosingSepBys]?
@@ -608,10 +614,10 @@ def toExampleSyntax (ir : Array IR) (canonQualified profile : Name) (enclosingSe
           mkAtom "//",
           mkNullNode,
           .ident (.original ⟨patString, 0, 0⟩ 0 ⟨patString, ⟨1⟩, ⟨1⟩⟩ ⟨1⟩)
-            patString.toSubstring `i [],
+            patString.toRawSubstring `i [],
           mkAtom "in",
           .node (.original ⟨collectionString, ⟨0⟩, ⟨0⟩⟩ ⟨0⟩ ⟨collectionString, ⟨4⟩, ⟨4⟩⟩ ⟨4⟩)
-            ``Std.Range.«term[:_]» #[
+            ``Std.Legacy.Range.«term[:_]» #[
               .atom (.original ⟨collectionString, ⟨0⟩, ⟨0⟩⟩ ⟨0⟩ ⟨collectionString, ⟨1⟩, ⟨1⟩⟩ ⟨1⟩)
                 "[",
               .atom (.original ⟨collectionString, ⟨1⟩, ⟨1⟩⟩ ⟨1⟩ ⟨collectionString, ⟨2⟩, ⟨2⟩⟩ ⟨2⟩)
@@ -635,7 +641,7 @@ def toExampleSyntax (ir : Array IR) (canonQualified profile : Name) (enclosingSe
           mkAtom "//",
           mkNullNode,
           .ident (.original ⟨condString, 0, 0⟩ 0 ⟨condString, ⟨1⟩, ⟨1⟩⟩ ⟨1⟩)
-            condString.toSubstring `b [],
+            condString.toRawSubstring `b [],
           mkNullNode <| Option.someIf (mkAtom "notex") «notex» |>.toArray,
           mkAtom "/>"
         ]

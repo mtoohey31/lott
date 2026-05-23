@@ -36,7 +36,9 @@ theorem mapMem_eq_map {as : List α} : as.mapMem (fun a _ => f a) = as.map f := 
 theorem map_singleton_flatten (xs : List α) : (xs.map fun x => [f x]).flatten = xs.map f :=
   match xs with
   | [] => rfl
-  | x :: xs' => by rw [List.map, List.map, List.flatten, List.singleton_append, xs'.map_singleton_flatten]
+  | x :: xs' => by
+    rw [List.map, List.map, List.flatten, List.append_eq, List.singleton_append,
+        xs'.map_singleton_flatten]
 
 theorem not_mem_append' {xs ys : List α} : z ∉ xs ++ ys ↔ z ∉ xs ∧ z ∉ ys where
   mp zninxsys := ⟨(zninxsys <| mem_append.mpr <| .inl ·), (zninxsys <| mem_append.mpr <| .inr ·)⟩
@@ -123,13 +125,13 @@ theorem eq_of_map_eq_map_of_inj {α β : Type} {f : α → β} {l₀ l₁ : List
     rw [finj _ (.head _) _ (.head _) eq₁]
     rw [eq_of_map_eq_map_of_inj eq' fun _ mem₀ _ mem₁ => finj _ (.tail _ mem₀) _ (.tail _ mem₁)]
 
-theorem get!_mem [Inhabited α] {as : List α} (h : i < as.length) : as.get! i ∈ as := by
-  rw [get!_eq_getD, getD_eq_getElem?_getD, getElem?_def, dif_pos h, Option.getD]
+theorem getElem!_mem [Inhabited α] {as : List α} (h : i < as.length) : as[i]! ∈ as := by
+  rw [getElem!_eq_getElem?_getD, getElem?_eq_getElem h]
   exact getElem_mem _
 
-theorem two_le_count_of_get!_eq_of_ne [BEq α] [LawfulBEq α] [Inhabited α] {as : List α}
-  (iltlen : i < as.length) (jltlen : j < as.length) (eq : as.get! i = as.get! j) (ne : i ≠ j)
-  : 2 ≤ List.count (as.get! i) as := by match as with
+theorem two_le_count_of_getElem!_eq_of_ne [BEq α] [LawfulBEq α] [Inhabited α] {as : List α}
+  (iltlen : i < as.length) (jltlen : j < as.length) (eq : as[i]! = as[j]!) (ne : i ≠ j)
+  : 2 ≤ List.count as[i]! as := by match as with
   | [] =>
     rw [length_nil] at iltlen
     nomatch Nat.not_lt_zero _ iltlen
@@ -143,47 +145,47 @@ theorem two_le_count_of_get!_eq_of_ne [BEq α] [LawfulBEq α] [Inhabited α] {as
         rw [eq]
         let ⟨k, eq'⟩ := Nat.exists_eq_succ_of_ne_zero ne.symm
         cases eq'
-        rw [get!_cons_succ]
+        rw [getElem!_cons_succ]
         show 1 + 1 ≤ _
         rw [length_cons] at jltlen
-        apply Nat.add_le_add_right <| Nat.succ_le_of_lt <| count_pos_iff.mpr <| get!_mem <|
+        apply Nat.add_le_add_right <| Nat.succ_le_of_lt <| count_pos_iff.mpr <| getElem!_mem <|
           Nat.add_lt_add_iff_right.mp jltlen
       · case neg h =>
         let ⟨k, eq'⟩ := Nat.exists_eq_succ_of_ne_zero h
         cases eq'
-        rw [get!_cons_succ]
+        rw [getElem!_cons_succ]
         by_cases j = 0
         · case pos h' =>
           show 1 + 1 ≤ _
           rw [length_cons] at jltlen
-          apply Nat.add_le_add_right <| Nat.succ_le_of_lt <| count_pos_iff.mpr <| get!_mem <|
+          apply Nat.add_le_add_right <| Nat.succ_le_of_lt <| count_pos_iff.mpr <| getElem!_mem <|
             Nat.add_lt_add_iff_right.mp iltlen
         · case neg h' =>
           apply Nat.le_add_right_of_le
           let ⟨l, eq''⟩ := Nat.exists_eq_succ_of_ne_zero h'
           cases eq''
-          exact two_le_count_of_get!_eq_of_ne (Nat.add_lt_add_iff_right.mp iltlen)
-            (Nat.add_lt_add_iff_right.mp jltlen) eq (ne <| Nat.succ_inj'.mpr ·)
+          exact two_le_count_of_getElem!_eq_of_ne (Nat.add_lt_add_iff_right.mp iltlen)
+            (Nat.add_lt_add_iff_right.mp jltlen) eq (ne <| Nat.succ_inj.mpr ·)
     · case isFalse h =>
       by_cases i = 0
       · case pos h' =>
         cases h'
-        rw [get!_cons_zero, BEq.refl] at h
+        rw [getElem!_cons_zero, BEq.refl] at h
         nomatch h
       · case neg h' =>
         by_cases j = 0
         · case pos h'' =>
           cases h''
-          rw [eq, get!_cons_zero, BEq.refl] at h
+          rw [eq, getElem!_cons_zero, BEq.refl] at h
           nomatch h
         · case neg h'' =>
           let ⟨k, eq'⟩ := Nat.exists_eq_succ_of_ne_zero h'
           cases eq'
           let ⟨k', eq''⟩ := Nat.exists_eq_succ_of_ne_zero h''
           cases eq''
-          rw [get!_cons_succ, Nat.add_zero]
-          exact two_le_count_of_get!_eq_of_ne (Nat.add_lt_add_iff_right.mp iltlen)
-            (Nat.add_lt_add_iff_right.mp jltlen) eq (ne <| Nat.succ_inj'.mpr ·)
+          rw [getElem!_cons_succ, Nat.add_zero]
+          exact two_le_count_of_getElem!_eq_of_ne (Nat.add_lt_add_iff_right.mp iltlen)
+            (Nat.add_lt_add_iff_right.mp jltlen) eq (ne <| Nat.succ_inj.mpr ·)
 
 theorem map_eq_id_of_eq_id_of_mem (id_of_mem : ∀ a ∈ as, f a = a) : List.map f as = as := by
   match as with
@@ -209,7 +211,7 @@ theorem sum_map_eq_of_eq_of_mem {f g : α → Nat} (eq_of_mem : ∀ a ∈ as, f 
 
 theorem get!_zip [Inhabited α] [Inhabited β] {l₁ : List α} {l₂ : List β}
   (length_eq : l₁.length = l₂.length) (ilt : i < l₁.length)
-  : (zip l₁ l₂).get! i = (l₁.get! i, l₂.get! i) := by match l₁, l₂ with
+  : (zip l₁ l₂)[i]! = (l₁[i]!, l₂[i]!) := by match l₁, l₂ with
   | [], _ => nomatch ilt
   | _, [] =>
     rw [length_eq] at ilt
@@ -217,9 +219,9 @@ theorem get!_zip [Inhabited α] [Inhabited β] {l₁ : List α} {l₂ : List β}
   | a :: l₁', b :: l₂' =>
     rw [zip_cons_cons]
     match i with
-    | 0 => rw [get!_cons_zero, get!_cons_zero, get!_cons_zero]
+    | 0 => rw [getElem!_cons_zero, getElem!_cons_zero, getElem!_cons_zero]
     | i' + 1 =>
-      rw [get!_cons_succ, get!_cons_succ, get!_cons_succ]
+      rw [getElem!_cons_succ, getElem!_cons_succ, getElem!_cons_succ]
       rw [length, length] at length_eq
       rw [length] at ilt
       exact get!_zip (Nat.add_one_inj.mp length_eq) <| Nat.lt_of_succ_lt_succ ilt
@@ -238,8 +240,6 @@ theorem cofinite_skolem {p : Nat → α → Prop} {I : List Nat}
   · case neg xmem => exact ⟨a', fun xnmem => nomatch xmem xnmem⟩
 
 theorem sizeOf_append [SizeOf α] {l₁ l₂ : List α}
-  : sizeOf (l₁ ++ l₂) + 1 = sizeOf l₁ + sizeOf l₂ := by
-  induction l₁ <;> simp_arith
-  assumption
+  : sizeOf (l₁ ++ l₂) + 1 = sizeOf l₁ + sizeOf l₂ := by induction l₁ <;> simp +arith [*]
 
 end List

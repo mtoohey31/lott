@@ -14,7 +14,7 @@ register_option linter.unusedVariables.lottSymbolEmbeddingPatternVars : Bool := 
     "enable the 'unused variables' linter to mark unused lott symbol embedding pattern variables"
 }
 
-def getLinterUnusedVariablesLottSymbolEmbeddingPatternVars (o : Options) : Bool :=
+def getLinterUnusedVariablesLottSymbolEmbeddingPatternVars (o : LinterOptions) : Bool :=
   o.get linter.unusedVariables.lottSymbolEmbeddingPatternVars.name
     (Lean.Linter.getLinterUnusedVariables o &&
       linter.unusedVariables.lottSymbolEmbeddingPatternVars.defValue)

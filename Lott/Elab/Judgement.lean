@@ -49,7 +49,7 @@ elab_rules : command | `(judgement_syntax $[$ps]* : $name $[(id $ids?,*)]? $[(te
     let macroName := mkIdentFrom name <| name.getId.appendAfter "Impl"
     elabCommand <| ←
       `(@[macro $(mkIdent `Lott.judgementEmbed)]
-        private
+        private partial
         def $macroName : Macro := fun stx => do
           let Lean.Syntax.node _ ``Lott.judgementEmbed #[
             Lean.Syntax.atom _ "[[",
@@ -77,7 +77,7 @@ elab_rules : command | `(judgement_syntax $[$ps]* : $name $[(id $ids?,*)]? $[(te
     let texElabName := mkIdentFrom name <| name.getId.appendAfter "TexElab"
     elabCommand <| ←
       `(@[lott_tex_elab $catIdent]
-        private
+        private partial
         def $texElabName : TexElab := fun profile ref stx => do
           let Lean.Syntax.node _ $(quote catName) #[$patternArgs,*] := stx
             | throwUnsupportedSyntax

@@ -1,4 +1,5 @@
 import Lake
+import Lake.CLI
 import Lean.Elab.Frontend
 
 open Lake DSL
@@ -13,7 +14,7 @@ def args := if notex then #[] else #[s!"-Dweak.lott.tex.output.dir={__dir__}"]
 package lott where
   moreGlobalServerArgs := args
 
-require aesop from git "https://github.com/leanprover-community/aesop" @ "v4.17.0"
+require aesop from git "https://github.com/leanprover-community/aesop" @ "v4.29.0"
 
 @[default_target]
 lean_lib Lott
@@ -64,7 +65,7 @@ script «lott-filter» args do
   | .ok inputCommands =>
     let ws ← getWorkspace
     let filter := "Lott.Elab.Filter"
-    match parseTargetSpecs ws [filter, spec] with
+    match ← EIO.toIO' <| parseTargetSpecs ws [filter, spec] with
     | .error cliError =>
       IO.eprintln cliError
       return 1
@@ -80,6 +81,6 @@ script «lott-filter» args do
 
       let input := s!"import {filter}\nimport {spec}\nnamespace {«namespace»}\n" ++
         inputCommands
-      let opts := Lean.KVMap.empty.insert `lott.tex.output.dir <| .ofString "/dev/null"
-      let (_, ok) ← Lean.Elab.runFrontend input opts "LottFilterScript.lean" `LottFilterScript
-      return (!ok).toUInt32
+      let opts := Lean.Options.empty.insert `lott.tex.output.dir <| .ofString "/dev/null"
+      let env ← Lean.Elab.runFrontend input opts "LottFilterScript.lean" `LottFilterScript
+      return env.isNone.toUInt32
