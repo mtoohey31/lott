@@ -1213,7 +1213,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
           let exampleStx := mkNode catName <| ← toExampleSyntax ir canonQualified profile
           let productionTex ← liftTermElabM <|
             texElabSymbolOrJudgement catName profile name exampleStx
-          return some s!"\\lottproduction\{{productionTex}}\n"
+          return some s!"\\lottproduction\{{name.getId.toString false}}\{{productionTex}}\n"
         let productionsTex := "\\lottproductionsep\n".intercalate productionTexs.toList
         return s!"\\lottnonterminal\{{canonTex}}\{\n{aliasesTex}}\{\n{productionsTex}}\n"
 
