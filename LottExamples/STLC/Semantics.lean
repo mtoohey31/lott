@@ -15,6 +15,10 @@ judgement_syntax x " ∉ " "fv" "(" e ")" : Term.NotInFreeVars (id x)
 
 judgement Term.NotInFreeVars := fun x e => ¬[[x ∈ fv(e)]]
 
+judgement_syntax "closed " e : Term.Closed
+
+judgement Term.Closed := fun e => ∀ x, [[x ∉ fv(e)]]
+
 namespace Environment
 
 termonly
@@ -86,7 +90,7 @@ x : τ ∈ Γ
 Γ ⊢ x : τ
 
 ∀ x ∉ I, Γ, x : τ₀ ⊢ e^x : τ₁
-───────────────────────────── lam {I : List VarId}
+───────────────────────────── lam (I : List VarId)
 Γ ⊢ λ x. e : τ₀ → τ₁
 
 Γ ⊢ e₀ : τ₀ → τ₁
@@ -98,8 +102,6 @@ x : τ ∈ Γ
 Γ ⊢ () : Unit
 
 judgement_syntax e " ↦ " e' : Reduction
-
-set_option pp.rawOnError true in
 
 judgement Reduction where
 
@@ -113,5 +115,28 @@ v e ↦ v e'
 
 ─────────────────── lamApp
 (λ x. e) v ↦ e^^v/x
+
+judgement_syntax e " ↦? " e' : Reduction?
+
+judgement Reduction? where
+
+────── refl
+e ↦? e
+
+e₀ ↦ e₁
+──────── step
+e₀ ↦? e₁
+
+judgement_syntax e " ↦* " e' : MultiReduction
+
+judgement MultiReduction where
+
+────── refl
+e ↦* e
+
+e₀ ↦ e₁
+e₁ ↦* e₂
+──────── step
+e₀ ↦* e₂
 
 end LottExamples.STLC
