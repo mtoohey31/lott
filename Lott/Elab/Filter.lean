@@ -55,15 +55,21 @@ elab_rules : command
           continue
 
         let mut stx := s.stxStack.back
-        if stx.getKind == choiceKind then
-          let possibilities := ", ".intercalate <| stx.getArgs.map (·.getKind.toString) |>.toList
-          logWarning s!"`{input}` from {entry.fileName} is ambiguous between: {possibilities}"
-          failed := true
-          continue
         if stx.getKind == `Lott.QualifiedSymbol then
           stx := stx.getArg 2
+        let some output ←
+          if stx.getKind == choiceKind then
+            let possibilities ← liftTermElabM <| stx.getArgs.mapM fun stx =>
+              texElabSymbolOrJudgement stx.getKind default inputName stx
+            pure <| Option.someIf possibilities[0]! <| (Std.TreeSet.ofArray possibilities).size == 1
+          else
+            Functor.map some <| liftTermElabM <|
+              texElabSymbolOrJudgement stx.getKind default inputName stx
+          | let possibilities := ", ".intercalate <| stx.getArgs.map (·.getKind.toString) |>.toList
+            logWarning s!"`{input}` from {entry.fileName} is ambiguous between: {possibilities}"
+            failed := true
+            continue
 
-        let output ← liftTermElabM <| texElabSymbolOrJudgement stx.getKind default inputName stx
         writeFile (withExtension entry.path "tex") <| output ++ "\n"
 
       if failed then
