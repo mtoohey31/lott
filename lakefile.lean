@@ -4,12 +4,13 @@ import Lean.Elab.Frontend
 
 open Lake DSL
 
-def noterm := get_config? noterm |>.isSome
-
 def notex := get_config? notex |>.isSome
 
 -- TODO: Use lib leanOptions for everything instead of args once string escaping is fixed.
-def args := if notex then #[] else #[s!"-Dweak.lott.tex.output.dir={__dir__}"]
+def args := if notex then
+    #[]
+  else
+    #[s!"-Dweak.lott.tex.output.dir={get_config? texdir |>.getD (__dir__ |>.toString)}"]
 
 package lott where
   moreGlobalServerArgs := args
@@ -21,8 +22,11 @@ lean_lib Lott
 
 @[test_driver]
 lean_lib LottExamples where
-  leanOptions := (if noterm then #[⟨`lott.term, false⟩] else #[]) ++
-    if notex then #[] else #[⟨`lott.tex.output.sourceRelative, false⟩]
+  leanOptions := (if get_config? noterm |>.isSome then #[⟨`lott.term, false⟩] else #[]) ++
+    if notex then #[] else #[
+      ⟨`lott.tex.locallyNameless, get_config? hideln |>.isNone⟩,
+      ⟨`lott.tex.output.sourceRelative, false⟩
+    ]
   moreLeanArgs := args
 
 open System

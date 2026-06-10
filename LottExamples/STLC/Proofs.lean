@@ -416,14 +416,14 @@ end Typing
 
 namespace Reduction
 
-theorem closed_preservation (c : [[closed e]]) (re : [[e ↦ e']]) : [[closed e']] := by
+theorem closed_preservation (c : [[closed e]]) (re : [[e → e']]) : [[closed e']] := by
   induction re
   case' lamApp => apply Term.Closed.Term_open
   all_goals aesop (add simp [Term.Closed, Term.NotInFreeVars, Term.InFreeVars, Term.freeVars])
 
-theorem not_of_Value : ¬[[v ↦ e]] := by cases v; cases ‹Term.IsValue _› <;> nofun
+theorem not_of_Value : ¬[[v → e]] := by cases v; cases ‹Term.IsValue _› <;> nofun
 
-theorem preservation (ty : [[Γ ⊢ e : τ]]) (re : [[e ↦ e']]) : [[Γ ⊢ e' : τ]] := match re, ty with
+theorem preservation (ty : [[Γ ⊢ e : τ]]) (re : [[e → e']]) : [[Γ ⊢ e' : τ]] := match re, ty with
   | appl e₀ree₀', .app e₀ty e₁ty => .app (e₀ree₀'.preservation e₀ty) e₁ty
   | appr e₁ree₁', .app e₀ty e₁ty => .app e₀ty <| e₁ree₁'.preservation e₁ty
   | lamApp, .app e₀ty vty =>
@@ -432,7 +432,7 @@ theorem preservation (ty : [[Γ ⊢ e : τ]]) (re : [[e ↦ e']]) : [[Γ ⊢ e' 
     let ⟨xninfve₀', xninI⟩ := List.not_mem_append'.mp xnin
     e₀'ty x xninI |>.opening (Γ₁ := .empty) vty nofun xninfve₀'
 
-theorem progress (ty : [[ε ⊢ e : τ]]) : e.IsValue ∨ ∃ e', [[e ↦ e']] := match e, ty with
+theorem progress (ty : [[ε ⊢ e : τ]]) : e.IsValue ∨ ∃ e', [[e → e']] := match e, ty with
   | [[λ x. e₀]], _ => .inl .lam
   | [[e₀ e₁]], .app e₀ty e₁ty => match progress e₀ty with
     | .inl e₀IsValue => match progress e₁ty with
@@ -448,25 +448,25 @@ end Reduction
 
 namespace Reduction?
 
-theorem closed_preservation (c : [[closed e]]) : [[e ↦? e']] → [[closed e']]
+theorem closed_preservation (c : [[closed e]]) : [[e →? e']] → [[closed e']]
   | .refl => c
   | .step re => re.closed_preservation c
 
-theorem appl : [[e₀ ↦? e₀']] → [[e₀ e₁ ↦? e₀' e₁]]
+theorem appl : [[e₀ →? e₀']] → [[e₀ e₁ →? e₀' e₁]]
   | .refl => .refl
   | .step e₀re => .step <| .appl e₀re
 
-theorem appr : [[e ↦? e']] → [[v e ↦? v e']]
+theorem appr : [[e →? e']] → [[v e →? v e']]
   | .refl => .refl
   | .step ere => .step <| .appr ere
 
-theorem toMulti : [[e ↦? e']] → [[e ↦* e']]
+theorem toMulti : [[e →? e']] → [[e →* e']]
   | .refl => .refl
   | .step ere => .step ere .refl
 
 end Reduction?
 
-theorem MultiReduction.trans (e₀mre : [[e₀ ↦* e₁]]) (e₁mre : [[e₁ ↦* e₂]]) : [[e₀ ↦* e₂]] := by
+theorem MultiReduction.trans (e₀mre : [[e₀ →* e₁]]) (e₁mre : [[e₁ →* e₂]]) : [[e₀ →* e₂]] := by
   induction e₀mre with
   | refl => exact e₁mre
   | step e₀re _ ih => exact step e₀re <| ih e₁mre

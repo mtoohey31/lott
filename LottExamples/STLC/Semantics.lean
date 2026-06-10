@@ -84,7 +84,7 @@ judgement_syntax Γ " ⊢ " e " : " τ : Typing
 
 judgement Typing where
 
-⊢ Γ
+notex ⊢ Γ
 x : τ ∈ Γ
 ───────── var
 Γ ⊢ x : τ
@@ -101,42 +101,42 @@ x : τ ∈ Γ
 ───────────── unit
 Γ ⊢ () : Unit
 
-judgement_syntax e " ↦ " e' : Reduction
+judgement_syntax e " → " e' : Reduction (tex := s!"{e} \\, \\lottsym\{\\longrightarrow} \\, {e'}")
 
 judgement Reduction where
 
-e₀ ↦ e₀'
+e₀ → e₀'
 ────────────── appl
-e₀ e₁ ↦ e₀' e₁
+e₀ e₁ → e₀' e₁
 
-e ↦ e'
+e → e'
 ────────── appr
-v e ↦ v e'
+v e → v e'
 
 ─────────────────── lamApp
-(λ x. e) v ↦ e^^v/x
+(λ x. e) v → e^^v/x
 
-judgement_syntax e " ↦? " e' : Reduction?
+judgement_syntax e " →? " e' : Reduction? (tex := s!"{e} \\, \\lottsym\{\\overset\{?}\{\\longrightarrow}} \\, {e'}")
 
 judgement Reduction? where
 
 ────── refl
-e ↦? e
+e →? e
 
-e₀ ↦ e₁
+e₀ → e₁
 ──────── step
-e₀ ↦? e₁
+e₀ →? e₁
 
-judgement_syntax e " ↦* " e' : MultiReduction
+judgement_syntax e " →* " e' : MultiReduction (tex := s!"{e} \\, \\lottsym\{\\overset\{*}\{\\longrightarrow}} \\, {e'}")
 
 judgement MultiReduction where
 
 ────── refl
-e ↦* e
+e →* e
 
-e₀ ↦ e₁
-e₁ ↦* e₂
+e₀ → e₁
+e₁ →* e₂
 ──────── step
-e₀ ↦* e₂
+e₀ →* e₂
 
 end LottExamples.STLC
