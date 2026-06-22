@@ -134,6 +134,7 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
                 `([[$«judgement»:Lott.Judgement]] → $acc)
               | `(InferenceRuleUpper| $i:ident := $sym), acc =>
                 `(let $i := [[$sym:Lott.Symbol]]; $acc)
+              | `(InferenceRuleUpper| noterm $_), acc => return acc
               | _, _ => throwUnsupportedSyntax
           `(ctor| | $name:ident $binders* : zeta_reduce% $ctorType)
 
@@ -197,6 +198,7 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
                 let hypTex ← liftTermElabM <|
                   texElabSymbolOrJudgement hyp.raw.getKind profile hyp hyp
                 return s!"\n\\lotthypothesis\{{hypTex}}"
+              | `(InferenceRuleUpper| noterm $tex) => return tex.getString
               | _ => throwUnsupportedSyntax
             let mut hypothesesTex := "\\\\".intercalate hypothesesTexs.toList
             let conclusionTex ← liftTermElabM <|
