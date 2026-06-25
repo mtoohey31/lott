@@ -15,7 +15,7 @@ def args := if notex then
 package lott where
   moreGlobalServerArgs := args
 
-require aesop from git "https://github.com/leanprover-community/aesop" @ "v4.29.0"
+require aesop from git "https://github.com/leanprover-community/aesop" @ "v4.30.0"
 
 @[default_target]
 lean_lib Lott
