@@ -1,10 +1,11 @@
 import Lott
+import Lott.Elab.Nat
 
 namespace LottExamples.STLC
 
 nonterminal (tex pre := "\\mathcolor{STLC}{", post := "}") «Type», τ :=
   | τ₀ " → " τ₁ : arr
-  | "Unit"      : unit
+  | "ℕ"         : nat
 
 locally_nameless
 metavar (tex pre := "\\mathcolor{STLC}{", post := "}") Var, x
@@ -13,7 +14,7 @@ nonterminal (tex pre := "\\mathcolor{STLC}{", post := "}") Term, e :=
   | x             : var
   | "λ " x ". " e : lam (bind x in e)
   | e₀ e₁         : app
-  | "(" ")"       : unit
+  | n             : nat
   | "(" e ")"     : paren notex (expand := return e)
 
 nonterminal (tex pre := "\\mathcolor{STLC}{", post := "}") Environment, Γ :=
@@ -23,6 +24,6 @@ nonterminal (tex pre := "\\mathcolor{STLC}{", post := "}") Environment, Γ :=
 
 nonterminal (parent := Term) (tex pre := "\\mathcolor{STLC}{", post := "}") Value, v :=
   | "λ " x ". " e : lam (bind x in e)
-  | "(" ")"       : unit
+  | n             : nat
 
 end LottExamples.STLC

@@ -332,7 +332,7 @@ theorem toVarLocallyClosed : [[Γ ⊢ e : τ]] → e.VarLocallyClosed
     let e'ty := e'ty x xnin
     .lam <| e'ty.toVarLocallyClosed.weakening (Nat.le_succ 0) |>.Var_open_drop <| Nat.zero_lt_succ _
   | app e₀ty e₁ty => .app e₀ty.toVarLocallyClosed e₁ty.toVarLocallyClosed
-  | unit => .unit
+  | nat => .nat
 
 theorem freeVars (ety : [[Γ ⊢ e : τ]]) : e.freeVars ⊆ Γ.domain := by
   induction ety with
@@ -357,7 +357,7 @@ theorem exchange : [[Γ₀, x : τ, Γ₁, Γ₂ ⊢ e : τ']] → [[Γ₀, Γ�
   | var Γ₀xΓ₁Γ₂wf x'inΓ₀xΓ₁Γ₂ => var Γ₀xΓ₁Γ₂wf.exchange <| x'inΓ₀xΓ₁Γ₂.exchange Γ₀xΓ₁Γ₂wf
   | lam I e'ty => lam I fun x' x'nin => let e'ty := e'ty x' x'nin; e'ty.exchange (Γ₂ := Γ₂.ext x' _)
   | app e₀ty e₁ty => app e₀ty.exchange e₁ty.exchange
-  | unit => unit
+  | nat => nat
 
 theorem weakening : [[Γ₀ ⊢ e : τ]] → [[⊢ Γ₀, Γ₁]] → [[Γ₀, Γ₁ ⊢ e : τ]]
   | var _ xinΓ₀, Γ₀Γ₁wf =>
@@ -369,7 +369,7 @@ theorem weakening : [[Γ₀ ⊢ e : τ]] → [[⊢ Γ₀, Γ₁]] → [[Γ₀, �
       have := e'ty.weakening (Γ₀Γ₁wf.insert xnindomΓ₀Γ₁)
       exact this.exchange (Γ₂ := .empty)
   | app e₀ty e₁ty, Γ₀Γ₁wf => app (e₀ty.weakening Γ₀Γ₁wf) (e₁ty.weakening Γ₀Γ₁wf)
-  | unit, _ => unit
+  | nat, _ => nat
 
 theorem opening
   (e₁ty : Typing ((Γ₀.ext x τ₀).append Γ₁) (e₁.Var_open x n) τ₁) (e₀ty : [[Γ₀ ⊢ e₀ : τ₀]])
@@ -408,9 +408,9 @@ theorem opening
   | [[e₁₀ e₁₁]] =>
     let .app e₁₀ty e₁₁ty := e₁ty
     exact .app (e₁₀ty.opening e₀ty xninΓ₁ xninfve₁.app₀) (e₁₁ty.opening e₀ty xninΓ₁ xninfve₁.app₁)
-  | [[()]] =>
-    let .unit := e₁ty
-    exact unit
+  | [[n]] =>
+    let .nat := e₁ty
+    exact nat
 
 end Typing
 
@@ -442,7 +442,7 @@ theorem progress (ty : [[ε ⊢ e : τ]]) : e.IsValue ∨ ∃ e', [[e → e']] :
         .inr <| .intro _ <| .lamApp (v := v₁)
       | .inr ⟨_, e₁ree₁'⟩ => .inr <| .intro _ <| .appr e₁ree₁' (v := ⟨_, e₀IsValue⟩)
     | .inr ⟨_, e₀ree₀'⟩ => .inr <| .intro _ <| .appl e₀ree₀'
-  | [[()]], .unit => .inl .unit
+  | [[n]], .nat => .inl .nat
 
 end Reduction
 

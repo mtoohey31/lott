@@ -98,8 +98,8 @@ x : τ ∈ Γ
 ──────────────── app
 Γ ⊢ e₀ e₁ : τ₁
 
-───────────── unit
-Γ ⊢ () : Unit
+───────── nat
+Γ ⊢ n : ℕ
 
 judgement_syntax e " → " e' : Reduction (tex := s!"{e} \\, \\lottsym\{\\longrightarrow} \\, {e'}")
 
