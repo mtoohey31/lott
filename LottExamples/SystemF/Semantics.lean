@@ -1,6 +1,11 @@
+module
+
 import Lott.Data.List
 import Lott.Elab.UniversalJudgement
-import LottExamples.SystemF.Syntax
+public import LottExamples.SystemF.Syntax
+
+@[expose]
+public section
 
 namespace LottExamples.SystemF
 

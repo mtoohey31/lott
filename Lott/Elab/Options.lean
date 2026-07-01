@@ -1,9 +1,14 @@
-import Lean
+module
+
+import Lean.Elab.Command
+public import Lean.Data.Options
 
 namespace Lott
 
 open Lean
 open Lean.Elab.Command
+
+public section
 
 register_option lott.term : Bool := {
   defValue := true
@@ -39,6 +44,8 @@ register_option lott.tex.output.makeDeps : Bool := {
   defValue := false
   descr := "also output .d files for make alongside tex"
 }
+
+end
 
 def getTexOutputSome : CommandElabM Bool := return (← getOptions).contains lott.tex.output.dir.name
 

@@ -1,18 +1,29 @@
-import Lott.Data.Char
-import Lott.Data.List
-import Lott.Data.Name
-import Lott.Data.Option
-import Lott.Data.String
-import Lott.Elab.Options
-import Lott.Environment
+module
+
+public meta import Lean.Elab.Command
+meta import Lott.Data.Char
+import all Lott.Data.Char
+public meta import Lott.Data.Name
+import all Lott.Data.Name
+meta import Lott.Data.Option
+public meta import Lott.Data.String
+import all Lott.Data.String
+public meta import Lott.Elab.Options
+import all Lott.Elab.Options
+public meta import Lott.Environment.Basic
+import all Lott.Environment.Basic
+meta import Lott.Environment.MetaVar
 import Lott.Parser
-import Lott.IR
+public meta import Lott.IR
+import all Lott.IR
 
 -- TODO: Remove unnecessary qualifications from names.
 -- TODO: Delab to embeddings when possible.
 -- TODO: Make hover in non-terminal work right.
 -- TODO: Test stuff without locally nameless.
 -- TODO: Centralize validation of bind/id usage in nonterminals.
+
+meta section
 
 namespace Lott
 
@@ -58,15 +69,17 @@ def writeTexOutput (name : Name) (mkTex : CommandElabM String) : CommandElabM Un
   writeMakeDeps outputName
   writeFile outputName <| ← mkTex
 
+public
 abbrev TexElab := (profile : Name) → (ref : Syntax) → Syntax → TermElabM String
 
-private unsafe
+unsafe
 def mkLottTexElabAttributeUnsafe (ref : Name) : IO (KeyedDeclsAttribute TexElab) := do
   mkElabAttribute TexElab .anonymous `lott_tex_elab `Lott ``Lott.TexElab "lott" ref
 
 @[implemented_by mkLottTexElabAttributeUnsafe]
 opaque mkLottTexElabAttribute (ref : Name) : IO (KeyedDeclsAttribute TexElab)
 
+private
 initialize lottTexElabAttribute : KeyedDeclsAttribute TexElab ← mkLottTexElabAttribute decl_name%
 
 def texElabIdx : Syntax → TermElabM String
@@ -74,7 +87,6 @@ def texElabIdx : Syntax → TermElabM String
   | .node _ `num #[.atom _ raw] => pure raw.texEscape
   | _ => throwUnsupportedSyntax
 
-private
 def texElabMetavar : TexElab := fun
   | _, _, .node _ catName #[.ident _ _ val _]
   | _, _, .node _ catName #[.ident _ _ val _, .atom _ "$", .node _ `num _] => do
@@ -100,7 +112,7 @@ def texElabMetavar : TexElab := fun
 
 mutual
 
-private partial
+public partial
 def texElabVariable : TexElab := fun
   | _, _, .node _ catName #[.node _ _ #[.ident _ _ val _] ] => do
     let ns ← getCurrNamespace
@@ -241,7 +253,7 @@ def texElabVariable : TexElab := fun
     texElabSymbolOrJudgement childCatName profile ref stx
   | _, _, _ => throwUnsupportedSyntax
 
-partial
+public partial
 def texElabSymbolOrJudgement (catName : Name) (profile : Name) (ref stx : Syntax)
   : TermElabM String := do
   let env ← getEnv
@@ -358,11 +370,11 @@ def _root_.Lott.IR.toExprArgs (ir : Array IR) (ids binders : Array Name)
 
       return some l
 
+public
 def Syntax.mkSymbolEmbed (stx : Syntax) : Term :=
   .mk <| mkNode ``Lott.symbolEmbed #[mkAtom "[[", stx, mkAtom "]]"]
 
-elab "#test" t:term : command => logInfo <| toString t.raw.getArgs
-
+public
 def _root_.Lean.Syntax.mkTypeAscription (stx type : Syntax) : Term :=
   .mk <| mkNode ``Lean.Parser.Term.typeAscription #[
       mkNode ``Lean.Parser.Term.hygienicLParen
@@ -656,6 +668,7 @@ elab_rules : command | `(termonly $c) => do if ← getTerm then elabCommand c
 /- Term embedding syntax. -/
 
 @[macro qualifiedSymbolEmbed]
+public meta
 def qualifiedSymbolEmbedImpl : Macro := fun stx =>
   return Lott.Syntax.mkSymbolEmbed <| stx.getArg 1 |>.getArg 2
 

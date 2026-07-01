@@ -1,5 +1,11 @@
-import Lott.Elab.Basic
+module
+
+public import Lean.Parser.Command
+public import Lott.Elab.Basic
+import all Lott.Elab.Basic
 import Lott.Parser
+
+meta section
 
 namespace Lott
 
@@ -12,7 +18,6 @@ open Lean.Parser
 open Lean.Parser.Command
 open Lean.Parser.Term
 
-private
 def judgementPrefix := `Lott.Judgement
 
 elab_rules : command | `(judgement_syntax $[$ps]* : $name $[(id $ids?,*)]? $[(tex $[$texProfile?s]? := $tex?s)]*) => do
@@ -36,7 +41,7 @@ elab_rules : command | `(judgement_syntax $[$ps]* : $name $[(id $ids?,*)]? $[(te
   let parserIdent := mkIdentFrom name <| name.getId.appendAfter "_parser"
   elabCommand <| ←
     `(@[Lott.Judgement_parser, $(mkIdent parserAttrName):ident]
-      private
+      public meta
       def $parserIdent : Parser := $val)
 
   -- Define macro and tex elab.
@@ -49,7 +54,7 @@ elab_rules : command | `(judgement_syntax $[$ps]* : $name $[(id $ids?,*)]? $[(te
     let macroName := mkIdentFrom name <| name.getId.appendAfter "Impl"
     elabCommand <| ←
       `(@[macro $(mkIdent `Lott.judgementEmbed)]
-        private partial
+        public meta partial
         def $macroName : Macro := fun stx => do
           let Lean.Syntax.node _ ``Lott.judgementEmbed #[
             Lean.Syntax.atom _ "[[",
@@ -77,7 +82,7 @@ elab_rules : command | `(judgement_syntax $[$ps]* : $name $[(id $ids?,*)]? $[(te
     let texElabName := mkIdentFrom name <| name.getId.appendAfter "TexElab"
     elabCommand <| ←
       `(@[lott_tex_elab $catIdent]
-        private partial
+        public meta partial
         def $texElabName : TexElab := fun profile ref stx => do
           let Lean.Syntax.node _ $(quote catName) #[$patternArgs,*] := stx
             | throwUnsupportedSyntax
@@ -85,12 +90,10 @@ elab_rules : command | `(judgement_syntax $[$ps]* : $name $[(id $ids?,*)]? $[(te
           $profileAlternatives*
           return $rest)
 
-private
 inductive RulesOrTerm
   | rules (r : TSyntaxArray `Lott.InferenceRule)
   | term (t : Term)
 
-private
 def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
   let ns ← getCurrNamespace
   let jds ← jds.mapM fun jd => do
@@ -226,7 +229,7 @@ elab_rules : command
   | `(mutual $[$jds:Lott.JudgementDecl]* end) => elabJudgementDecls jds
 
 @[term_elab zetaReduce]
-partial
+public partial
 def elabZetaReduce : TermElab := fun stx expectedType? => do
   let `(zeta_reduce% $t) := stx | throwUnsupportedSyntax
   let e ← elabTerm t expectedType?

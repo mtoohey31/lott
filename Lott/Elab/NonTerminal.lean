@@ -1,5 +1,17 @@
-import Lott.Elab.Basic
+module
+
+public meta import Lean.Data.RBTree
+public import Lean.Parser.Command
+import all Lott.Data.Name
+public import Lott.Elab.Basic
+import all Lott.Elab.Basic
+import all Lott.Elab.Options
+import all Lott.Environment.Basic
+public meta import Lott.Environment.MetaVar
+import all Lott.IR
 import Lott.Parser
+
+meta section
 
 namespace Lott
 
@@ -12,10 +24,9 @@ open Lean.Parser.Command
 open Lean.Parser.Term
 open Lott.IR
 
-private
 def symbolEmbedIdent := mkIdent ``Lott.symbolEmbed
 
-private partial
+partial
 def IR.toIsChildCtor (prodIdent isIdent : Ident) (qualified pqualified : Name) (ir pir : Array IR)
   (binders : Array Name) : CommandElabM (TSyntax ``Lean.Parser.Command.ctor) := do
   if ir.size != pir.size then
@@ -97,7 +108,6 @@ where
           ``(∀ $l'bi ∈ $l, let $prod:term := $l'; $(← foldlAnd props))
     | _, _ => throwErrorAt prodIdent "mismatched syntax"
 
-private
 def freeName (varName : Name) (typeName : Name) : CommandElabM Name := do
   let ns ← getCurrNamespace
   let typeName := typeName.replacePrefix ns .anonymous
@@ -105,7 +115,7 @@ def freeName (varName : Name) (typeName : Name) : CommandElabM Name := do
   | .str .anonymous s => return typeName ++ Name.appendAfter `free s |>.appendAfter "s"
   | n => return typeName ++ `free ++ n.appendAfter "s"
 
-private partial
+partial
 def toFreeMatchAlt (prodId : Ident) (ir : Array IR) (subst : Name × Name)
   (binders : Array Name) : CommandElabM (TSyntax ``Lean.Parser.Term.matchAltExpr) := do
   let (patArgs, appendArgs) ← goMany ir
@@ -152,13 +162,12 @@ where
           )
         )
 
-private
 def locallyClosedName (varName : Name) (typeName : Name) : CommandElabM Name := do
   let ns ← getCurrNamespace
   let typeName := typeName.replacePrefix ns .anonymous
   return typeName ++ varName.replacePrefix ns .anonymous |>.appendAfter "LocallyClosed"
 
-private partial
+partial
 def containsVar (varName : Name) (ir : Array IR) (ids binders : Array Name) : Bool :=
   ir.any fun
     | mk l (.category n) => n == varName && !(binders.contains l.getId || ids.contains l.getId)
@@ -166,7 +175,7 @@ def containsVar (varName : Name) (ir : Array IR) (ids binders : Array Name) : Bo
     | mk _ (.sepBy ir _)
     | mk _ (.optional ir) => containsVar varName ir ids binders
 
-private partial
+partial
 def toLocallyClosedCtors (prodId locallyClosedId idxId : Ident) (qualified : Name) (ir : Array IR)
   (subst : Name × Name) (ids binders : Array Name)
   : CommandElabM (Array (TSyntax ``Lean.Parser.Command.ctor)) := do
@@ -235,11 +244,10 @@ where
           do `(∀ x ∈ $l, let $(← liftMacroM <| foldrProd <| ← toTerms patArgs):term := x; $prop)
         go irs (patAcc.push lbi) <| propAcc ++ propAcc'
 
-private
 def substName (varName : Name) : CommandElabM Name :=
   return varName.replacePrefix (← getCurrNamespace) .anonymous |>.appendAfter "_subst"
 
-private partial
+partial
 def toSubstPatternAndArgs (ir : Array IR) (varType valType : Name) (varId valId :  Ident)
   (bindOf? binderId? : Option Ident) : CommandElabM (Option (Array Term × Array Term)) := do
   let patsAndArgsAndFounds ← ir.filterMapM fun (mk l irt) => do
@@ -276,11 +284,10 @@ def toSubstPatternAndArgs (ir : Array IR) (varType valType : Name) (varId valId 
   else
     return none
 
-private
 def openName (varName : Name) : CommandElabM Name :=
   return varName.replacePrefix (← getCurrNamespace) .anonymous |>.appendAfter "_open"
 
-private partial
+partial
 def toVarOpenPatternAndArgs (ir : Array IR) (varType valType : Name) (varId idxId :  Ident)
   (bindOf? binderId? : Option Ident) : CommandElabM (Option (Array Term × Array Term)) := do
   let patsAndArgsAndFounds ← ir.filterMapM fun (mk l irt) => do
@@ -319,7 +326,7 @@ def toVarOpenPatternAndArgs (ir : Array IR) (varType valType : Name) (varId idxI
   else
     return none
 
-private partial
+partial
 def toValOpenPatternAndArgs (ir : Array IR) (varType valType : Name) (valId idxId :  Ident)
   (bindOf? binderId? : Option Ident) : CommandElabM (Option (Array Term × Array Term)) := do
   let patsAndArgsAndFounds ← ir.filterMapM fun (mk l irt) => do
@@ -355,11 +362,10 @@ def toValOpenPatternAndArgs (ir : Array IR) (varType valType : Name) (valId idxI
   else
     return none
 
-private
 def closeName (varName : Name) : CommandElabM Name :=
   return varName.replacePrefix (← getCurrNamespace) .anonymous |>.appendAfter "_close"
 
-private partial
+partial
 def toClosePatternAndArgs (ir : Array IR) (varType valType : Name) (varId idxId :  Ident)
   (bindOf? binderId? : Option Ident) : CommandElabM (Option (Array Term × Array Term)) := do
   let patsAndArgsAndFounds ← ir.filterMapM fun (mk l irt) => do
@@ -399,7 +405,7 @@ def toClosePatternAndArgs (ir : Array IR) (varType valType : Name) (varId idxId 
     return none
 
 @[macro symbolEmbed]
-private
+public
 def nonTerminalImpl : Macro := fun
   | .node _ ``Lott.symbolEmbed #[
       .atom _ "[[",
@@ -517,13 +523,11 @@ def nonTerminalImpl : Macro := fun
     return mkNode choiceKind <| cs.map (Syntax.mkSymbolEmbed ·)
   | _ => Macro.throwUnsupported
 
-private
 structure BindConfig where
   of : Ident
   in' : Array Ident
 deriving BEq
 
-private
 def BindConfig.find? (bc : BindConfig) (n : Name) : Option Ident := Id.run do
   if bc.of.getId == n then
     return bc.of
@@ -533,7 +537,6 @@ def BindConfig.find? (bc : BindConfig) (n : Name) : Option Ident := Id.run do
 instance : Std.ToStream BindConfig (Array Ident) where
   toStream | { of, in' } => in'.push of
 
-private
 structure Production where
   name : Ident
   ir : Array IR
@@ -543,11 +546,9 @@ structure Production where
   «notex» : Bool
   profileTex : NameMap Term
 
-private
 def Production.binders (prod : Production) : Array Name :=
   prod.bindConfig?.toArray.map fun { of, .. } => of.getId
 
-private
 structure NonTerminal where
   canon : Ident
   aliases : Array (Ident × Bool × Option String)
@@ -559,27 +560,22 @@ structure NonTerminal where
 
 namespace NonTerminal
 
-private
 def qualified (nt : NonTerminal) : CommandElabM Name :=
   return (← getCurrNamespace) ++ nt.canon.getId
 
-private
 def catName (nt : NonTerminal) : CommandElabM Name :=
   return symbolPrefix ++ (← nt.qualified)
 
-private
 def varCatName (nt : NonTerminal) : CommandElabM Name :=
   return variablePrefix ++ (← nt.qualified)
 
-private
 def parserAttrName (nt : NonTerminal) : CommandElabM Name :=
   return (← nt.catName).appendAfter "_parser"
 
-private
 def varParserAttrName (nt : NonTerminal) : CommandElabM Name :=
   return (← nt.varCatName).appendAfter "_parser"
 
-private partial
+partial
 def shallowSubstitutionClosure (nt : NonTerminal) (qualifiedLocalMap : NameMap NonTerminal)
   : CommandElabM NameSet := do
   let mut res := .empty |>.insert (← nt.qualified)
@@ -606,7 +602,7 @@ where
     | .mk _ (.optional ir) => irsClosure ir
   irsClosure ir := ir.foldl (·.union <| irClosure ·) .empty
 
-private partial
+partial
 def profileClosure (nt : NonTerminal) (qualifiedLocalMap : NameMap NonTerminal)
   : CommandElabM (Array Name) := do
   let mut res : NameSet := Std.TreeSet.ofArray nt.profiles Name.quickCmp
@@ -639,8 +635,7 @@ where
 
 end NonTerminal
 
-set_option maxHeartbeats 2000000 in
-private
+set_option maxHeartbeats 20000000 in
 def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
   -- Populate alias map immediately so we can resolve stuff within the current mutual throughout the
   -- following steps.
@@ -819,7 +814,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         let parserIdent := mkIdentFrom name <| canonName ++ name.getId.appendAfter "_parser"
         elabCommand <| ←
           `(@[Lott.Symbol_parser, $attrIdent:ident]
-            private
+            public meta
             def $parserIdent : $type := $val)
 
     let substitutions := substitutions?.getD #[]
@@ -827,7 +822,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       let parserIdent := mkIdent <| canonName ++ varName.appendAfter "_subst_parser"
       elabCommand <| ←
         `(@[Lott.Symbol_parser, $attrIdent:ident]
-          private
+          public meta
           def $parserIdent : TrailingParser :=
             trailingNode $(quote <| ← nt.catName) Parser.maxPrec 0 <|
               "[" >> categoryParser $(quote <| symbolPrefix ++ valName) 0 >> " / " >>
@@ -840,7 +835,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       let parserIdent := mkIdent <| canonName ++ varName.appendAfter "_open_parser"
       elabCommand <| ←
         `(@[Lott.Symbol_parser, $attrIdent:ident]
-          private
+          public meta
           def $parserIdent : TrailingParser :=
             trailingNode $(quote <| ← nt.catName) Parser.maxPrec 0 <|
               checkNoWsBefore >> "^" >> categoryParser $(quote <| symbolPrefix ++ varName) 0 >>
@@ -851,7 +846,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       let parserIdent := mkIdent <| canonName ++ valName.appendAfter "_open_parser"
       elabCommand <| ←
         `(@[Lott.Symbol_parser, $attrIdent:ident]
-          private
+          public meta
           def $parserIdent : TrailingParser :=
             trailingNode $(quote <| ← nt.catName) Parser.maxPrec 0 <|
               checkNoWsBefore >> "^^" >> categoryParser $(quote <| symbolPrefix ++ valName) 0 >>
@@ -862,7 +857,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       let parserIdent := mkIdent <| canonName ++ varName.appendAfter "_close_parser"
       elabCommand <| ←
         `(@[Lott.Symbol_parser, $attrIdent:ident]
-          private
+          public meta
           def $parserIdent : Parser :=
             leadingNode $(quote <| ← nt.catName) Parser.maxPrec <|
               "\\" >> categoryParser $(quote <| symbolPrefix ++ varName) 0 >>
@@ -876,7 +871,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
       let parserIdent := mkIdentFrom alias <| canonName ++ aliasName.appendAfter "_parser"
       elabCommand <| ←
         `(@[$varAttrIdent:ident]
-          private
+          public meta
           def $parserIdent : Parser :=
             leadingNode $(quote <| ← nt.varCatName) Parser.maxPrec <|
               Lott.identPrefix $(quote nameStr))
@@ -884,7 +879,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
     let parserIdent := mkIdentFrom canon <| canon.getId.appendAfter "_idx_parser"
     elabCommand <| ←
       `(@[$varAttrIdent:ident]
-        private
+        public meta
         def $parserIdent : TrailingParser :=
           trailingNode $(quote <| ← nt.varCatName) Parser.maxPrec 0 <|
             checkNoWsBefore >> "@" >> checkLineEq >> (Parser.ident <|> Parser.numLit))
@@ -892,7 +887,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
     let varParserIdent := mkIdentFrom canon <| canonName.appendAfter "_variable_parser"
     elabCommand <| ←
       `(@[Lott.Symbol_parser, $attrIdent:ident]
-        private
+        public meta
         def $varParserIdent : Parser :=
           leadingNode $(quote <| ← nt.catName) Parser.maxPrec <|
             categoryParser $(quote <| ← nt.varCatName) Parser.maxPrec)
@@ -906,7 +901,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         mkIdentFrom parent <| `_root_ ++ parentQualified ++ canonName.appendAfter "_parser"
       elabCommand <| ←
         `(@[Lott.Symbol_parser, $(mkIdent parentParserAttrName):ident]
-          private
+          public meta
           def $parentParserIdent : Parser :=
             leadingNode $(quote parentParserCatName) Parser.maxPrec <|
               categoryParser $(quote <| ← nt.catName) 0)
@@ -926,7 +921,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         let macroName := mkIdentFrom name <| canonName ++ name.getId.appendAfter "Impl"
         elabCommand <| ←
           `(@[macro $symbolEmbedIdent]
-            private partial
+            public meta partial
             def $macroName : Macro := fun stx => do
               let Lean.Syntax.node _ ``Lott.symbolEmbed #[
                 Lean.Syntax.atom _ "[[",
@@ -949,7 +944,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         let texElabName := mkIdentFrom name <| canonName ++ name.getId.appendAfter "TexElab"
         elabCommand <| ←
           `(@[lott_tex_elab $catIdent]
-            private partial
+            public meta partial
             def $texElabName : TexElab := fun profile ref stx => do
               let Lean.Syntax.node _ $(quote catName) #[$patternArgs,*] := stx
                 | throwUnsupportedSyntax
@@ -966,7 +961,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
           mkIdent <| `_root_ ++ parent.getId ++ canon.getId.appendAfter "Impl"
         elabCommand <| ←
           `(@[macro $symbolEmbedIdent]
-            private
+            public meta
             def $parentMacroName : Macro := fun stx => do
               let Lean.Syntax.node _ ``Lott.symbolEmbed #[
                 Lean.Syntax.atom _ "[[",

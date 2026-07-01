@@ -1,4 +1,8 @@
-import Lean.Linter
+module
+
+public meta import Lean.Linter.UnusedVariables
+
+meta section
 
 namespace Lean.Linter
 
@@ -8,6 +12,7 @@ namespace Lean.Linter
 You can't put a hole inside an embedding to ignore something, so it's generally desirable to not be
 bugged about embedding pattern variables being unused.
 -/
+public
 register_option linter.unusedVariables.lottSymbolEmbeddingPatternVars : Bool := {
   defValue := false
   descr :=
@@ -20,7 +25,7 @@ def getLinterUnusedVariablesLottSymbolEmbeddingPatternVars (o : LinterOptions) :
       linter.unusedVariables.lottSymbolEmbeddingPatternVars.defValue)
 
 @[unused_variables_ignore_fn]
-private
+public
 def symbolEmbeddingPatternVars : Lean.Linter.IgnoreFunction := fun _ stack opts =>
   !getLinterUnusedVariablesLottSymbolEmbeddingPatternVars opts && (
     let stackBeforeMatchAlt := stack.takeWhile fun (stx, _) =>

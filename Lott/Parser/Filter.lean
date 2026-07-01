@@ -1,10 +1,13 @@
-import Lott.Parser
+module
+
+meta import Lott.Parser
+
+meta section
 
 namespace Lott
 
 open Lean.Parser
 
-private
 def embedCloseFn : ParserFn := fun c s =>
   let p := s.pos
   if h : c.atEnd p then
@@ -20,7 +23,7 @@ def embedCloseFn : ParserFn := fun c s =>
   else
     s.mkUnexpectedErrorAt "expected ']]'" p
 
-private partial
+partial
 def filterParserFnAux (startPos : String.Pos.Raw) : ParserFn := fun c s =>
   let p := s.pos
   if h : c.atEnd p then

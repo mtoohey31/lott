@@ -1,3 +1,5 @@
+module
+
 import Lott.Elab
 
 namespace Lott
@@ -11,11 +13,9 @@ declare_syntax_cat Lott.Symbol.Bool
 run_cmd setEnv <| aliasExt.addEntry (← getEnv) { canon := `Bool, alias := `b, tex? := none }
 
 @[Lott.Symbol.Bool_parser]
-private
 def bool.b_parser : Parser := leadingNode `Lott.Symbol.Bool maxPrec <| identPrefix "b"
 
 @[macro symbolEmbed]
-private
 def boolImpl : Macro := fun stx => do
   let .node _ `Lott.symbolEmbed #[
     .atom _ "[[",

@@ -1,5 +1,10 @@
+module
+
 import Lott.Elab.UniversalJudgement
-import LottExamples.STLC.Syntax
+public import LottExamples.STLC.Syntax
+
+@[expose]
+public section
 
 namespace LottExamples.STLC
 

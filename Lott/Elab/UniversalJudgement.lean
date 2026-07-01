@@ -1,5 +1,12 @@
-import Lott.Elab.Basic
-import Lott.Parser.UniversalJudgement
+module
+
+public meta import Lott.Data.String
+import all Lott.Data.String
+public import Lott.Elab.Basic
+import all Lott.Elab.Basic
+public import Lott.Parser.UniversalJudgement
+
+public meta section
 
 namespace Lott
 
@@ -7,7 +14,6 @@ open Lean
 open Lean.Elab
 
 @[macro judgementEmbed]
-private
 def universalJudgementImpl : Macro
   | `([[∀ $[$binders]* $[$type?]?, $«judgement»:Lott.Judgement]]) =>
     ``(∀ $binders* $[$type?:typeSpec]?, [[$«judgement»:Lott.Judgement]])
@@ -18,7 +24,6 @@ def universalJudgementImpl : Macro
   | _ => Macro.throwUnsupported
 
 @[lott_tex_elab universalJudgement]
-private
 def universalJudgementTexElab : TexElab := fun profile ref stx => do
   let `(universalJudgement| ∀ $binders* $[$type?]?, $«judgement»:Lott.Judgement) := stx
     | throwUnsupportedSyntax
@@ -39,7 +44,6 @@ def universalJudgementTexElab : TexElab := fun profile ref stx => do
   return s!"\\lottsym\{∀} \\, {binderTexs}, {judgementTex}"
 
 @[lott_tex_elab universalPredJudgement]
-private
 def universalPredJudgementTexElab : TexElab
   | profile, ref, `(universalPredJudgement| ∀ $i:ident $bp:binderPred, $«judgement»:Lott.Judgement) => do
     let identTex := i.getId.toString false |>.texEscape

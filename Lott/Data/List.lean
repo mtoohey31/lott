@@ -1,5 +1,9 @@
-import Lott.Data.Function
-import Lott.Data.Nat
+module
+
+public import Lott.Data.Function
+
+@[expose]
+public section
 
 namespace List
 

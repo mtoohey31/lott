@@ -1,4 +1,13 @@
-import Lott.Elab.Basic
+module
+
+public import Lean.Elab.Command
+public meta import Lott.Data.String
+public import Lott.Elab.Basic
+import all Lott.Elab.Basic
+import all Lott.Environment.Basic
+public import Lott.Parser
+
+meta section
 
 namespace Lott
 
@@ -14,23 +23,22 @@ def addNatAlias (alias : Name) : CommandElabM Unit := do
   let parserIdent := mkIdent <| `nat ++ (alias.appendAfter "_parser")
   elabCommand <| ←
     `(@[Lott.Symbol.Nat_parser]
-      private
+      public
       def $parserIdent : Parser :=
         leadingNode `Lott.Symbol.Nat maxPrec <| identPrefix $(quote <| alias.toString))
 
 run_cmd addNatAlias `n
 
+public section
+
 @[Lott.Symbol.Nat_parser]
-private
 def nat.num_parser : Parser := leadingNode `Lott.Symbol.Nat maxPrec numLit
 
 @[Lott.Symbol.Nat_parser]
-private
 def nat.term_parser : Parser :=
   leadingNode `Lott.Symbol.Nat maxPrec <| "{{" >> checkLineEq >> termParser >> checkLineEq >> "}}"
 
 @[macro symbolEmbed]
-private
 def natImpl : Macro
   | .node _ `Lott.symbolEmbed #[
       .atom _ "[[",
@@ -50,7 +58,6 @@ def natImpl : Macro
   | _ => Macro.throwUnsupported
 
 @[lott_tex_elab Lott.Symbol.Nat]
-private
 def natTexElab : TexElab
   | _, _, .node _ `Lott.Symbol.Nat #[n@(.ident ..)]
   | _, _, .node _ `Lott.Symbol.Nat #[n@(.node _ `num _)] => texElabIdx n
@@ -59,5 +66,7 @@ def natTexElab : TexElab
       | throwUnsupportedSyntax
     return s!"({n.toString.texEscape})"
   | _, _, _ => throwUnsupportedSyntax
+
+end
 
 end Lott

@@ -1,4 +1,15 @@
-import Lott.Elab.Basic
+module
+
+public meta import Lean.Elab.Command
+public meta import Lott.Elab.Options
+import all Lott.Elab.Options
+public import Lott.Environment.Basic
+import all Lott.Environment.Basic
+public meta import Lott.Environment.MetaVar
+public meta import Lott.IR
+import all Lott.Parser
+
+public meta section
 
 namespace Lott
 
@@ -9,7 +20,6 @@ open Lean.Parser
 open Lean.Parser.Term
 
 @[macro Lott.symbolEmbed]
-private
 def metavarImpl : Macro := fun
   | .node _ ``Lott.symbolEmbed #[
       .atom _ "[[",
@@ -93,7 +103,7 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $[(tex pre := $pre?, p
     let parserIdent := mkIdentFrom alias <| canon.getId ++ aliasName.appendAfter "_parser"
     elabCommand <| ←
       `(@[Lott.Symbol_parser, $(mkIdent parserAttrName):ident]
-        private
+        public meta
         def $parserIdent : Parser :=
           leadingNode $(quote catName) Parser.maxPrec <| Lott.identPrefix $(quote nameStr))
 
@@ -101,7 +111,7 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $[(tex pre := $pre?, p
       let parserIdent := mkIdentFrom alias <| canon.getId ++ aliasName.appendAfter "_bound_parser"
       elabCommand <| ←
         `(@[Lott.Symbol_parser, $(mkIdent parserAttrName):ident]
-          private
+          public meta
           def $parserIdent : Parser :=
             leadingNode $(quote catName) Parser.maxPrec <|
               Lott.identPrefix $(quote nameStr) >> "$" >> num)
@@ -109,7 +119,7 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $[(tex pre := $pre?, p
   let parserIdent := mkIdentFrom canon <| canon.getId.appendAfter "_idx_parser"
   elabCommand <| ←
     `(@[Lott.Symbol_parser, $(mkIdent parserAttrName):ident]
-      private
+      public meta
       def $parserIdent : TrailingParser :=
         trailingNode $(quote catName) Parser.maxPrec 0 <|
           checkNoWsBefore >> "@" >> checkLineEq >> (Parser.ident <|> Parser.numLit))

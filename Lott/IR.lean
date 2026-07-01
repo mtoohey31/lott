@@ -1,7 +1,10 @@
-import Lean
+module
+
+import Lean.Elab.Command
 import Lott.Data.Option
-import Lott.Environment.MetaVar
+import all Lott.Environment.MetaVar
 import Lott.Parser
+import Std.Do.Triple.SpecLemmas
 
 namespace Lott
 
@@ -54,7 +57,7 @@ def containsName (ir : Array IR) (name : Name) : Bool :=
 
 mutual
 
-private partial
+partial
 def toParser' (canon : Name) : IR → CommandElabM (Option Term)
   | mk _ (.category n) => ``(categoryParser $(quote <| symbolPrefix ++ n) Parser.maxPrec)
   | mk _ (.atom s) => if s == "" then return none else ``(symbol $(mkStrLit s))
@@ -120,7 +123,7 @@ def toParser' (canon : Name) : IR → CommandElabM (Option Term)
 
     ``(Parser.optional (categoryParser $(quote catName) 0))
 
-private partial
+partial
 def toParserSeq (canon : Name) (ir : Array IR) : CommandElabM Term := do
   let parserTerms ← ir.filterMapM <| toParser' canon
 
@@ -182,7 +185,6 @@ def foldrArrow (args : Array Term) (init : Term) : CommandElabM Term :=
 def toTypeArrSeq (ir : Array IR) (init : Term) (ids binders : Array Name) : CommandElabM Term := do
   (← ir.filterMapM <| IR.toType ids binders) |> foldrArrow (init := init)
 
-private
 def toPatternArg : IR → CommandElabM (Option Term)
   | mk l (.category n) => `($l@(Lean.Syntax.node _ $(quote <| symbolPrefix ++ n) _))
   | mk l (.atom s) =>

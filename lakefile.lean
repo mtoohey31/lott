@@ -24,8 +24,8 @@ lean_lib Lott
 lean_lib LottExamples where
   leanOptions := (if get_config? noterm |>.isSome then #[⟨`lott.term, false⟩] else #[]) ++
     if notex then #[] else #[
-      ⟨`lott.tex.locallyNameless, get_config? hideln |>.isNone⟩,
-      ⟨`lott.tex.output.sourceRelative, false⟩
+      ⟨`weak.lott.tex.locallyNameless, get_config? hideln |>.isNone⟩,
+      ⟨`weak.lott.tex.output.sourceRelative, false⟩
     ]
   moreLeanArgs := args
 

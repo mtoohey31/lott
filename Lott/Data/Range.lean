@@ -1,4 +1,9 @@
-import Lott.Data.Nat
+module
+
+import all Lott.Data.Nat
+
+@[expose]
+public section
 
 namespace Std.Legacy.Range
 

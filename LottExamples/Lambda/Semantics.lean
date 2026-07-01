@@ -1,4 +1,8 @@
-import LottExamples.Lambda.Syntax
+module
+
+public import LottExamples.Lambda.Syntax
+
+public section
 
 namespace LottExamples.Lambda
 

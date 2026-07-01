@@ -1,5 +1,10 @@
-import Lean.Elab
-import Lean.Parser
+module
+
+public import Lean.Parser.Basic
+import Lean.Parser.Extension
+public meta import Lean.Parser.Syntax
+
+public meta section
 
 namespace Lott
 
@@ -60,12 +65,11 @@ def expandConfig := " (" >> nonReservedSymbol "expand" >> " := " >> termParser >
 
 def texConfig := " (" >> nonReservedSymbol "tex" >> optional ident >> " := " >> termParser >> ")"
 
-def strLitTexConfig := " (" >> nonReservedSymbol "tex" >> " := " >> strLit >> ")"
-
 syntax ppLine "|" (ppSpace prodArg)+ " : " withPosition(ident (lineEq " nosubst")? " notex"?) atomic(bindConfig)? atomic(idConfig)? atomic(expandConfig)? (texConfig)* : Lott.Production
 
-private
 def parent := nonReservedSymbol "parent"
+
+def strLitTexConfig := " (" >> nonReservedSymbol "tex" >> " := " >> strLit >> ")"
 
 syntax "nosubst "? "nonterminal " atomic("(" parent " := " ident ") ")? (texPrePostConfig)? (ident " notex"? (strLitTexConfig)?),+ " := " Lott.Production* : Lott.NonTerminal
 
@@ -81,8 +85,7 @@ declare_syntax_cat Lott.JudgementDecl
 
 syntax "judgement_syntax" (ppSpace stx)+ " : " ident atomic(idConfig)? (texConfig)* : command
 
-private
-def bracketedBinder := Term.bracketedBinder
+private def bracketedBinder := Term.bracketedBinder
 
 syntax Lott.Judgement : Lott.InferenceRuleUpper
 
@@ -145,7 +148,6 @@ def parserOfStack (offset : Nat) (prec : Nat := 0) : Parser where
 
 open PrettyPrinter Formatter in
 @[combinator_formatter parserOfStack]
-private
 def parserOfStack.formatter (offset : Nat) (_prec : Nat := 0) : Formatter := do
   let st ← get
   let stx := st.stxTrav.parents.back!.getArg (st.stxTrav.idxs.back! - offset)
@@ -153,12 +155,12 @@ def parserOfStack.formatter (offset : Nat) (_prec : Nat := 0) : Formatter := do
 
 open PrettyPrinter Parenthesizer in
 @[combinator_parenthesizer parserOfStack]
-private
 def parserOfStack.parenthesizer (offset : Nat) (_prec : Nat := 0) : Parenthesizer := do
   let st ← get
   let stx := st.stxTrav.parents.back!.getArg (st.stxTrav.idxs.back! - offset)
   parenthesizerForKind stx.getKind
 
+@[expose]
 def qualifiedSymbolParser := leadingNode `Lott.QualifiedSymbol Parser.maxPrec <|
   ident >> "| " >> incQuotDepth (parserOfStack 1)
 

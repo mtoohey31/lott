@@ -1,5 +1,8 @@
+module
+
 import Aesop
-import LottExamples.SystemF.Semantics
+import Lott.Data.List
+public import LottExamples.SystemF.Semantics
 
 namespace LottExamples.SystemF
 

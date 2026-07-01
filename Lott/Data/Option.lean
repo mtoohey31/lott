@@ -1,3 +1,8 @@
+module
+
+@[expose]
+public section
+
 namespace Option
 
 def someIf (x : α) (b : Bool) : Option α := if b then some x else none

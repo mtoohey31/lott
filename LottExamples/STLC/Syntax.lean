@@ -1,5 +1,10 @@
-import Lott
-import Lott.Elab.Nat
+module
+
+public import Lott
+public import Lott.Elab.Nat
+
+@[expose]
+public section
 
 namespace LottExamples.STLC
 

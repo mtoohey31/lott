@@ -1,9 +1,12 @@
-import Lean
+module
+
+import Lean.Environment
 
 namespace Lott
 
 open Lean
 
+private
 initialize metaVarExt : PersistentEnvExtension (Name × Bool) (Name × Bool) (NameMap Bool) ←
   registerPersistentEnvExtension {
   mkInitial := return default

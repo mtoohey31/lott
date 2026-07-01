@@ -1,5 +1,17 @@
-import Lott.Elab.Basic
-import Lott.Parser.Filter
+module
+
+public import Lean.Elab.Command
+public meta import Lott.Data.Option
+public import Lott.Elab.Basic
+import all Lott.Elab.Basic
+public meta import Lott.Elab.Options
+import all Lott.Elab.Options
+public meta import Lott.IR
+public import Lott.Parser
+public import Lott.Parser.Filter
+import all Lott.Parser.Filter
+
+meta section
 
 namespace Lott
 
@@ -9,11 +21,10 @@ open Lean.Elab.Command
 open System FilePath
 open IO.FS
 
-private
 def mkAbsolute (name : String) : CommandElabM FilePath := do
   if isAbsolute name then
     return name
-  let some parent := parent <| ← getFileName |
+  let some parent := FilePath.parent <| ← getFileName |
     throwError "failed to resolve parent of current file"
   return parent / name
 

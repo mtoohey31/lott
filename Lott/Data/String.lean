@@ -1,6 +1,7 @@
+module
+
 namespace String
 
-private
 def toPascalParts (s : String) : Array String := Id.run do
   let rawParts := s.toList.splitBy (·.isUpper == ·.isUpper)
   let mut parts : Array String := #[]
@@ -23,7 +24,7 @@ def pascalToSnake (s : String) : String :=
 
 def pascalToTitle (s : String) : String := " ".intercalate s.toPascalParts.toList
 
-def texEscape (s : String) : String :=
+public def texEscape (s : String) : String :=
   join <| s.toList.map fun
     | c@'&' | c@'%' | c@'$' | c@'#' | c@'_' | c@'{' | c@'}' => "\\" ++ c.toString
     | '~' => "\\textasciitilde"

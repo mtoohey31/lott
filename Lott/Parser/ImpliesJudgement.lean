@@ -1,3 +1,5 @@
+module
+
 import Lott.Parser
 
 namespace Lott

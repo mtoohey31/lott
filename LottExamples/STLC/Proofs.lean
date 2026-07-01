@@ -1,6 +1,10 @@
+module
+
 import Aesop
 import Lott.Data.List
-import LottExamples.STLC.Semantics
+public import LottExamples.STLC.Semantics
+
+public section
 
 namespace LottExamples.STLC
 

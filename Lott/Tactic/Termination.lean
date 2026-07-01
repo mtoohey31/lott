@@ -1,3 +1,5 @@
+module
+
 theorem sizeOf_fst_lt_of_prod_mem [SizeOf α] {as : List (α × α)} (h : (a, b) ∈ as) : sizeOf a < sizeOf as := by
   apply Nat.lt_trans
   · show sizeOf a < sizeOf (a, b)

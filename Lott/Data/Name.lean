@@ -1,5 +1,6 @@
-import Lean.Data.Name
+module
 
+import Lean.Data.Name
 import Lott.Data.Option
 
 namespace Lean.Name

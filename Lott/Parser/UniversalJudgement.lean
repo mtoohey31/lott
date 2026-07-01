@@ -1,4 +1,6 @@
-import Lott.Parser
+module
+
+public meta import Lott.Parser
 
 namespace Lott
 

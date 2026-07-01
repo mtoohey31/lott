@@ -1,4 +1,9 @@
-import Lott
+module
+
+public import Lott
+
+@[expose]
+public section
 
 namespace LottExamples.Lambda
 

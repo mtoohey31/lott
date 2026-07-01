@@ -1,5 +1,10 @@
-import Lott.Elab.Basic
+module
+
+import all Lott.Data.String
+public import Lott.Elab.Basic
 import Lott.Parser.NotExistentialJudgement
+
+public meta section
 
 namespace Lott
 
@@ -7,14 +12,12 @@ open Lean
 open Lean.Elab
 
 @[macro judgementEmbed]
-private
 def existentialJudgementImpl : Macro
   | `([[∄ $binders, $«judgement»:Lott.Judgement]]) =>
     ``(¬(∃ $binders, [[$«judgement»:Lott.Judgement]]))
   | _ => Macro.throwUnsupported
 
 @[lott_tex_elab notExistentialJudgement]
-private
 def notExistentialJudgementTexElab : TexElab := fun profile ref stx => do
   let `(notExistentialJudgement| ∄ $binders, $«judgement»:Lott.Judgement) := stx
     | throwUnsupportedSyntax

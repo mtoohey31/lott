@@ -1,6 +1,10 @@
+module
+
 import Lean.Data.Trie
-import Lean.Environment
-import Lott.IR
+meta import Lott.IR
+import all Lott.IR
+
+meta section
 
 namespace Lott
 
@@ -20,6 +24,7 @@ structure AliasState where
 
 instance : Inhabited AliasState where default := { byAlias := default, allCanon := default }
 
+private
 initialize aliasExt : PersistentEnvExtension Alias Alias AliasState ←
   registerPersistentEnvExtension {
   mkInitial := return default
@@ -53,6 +58,7 @@ instance : Inhabited Symbol where
 
 abbrev SymbolState := NameMap Symbol
 
+private
 initialize symbolExt : PersistentEnvExtension Symbol Symbol SymbolState ←
   registerPersistentEnvExtension {
   mkInitial := return default
@@ -75,6 +81,7 @@ structure JudgementState where
 
 instance : Inhabited JudgementState where default := { byName := default, all := default }
 
+private
 initialize judgementExt : PersistentEnvExtension Judgement Judgement JudgementState ← registerPersistentEnvExtension {
   mkInitial := return default
   addImportedFn := fun jds => return {
@@ -95,6 +102,7 @@ structure Child where
 
 abbrev ChildState := NameMap Child
 
+private
 initialize childExt : PersistentEnvExtension Child Child ChildState ← registerPersistentEnvExtension {
   mkInitial := return default
   addImportedFn := fun children =>
