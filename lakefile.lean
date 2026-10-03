@@ -15,7 +15,7 @@ def args := if notex then
 package lott where
   moreGlobalServerArgs := args
 
-require aesop from git "https://github.com/leanprover-community/aesop" @ "v4.30.0"
+require aesop from git "https://github.com/leanprover-community/aesop" @ "v4.33.0"
 
 @[default_target]
 lean_lib Lott
@@ -32,7 +32,7 @@ lean_lib LottExamples where
 open System
 
 @[implemented_by Lean.enableInitializersExecution]
-opaque enableInitializersExecution : IO Unit
+opaque enableInitializersExecution : BaseIO Unit
 
 inductive Filterable where
   | file (input output : FilePath)

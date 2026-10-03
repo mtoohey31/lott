@@ -1150,8 +1150,8 @@ where
     | _, .var .. => .var_free
     | [[λ x : A'. E']], .lam _ E'ty (I := I) => by
       let ⟨x, xnin⟩ := I.exists_fresh
-      have := go <| E'ty x xnin
-      rw [Environment.termVar_count, Nat.add_comm] at this
+      have : Term.TermVarLocallyClosed _ (_ + _) := go <| E'ty x xnin
+      rw [Nat.add_comm] at this
       exact .lam <| this.TermVar_open_drop <| Nat.zero_lt_succ _
     | .app .., .app E'ty Fty => .app (go E'ty) (go Fty)
     | [[Λ a. E']], .typeGen E'ty (I := I) => by
@@ -1168,13 +1168,12 @@ where
       let A'lc := A'ty.TypeVarLocallyClosed_of.weakening (Nat.le_add_left ..) (n := Γ.typeVar_count)
       let ⟨x, xnin⟩ := I.exists_fresh
       have := go <| E'ty x xnin
-      rw [Environment.typeVar_count] at this
       exact .lam A'lc this.TermVar_open_drop
     | .app .., .app E'ty Fty => .app (go E'ty) (go Fty)
     | [[Λ a. E']], .typeGen E'ty (I := I) => by
       let ⟨a, anin⟩ := I.exists_fresh
-      have := go <| E'ty a anin
-      rw [Environment.typeVar_count, Nat.add_comm] at this
+      have : Term.TypeVarLocallyClosed _ (_ + _) := go <| E'ty a anin
+      rw [Nat.add_comm] at this
       apply Term.TypeVarLocallyClosed.typeGen
       exact this.TypeVar_open_drop <| Nat.zero_lt_succ _
     | [[E' [A'] ]], .typeApp E'ty A'ty => by

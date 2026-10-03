@@ -27,12 +27,12 @@ def append (Γ₀ : Environment) : Environment → Environment
   | [[Γ₁, x : τ]] => Γ₀.append Γ₁ |>.ext x τ
 
 termonly
-def empty_append (Γ : Environment) : Environment.empty.append Γ = Γ := match Γ with
+theorem empty_append (Γ : Environment) : Environment.empty.append Γ = Γ := match Γ with
   | [[ε]] => rfl
   | [[Γ', x : τ]] => by rw [append, Γ'.empty_append]
 
 termonly
-def append_assoc {Γ₀ : Environment} : Γ₀.append (Γ₁.append Γ₂) = (Γ₀.append Γ₁).append Γ₂ := by
+theorem append_assoc {Γ₀ : Environment} : Γ₀.append (Γ₁.append Γ₂) = (Γ₀.append Γ₁).append Γ₂ := by
   match Γ₂ with
   | [[ε]] => rfl
   | [[Γ₂', x : τ]] => rw [append, append, append_assoc, ← append]

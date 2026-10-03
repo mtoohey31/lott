@@ -41,7 +41,7 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $[(tex pre := $pre?, p
   if ← getTerm then
     if locallyNameless then
       let idIdent := mkIdentFrom canon <| canon.getId.appendAfter "Id"
-      elabCommand <| ← `(def $idIdent := Nat)
+      elabCommand <| ← `(abbrev $idIdent := Nat)
       elabCommand <| ← `(instance (x y : $idIdent) : Decidable (x = y) := Nat.decEq x y)
       elabCommand <| ←
         `(inductive $canon where
@@ -62,7 +62,7 @@ elab_rules : command | `($[locally_nameless%$ln]? metavar $[(tex pre := $pre?, p
             | .bound _, .free _ => isFalse nofun)
       elabCommand <| ← `(instance : Coe $idIdent $canon where coe := .free)
     else
-      elabCommand <| ← `(def $canon := Nat)
+      elabCommand <| ← `(abbrev $canon := Nat)
       elabCommand <| ← `(instance (x y : $canon) : Decidable (x = y) := Nat.decEq x y)
   else
     elabCommand <| ← `(opaque $canon : Type)

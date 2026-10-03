@@ -343,7 +343,6 @@ theorem freeVars (ety : [[Γ ⊢ e : τ]]) : e.freeVars ⊆ Γ.domain := by
     let ⟨x, xnin⟩ := e'.freeVars ++ I |>.exists_fresh
     let ⟨xnine', xninI⟩ := List.not_mem_append'.mp xnin
     specialize ih x xninI
-    rw [Environment.domain] at ih
     rw [Term.freeVars]
     intro x' xine'
     cases ih <| Term.InFreeVars.Var_open_intro xine' with

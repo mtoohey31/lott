@@ -764,7 +764,7 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
         `(inductive $(mkIdentFrom isIdent <| `_root_ ++ isIdent.getId) : $parent → Prop where
             $ctors*)
 
-      return (some <| ← `(def $canon := { x : $parent // $isIdent x }), inductive')
+      return (some <| ← `(abbrev $canon := { x : $parent // $isIdent x }), inductive')
     let (defs, inductives) := defsAndInductives.unzip
     elabMutualCommands inductives
     elabMutualCommands <| defs.filterMap id
@@ -780,12 +780,8 @@ def elabNonTerminals (nts : Array Syntax) : CommandElabM Unit := do
 
     let mut substitutions' := RBTree.empty (cmp := namePairCmp)
     for n in ← nt.shallowSubstitutionClosure ntsMap do
-      let substitutions? ← match ntsMap.find? n with
-        | some { substitutions?, .. } => pure substitutions?
-        | none =>
-          let some { substitutions, .. } := symbolExt.getState (← getEnv) |>.find? n | continue
-          pure substitutions
-      let some substitutions := substitutions? | continue
+      let some (some substitutions) := ntsMap.find? n |>.map NonTerminal.substitutions? |>.or <|
+        symbolExt.getState (← getEnv) |>.find? n |>.map <| some ∘ Symbol.substitutions | continue
       for subst in substitutions do
         substitutions' := substitutions'.insert subst
     return { nt with substitutions? := substitutions'.toArray : NonTerminal }
