@@ -90,7 +90,7 @@ syntax ident " := " Lott.Symbol : Lott.InferenceRuleUpper
 
 syntax "notex " ("for " ident)? Lott.InferenceRuleUpper : Lott.InferenceRuleUpper
 
-syntax "noterm " strLit : Lott.InferenceRuleUpper
+syntax "noterm " ("nosep ")? strLit : Lott.InferenceRuleUpper
 
 def commentConfig :=
   " (" >> nonReservedSymbol "comment" >> optional ident >> optional (" := " >> strLit) >> ")"

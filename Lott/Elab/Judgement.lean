@@ -134,7 +134,7 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
                 `([[$«judgement»:Lott.Judgement]] → $acc)
               | `(InferenceRuleUpper| $i:ident := $sym), acc =>
                 `(let $i := [[$sym:Lott.Symbol]]; $acc)
-              | `(InferenceRuleUpper| noterm $_), acc => return acc
+              | `(InferenceRuleUpper| noterm $[nosep%$ns?]? $_), acc => return acc
               | _, _ => throwUnsupportedSyntax
           `(ctor| | $name:ident $binders* : zeta_reduce% $ctorType)
 
@@ -178,11 +178,11 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
                       symbolExt.getState env |>.find? qualified then
                       idTex := s!"{texPre} {idTex} {texPost}"
                   let symTex ← liftTermElabM <| texElabSymbolOrJudgement catName profile sym sym
-                  return s!"\n\\lottlet\{{idTex}}\{{symTex}}"
+                  return s!"\n\\lottlet\{{idTex}}\{{symTex}}\\\\"
                 | `(InferenceRuleUpper| $hyp:Lott.Judgement) => do
                   let hypTex ← liftTermElabM <|
                     texElabSymbolOrJudgement hyp.raw.getKind profile hyp hyp
-                  return s!"\n\\lotthypothesis\{{hypTex}}"
+                  return s!"\n\\lotthypothesis\{{hypTex}}\\\\"
                 | _ => throwUnsupportedSyntax
               | `(InferenceRuleUpper| $i:ident := $sym) => do
                 let catName := sym.raw.getKind
@@ -193,14 +193,15 @@ def elabJudgementDecls (jds : Array Syntax) : CommandElabM Unit := do
                     symbolExt.getState env |>.find? qualified then
                     idTex := s!"{texPre} {idTex} {texPost}"
                 let symTex ← liftTermElabM <| texElabSymbolOrJudgement catName profile sym sym
-                return s!"\n\\lottlet\{{idTex}}\{{symTex}}"
+                return s!"\n\\lottlet\{{idTex}}\{{symTex}}\\\\"
               | `(InferenceRuleUpper| $hyp:Lott.Judgement) => do
                 let hypTex ← liftTermElabM <|
                   texElabSymbolOrJudgement hyp.raw.getKind profile hyp hyp
-                return s!"\n\\lotthypothesis\{{hypTex}}"
-              | `(InferenceRuleUpper| noterm $tex) => return tex.getString
+                return s!"\n\\lotthypothesis\{{hypTex}}\\\\"
+              | `(InferenceRuleUpper| noterm $[nosep%$ns?]? $tex) =>
+                return tex.getString ++ if ns?.isSome then "" else "\\\\"
               | _ => throwUnsupportedSyntax
-            let mut hypothesesTex := "\\\\".intercalate hypothesesTexs.toList
+            let mut hypothesesTex := String.join hypothesesTexs.toList |>.dropEnd 2
             let conclusionTex ← liftTermElabM <|
               texElabSymbolOrJudgement catName profile conclusion conclusion
             let (alts, defaults) := commentProfile?s.zip comment?s |>.partition fun (profile?, _) =>
