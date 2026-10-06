@@ -5,50 +5,23 @@ namespace LottExamples.STLC
 
 judgement_syntax x " ≠ " x' : VarId.Ne (id x, x')
 
-judgement VarId.Ne := fun (x x' : VarId) => x ≠ x'
-
-judgement_syntax x " ∈ " "fv" "(" e ")" : Term.InFreeVars (id x)
-
-judgement Term.InFreeVars := fun x (e : Term) => x ∈ e.freeVars
-
-judgement_syntax x " ∉ " "fv" "(" e ")" : Term.NotInFreeVars (id x)
-
-judgement Term.NotInFreeVars := fun x e => ¬[[x ∈ fv(e)]]
-
-judgement_syntax "closed " e : Term.Closed
-
-judgement Term.Closed := fun e => ∀ x, [[x ∉ fv(e)]]
+judgement VarId.Ne := _root_.Ne (α := VarId)
 
 namespace Environment
 
-termonly
-def append (Γ₀ : Environment) : Environment → Environment
+termonly def append (Γ₀ : Environment) : Environment → Environment
   | [[ε]] => Γ₀
-  | [[Γ₁, x : τ]] => Γ₀.append Γ₁ |>.ext x τ
+  | [[Γ₁, x : τ]] => append Γ₀ Γ₁ |>.ext x τ
 
-termonly
-theorem empty_append (Γ : Environment) : Environment.empty.append Γ = Γ := match Γ with
-  | [[ε]] => rfl
-  | [[Γ', x : τ]] => by rw [append, Γ'.empty_append]
-
-termonly
-theorem append_assoc {Γ₀ : Environment} : Γ₀.append (Γ₁.append Γ₂) = (Γ₀.append Γ₁).append Γ₂ := by
-  match Γ₂ with
-  | [[ε]] => rfl
-  | [[Γ₂', x : τ]] => rw [append, append, append_assoc, ← append]
-
-termonly
-def domain : Environment → List VarId
+termonly def dom : Environment → List VarId
   | empty => []
-  | ext Γ x _ => x :: Γ.domain
+  | ext Γ x _ => x :: dom Γ
 
-end Environment
+judgement_syntax LottExamples.STLC.x " : " LottExamples.STLC.τ " ∈ " Γ : Mem (id x)
 
-judgement_syntax x " : " τ " ∈ " Γ : Environment.VarIn (id x)
+judgement Mem where
 
-judgement Environment.VarIn where
-
-──────────────── head
+──────────────── head {x τ}
 x : τ ∈ Γ, x : τ
 
 x : τ ∈ Γ
@@ -56,31 +29,31 @@ x ≠ x'
 ────────────────── ext
 x : τ ∈ Γ, x' : τ'
 
-judgement_syntax x " ∉ " Γ : Environment.VarNotIn (id x)
+judgement_syntax LottExamples.STLC.x " ∈ " Γ : Mem' (id x)
 
-judgement Environment.VarNotIn := fun x Γ => ∀ τ, ¬[[x : τ ∈ Γ]]
+termonly abbrev Mem' := fun x Γ => ∃ τ, [[x : τ ∈ Γ]]
 
-judgement_syntax x " ∈ " "dom" "(" Γ ")" : Environment.VarInDom (id x)
+judgement_syntax LottExamples.STLC.x " ∉ " Γ : NotMem (id x)
 
-judgement Environment.VarInDom := fun x (Γ : Environment) => x ∈ Γ.domain
+termonly abbrev NotMem := fun x Γ => ¬[[x ∈ Γ]]
 
-judgement_syntax x " ∉ " "dom" "(" Γ ")" : Environment.VarNotInDom (id x)
+judgement_syntax "⊢ " Γ : WellFormedness
 
-judgement Environment.VarNotInDom := fun x Γ => ¬[[x ∈ dom(Γ)]]
-
-judgement_syntax "⊢ " Γ : Environment.WellFormedness
-
-judgement Environment.WellFormedness where
+judgement WellFormedness where
 
 ─── empty
 ⊢ ε
 
 ⊢ Γ
-x ∉ dom(Γ)
+x ∉ Γ
 ────────── ext
 ⊢ Γ, x : τ
 
-judgement_syntax Γ " ⊢ " e " : " τ : Typing
+end Environment
+
+namespace Term
+
+judgement_syntax LottExamples.STLC.Γ " ⊢ " e " : " LottExamples.STLC.τ : Typing
 
 judgement Typing where
 
@@ -116,27 +89,6 @@ v e → v e'
 ─────────────────── lamApp
 (λ x. e) v → e^^v/x
 
-judgement_syntax e " →? " e' : Reduction? (tex := s!"{e} \\, \\lottsym\{\\overset\{?}\{\\longrightarrow}} \\, {e'}")
-
-judgement Reduction? where
-
-────── refl
-e →? e
-
-e₀ → e₁
-──────── step
-e₀ →? e₁
-
-judgement_syntax e " →* " e' : MultiReduction (tex := s!"{e} \\, \\lottsym\{\\overset\{*}\{\\longrightarrow}} \\, {e'}")
-
-judgement MultiReduction where
-
-────── refl
-e →* e
-
-e₀ → e₁
-e₁ →* e₂
-──────── step
-e₀ →* e₂
+end Term
 
 end LottExamples.STLC

@@ -24,40 +24,13 @@ theorem Var_open_drop : m < n → (Var_open e x m).VarLocallyClosed n → e.VarL
   induction e generalizing m n <;> aesop
     (add simp Var_open, safe cases VarLocallyClosed, safe constructors VarLocallyClosed)
 
-theorem Var_open_drop_eq : (Var_open e x n).VarLocallyClosed n → e.VarLocallyClosed (n + 1) := by
-  induction e generalizing n <;> aesop (add simp Var_open, safe cases VarLocallyClosed,
-      safe constructors VarLocallyClosed, 50% apply Nat.lt_succ_of_lt)
-
-theorem Var_open_intro x : m < n → VarLocallyClosed e n → (e.Var_open x m).VarLocallyClosed n := by
-  induction e generalizing m n <;> aesop
-    (add simp Term.Var_open, unsafe cases VarLocallyClosed, safe constructors VarLocallyClosed)
-
-theorem Var_open_intro_eq x : VarLocallyClosed e (n + 1) → (e.Var_open x n).VarLocallyClosed n := by
-  induction e generalizing n <;> aesop (add simp Term.Var_open, unsafe cases VarLocallyClosed,
-      safe constructors VarLocallyClosed, 50% apply [Nat.lt_of_le_of_ne, Nat.le_of_lt_succ])
-
 theorem Var_open_id : VarLocallyClosed e n → e.Var_open x n = e := by
   induction e generalizing n <;> aesop (add simp Term.Var_open, safe cases VarLocallyClosed)
-
-theorem Term_open_id : VarLocallyClosed e n → e.Term_open x n = e := by
-  induction e generalizing n <;> aesop (add simp Term.Term_open, safe cases VarLocallyClosed)
 
 theorem Var_open_Term_open_comm (e'lc : VarLocallyClosed e')
   : m ≠ n → (Term_open e e' m).Var_open x n = (e.Var_open x n).Term_open e' m := by
   induction e generalizing m n <;> aesop
     (add simp [Term.Var_open, Term_open], 50% apply Nat.zero_le, 20% apply [Var_open_id, weakening])
-
-theorem NotInFreeVars_Var_open_dec (elc : VarLocallyClosed e (n + 1))
-  (xnin : NotInFreeVars x (Term.Var_open e x n)) : VarLocallyClosed e n := by
-  induction e generalizing n <;> aesop
-    (add simp [NotInFreeVars, InFreeVars, Term.Var_open, freeVars], unsafe cases VarLocallyClosed,
-      safe constructors VarLocallyClosed, 50% apply [Nat.le_of_lt_succ, Nat.lt_of_le_of_ne])
-
-theorem NotInFreeVars_Var_open_dec' (elc : VarLocallyClosed (Term.Var_open e x n) (n + 1))
-  (xnin : NotInFreeVars x (Term.Var_open e x n)) : VarLocallyClosed e n := by
-  induction e generalizing n <;> aesop
-    (add simp [NotInFreeVars, InFreeVars, Term.Var_open, freeVars], unsafe cases VarLocallyClosed,
-      safe constructors VarLocallyClosed, 50% apply [Nat.le_of_lt_succ, Nat.lt_of_le_of_ne])
 
 end VarLocallyClosed
 
@@ -71,403 +44,253 @@ theorem freeVars_Var_open_subset : freeVars (Var_open e x n) ⊆ x :: freeVars e
     all_goals simp
   | _ => aesop (add simp [Var_open, freeVars])
 
-theorem subset_freeVars_Var_open : freeVars e ⊆ freeVars (Var_open e x n) := by
-  induction e generalizing n with
-  | app _ _ e₀ih e₁ih =>
-    simp [Var_open, freeVars]
-    constructor
-    case' left => apply e₀ih (n := n).trans
-    case' right => apply e₁ih (n := n).trans
-    all_goals simp
-  | _ => aesop (add simp [Var_open, freeVars])
-
-namespace InFreeVars
-
-theorem Var_open_drop : InFreeVars x (e.Var_open x' n) → x ≠ x' → [[x ∈ fv(e)]] := by
+theorem mem_freeVars_Var_open_drop : x ∈ freeVars (Var_open e x' n) → x ≠ x' → x ∈ freeVars e := by
   intro mem ne
   cases freeVars_Var_open_subset mem <;> trivial
 
-theorem Var_open_intro : [[x ∈ fv(e)]] → InFreeVars x (e.Var_open x' n) :=
-  (subset_freeVars_Var_open ·)
-
-end InFreeVars
-
-namespace NotInFreeVars
-
-theorem lam : [[x ∉ fv(λ x. e)]] → [[x ∉ fv(e)]] := (· ·)
-
-theorem app₀ : [[x ∉ fv(e₀ e₁)]] → [[x ∉ fv(e₀)]] := (· <| List.mem_append.mpr <| .inl ·)
-
-theorem app₁ : [[x ∉ fv(e₀ e₁)]] → [[x ∉ fv(e₁)]] := (· <| List.mem_append.mpr <| .inr ·)
-
-theorem Var_open_intro : [[x ∉ fv(e)]] → x ≠ x' → NotInFreeVars x (Var_open e x' n) :=
-  fun xninfve xnex' xinfveop => xninfve <| xinfveop.Var_open_drop xnex'
-
-theorem Var_open_drop : NotInFreeVars x (Var_open e x' n) → [[x ∉ fv(e)]] := (· ·.Var_open_intro)
-
-end NotInFreeVars
-
-theorem Closed.Term_open (e₀c : [[closed e₀]]) (e₁c : [[closed e₁]]) :
-  Closed (Term_open e₀ e₁ n) := by
-  induction e₀ generalizing n <;> aesop
-    (add simp [Term.Term_open, Closed, NotInFreeVars, InFreeVars, freeVars])
-
-namespace IsValue
-
-theorem Term_open (e₀IsValue : IsValue e₀) : IsValue (Term_open e₀ e₁ n) := by
-  cases e₀IsValue <;> constructor
-
-theorem Var_open_drop (eIsValue : IsValue (Var_open e x n)) : IsValue e := by
-  cases e <;> cases eIsValue <;> constructor
-
-end IsValue
+theorem not_mem_freeVars_Var_open_intro (xnin : x ∉ freeVars e) (xne : x ≠ x') :
+  x ∉ freeVars (Var_open e x' n) := (xnin <| mem_freeVars_Var_open_drop · xne)
 
 end Term
 
 namespace Environment
 
-theorem VarNotIn.ext : [[x ∉ Γ, x' : τ]] ↔ x ≠ x' ∧ [[x ∉ Γ]] where
-  mp xninΓx' := ⟨
-    fun | .refl .. => xninΓx' _ .head,
-    fun _ xinΓ => Classical.byCases
-      fun | .refl .. => xninΓx' _ .head
-      fun xnex' => xninΓx' _ <| xinΓ.ext xnex'
-  ⟩
-  mpr
-    | ⟨xnex', _⟩, _, .head => nomatch xnex'
-    | ⟨_, xninΓ⟩, _, .ext xinΓ _ => xninΓ _ xinΓ
+theorem append_assoc {Γ₀ : Environment} : [[Γ₀, (Γ₁, Γ₂)]] = [[(Γ₀, Γ₁), Γ₂]] := by
+  cases Γ₂ with
+  | empty => rfl
+  | ext => rw [append, append, append_assoc, ← append]
 
-namespace VarIn
+theorem NotMem.ext : [[x ∉ Γ, x' : τ]] ↔ x ≠ x' ∧ [[x ∉ Γ]] where
+  mp xnin :=
+    have ne : x ≠ x' := fun | .refl _ => xnin ⟨_, .head⟩
+    ⟨ne, fun ⟨_, xin⟩ => xnin ⟨_, .ext xin ne⟩⟩
+  mpr := by
+    rintro ⟨ne, xnin⟩ ⟨_, ⟨⟩ | xin⟩
+    · nomatch ne
+    · exact xnin ⟨_, xin⟩
 
-theorem append_elim : [[x : τ ∈ Γ₀, Γ₁]] → [[x : τ ∈ Γ₀]] ∧ [[x ∉ Γ₁]] ∨ [[x : τ ∈ Γ₁]] :=
-  fun xinΓ₀Γ₁ => match Γ₁ with
-    | .empty => .inl ⟨xinΓ₀Γ₁, nofun⟩
-    | .ext .. =>
-      match xinΓ₀Γ₁ with
-      | .head => .inr head
-      | .ext xinΓ₀Γ₁' xnex' => match xinΓ₀Γ₁'.append_elim with
-        | .inl ⟨xinΓ₀, xninΓ₁'⟩ => .inl ⟨xinΓ₀, VarNotIn.ext.mpr ⟨xnex', xninΓ₁'⟩⟩
-        | .inr xinΓ₁' => .inr <| xinΓ₁'.ext xnex'
+namespace Mem
 
-theorem append_inl : [[x : τ ∈ Γ₀]] → [[x ∉ Γ₁]] → [[x : τ ∈ Γ₀, Γ₁]] :=
-  fun xinΓ₀ xninΓ₁ => match Γ₁ with
-    | .empty => xinΓ₀
-    | .ext .. =>
-      let ⟨xnex', xninΓ₁'⟩ := VarNotIn.ext.mp xninΓ₁
-      xinΓ₀.append_inl xninΓ₁' |>.ext xnex'
+theorem append_elim (xin : [[x : τ ∈ Γ₀, Γ₁]]) : [[x : τ ∈ Γ₀]] ∧ [[x ∉ Γ₁]] ∨ [[x : τ ∈ Γ₁]] :=
+  match Γ₁ with
+  | .empty => .inl ⟨xin, nofun⟩
+  | .ext .. => match xin with
+    | head => .inr head
+    | ext xin xne => match append_elim xin with
+      | .inl ⟨xin, xnin⟩ => .inl ⟨xin, NotMem.ext.mpr ⟨xne, xnin⟩⟩
+      | .inr xin => .inr <| ext xin xne
+
+theorem append_inl (xin : [[x : τ ∈ Γ₀]]) (xnin : [[x ∉ Γ₁]]) : [[x : τ ∈ Γ₀, Γ₁]] :=
+  match Γ₁ with
+  | .empty => xin
+  | .ext .. =>
+    have ⟨xne, xnin⟩ := NotMem.ext.mp xnin
+    ext (append_inl xin xnin) xne
 
 theorem append_inr : [[x : τ ∈ Γ₁]] → [[x : τ ∈ Γ₀, Γ₁]]
   | head => head
-  | ext xinΓ₁' xnex' => xinΓ₁'.append_inr.ext xnex'
+  | ext xin xne => ext (append_inr xin) xne
 
-theorem VarInDom_of : [[x : τ ∈ Γ]] → [[x ∈ dom(Γ)]]
+theorem dom : [[x : τ ∈ Γ]] → x ∈ dom Γ
   | .head => .head _
-  | .ext xinΓ' ne => .tail _ xinΓ'.VarInDom_of
+  | .ext mem _ => .tail _ <| dom mem
 
-end VarIn
+end Mem
 
-theorem VarNotIn.append : [[x ∉ Γ₀, Γ₁]] ↔ [[x ∉ Γ₀]] ∧ [[x ∉ Γ₁]] where
-  mp xninΓ₀Γ₁ := ⟨
-    fun _ xinΓ₀ => Classical.byCases (p := ∃ τ, [[x : τ ∈ Γ₁]])
-      (fun ⟨_, xinΓ₁⟩ => xninΓ₀Γ₁ _ xinΓ₁.append_inr)
-      fun xninΓ₁ => xninΓ₀Γ₁ _ <| xinΓ₀.append_inl <| not_exists.mp xninΓ₁,
-    fun _ => (xninΓ₀Γ₁ _ ·.append_inr)
-  ⟩
-  mpr | ⟨xninΓ₀, xninΓ₁⟩, _, xinΓ₀Γ₁ => match xinΓ₀Γ₁.append_elim with
-    | .inl ⟨xinΓ₀, _⟩ => xninΓ₀ _ xinΓ₀
-    | .inr xinΓ₁ => xninΓ₁ _ xinΓ₁
+namespace Mem'
 
-namespace VarInDom
+theorem append_elim (xin : [[x ∈ Γ₀, Γ₁]]) : [[x ∈ Γ₀]] ∨ [[x ∈ Γ₁]] :=
+  xin.choose_spec.append_elim.imp (.intro _ ∘ And.left) (.intro _)
 
-theorem insert : [[x ∈ dom(Γ₀, Γ₁)]] → [[x ∈ dom(Γ₀, x' : τ, Γ₁)]] :=
-  fun xindomΓ₀Γ₁ =>
-    match Γ₁ with
-    | .empty => .tail _ xindomΓ₀Γ₁
-    | .ext .. => match xindomΓ₀Γ₁ with
-      | .head _ => .head _
-      | .tail _ xindomΓ₀Γ₁' => .tail _ <| insert xindomΓ₀Γ₁'
+theorem append_inr : [[x ∈ Γ₁]] → [[x ∈ Γ₀, Γ₁]] := .imp fun _ => .append_inr
 
-theorem of_VarIn : [[x : τ ∈ Γ]] → [[x ∈ dom(Γ)]]
-  | .head => .head _
-  | .ext xinΓ' _ => .tail _ <| of_VarIn xinΓ'
+theorem append_inl : [[x ∈ Γ₀]] → [[x ∈ Γ₀, Γ₁]] := by
+  if [[x ∈ Γ₁]] then
+    exact fun _ => append_inr ‹_›
+  else
+    exact .imp fun _ => .append_inl (xnin := ‹_›)
 
-theorem append_elim : [[x ∈ dom(Γ₀, Γ₁)]] → [[x ∈ dom(Γ₀)]] ∨ [[x ∈ dom(Γ₁)]] := fun xindomΓ₀Γ₁ =>
-  match Γ₁ with
-  | .empty => .inl xindomΓ₀Γ₁
-  | .ext .. => match xindomΓ₀Γ₁ with
-    | .head _ => .inr <| .head _
-    | .tail _ xindomΓ₀Γ₁' => match append_elim xindomΓ₀Γ₁' with
-      | .inl xindomΓ₀ => .inl xindomΓ₀
-      | .inr xindomΓ₁' => .inr <| .tail _ <| xindomΓ₁'
+end Mem'
 
-theorem append_inl : [[x ∈ dom(Γ₀)]] → [[x ∈ dom(Γ₀, Γ₁)]] := fun xindomΓ₀ => match Γ₁ with
-  | .empty => xindomΓ₀
-  | .ext .. => .tail _ xindomΓ₀.append_inl
+namespace NotMem
 
-theorem append_inr : [[x ∈ dom(Γ₁)]] → [[x ∈ dom(Γ₀, Γ₁)]] := fun xindomΓ₁ =>
-  let .ext .. := Γ₁
-  match xindomΓ₁ with
-  | .head _ => .head _
-  | .tail _ xinΓ₁' => .tail _ <| append_inr xinΓ₁'
+theorem append : [[x ∉ Γ₀, Γ₁]] ↔ [[x ∉ Γ₀]] ∧ [[x ∉ Γ₁]] where
+  mp xnin := ⟨(xnin ·.append_inl), (xnin ·.append_inr)⟩
+  mpr | ⟨xninΓ₀, xninΓ₁⟩, xin => xin.append_elim.elim xninΓ₀ xninΓ₁
 
-end VarInDom
+theorem drop : [[x ∉ Γ₀, x' : τ, Γ₁]] → [[x ∉ Γ₀, Γ₁]] :=
+  append.mpr ∘ And.imp_left (And.right ∘ NotMem.ext.mp) ∘ append.mp 
 
-namespace VarNotInDom
+theorem exchange (xnin : [[x ∉ Γ₀, x' : τ, Γ₁, Γ₂]]) : [[x ∉ Γ₀, Γ₁, x' : τ, Γ₂]] :=
+  have ⟨xninΓ₀x', xninΓ₁Γ₂⟩ := append.mp xnin
+  have ⟨xne, xninΓ₀⟩ := ext.mp xninΓ₀x'
+  have ⟨xninΓ₁, xninΓ₂⟩ := append.mp xninΓ₁Γ₂
+  append.mpr ⟨xninΓ₀, append.mpr ⟨ext.mpr ⟨xne, xninΓ₁⟩, xninΓ₂⟩⟩
 
-theorem drop : [[x ∉ dom(Γ₀, x' : τ, Γ₁)]] → [[x ∉ dom(Γ₀, Γ₁)]] :=
-  (· ·.insert)
-
-theorem append : [[x ∉ dom(Γ₀, Γ₁)]] ↔ [[x ∉ dom(Γ₀)]] ∧ [[x ∉ dom(Γ₁)]] where
-  mp xnindomΓ₀Γ₁ := ⟨(xnindomΓ₀Γ₁ ·.append_inl), (xnindomΓ₀Γ₁ ·.append_inr)⟩
-  mpr | ⟨xnindomΓ₀, xnindomΓ₁⟩, xindomΓ₀Γ₁ => match xindomΓ₀Γ₁.append_elim with
-    | .inl xindomΓ₀ => xnindomΓ₀ xindomΓ₀
-    | .inr xindomΓ₁ => xnindomΓ₁ xindomΓ₁
-
-theorem ext : [[x ∉ dom(Γ, x' : τ)]] ↔ x ≠ x' ∧ [[x ∉ dom(Γ)]] where
-  mp xnindomΓx' := ⟨
-    fun | .refl .. => xnindomΓx' <| .head _,
-    (xnindomΓx' <| .tail _ ·)
-  ⟩
-  mpr | ⟨xnex', xnindomΓ⟩, xindomΓx' => match xindomΓx' with
-    | .head _ => nomatch xnex'
-    | .tail _ xindomΓ => xnindomΓ xindomΓ
-
-theorem exchange : [[x ∉ dom(Γ₀, x' : τ, Γ₁, Γ₂)]] → [[x ∉ dom(Γ₀, Γ₁, x' : τ, Γ₂)]] :=
-  fun xnindomΓ₀x'Γ₁Γ₂ =>
-    let ⟨xnindomΓ₀x', xnindomΓ₁Γ₂⟩ := append.mp xnindomΓ₀x'Γ₁Γ₂
-    let ⟨xnex', xnindomΓ₀⟩ := ext.mp xnindomΓ₀x'
-    let ⟨xnindomΓ₁, xnindomΓ₂⟩ := append.mp xnindomΓ₁Γ₂
-    append.mpr ⟨xnindomΓ₀, append.mpr ⟨ext.mpr ⟨xnex', xnindomΓ₁⟩, xnindomΓ₂⟩⟩
-
-theorem not_VarIn : [[x ∉ dom(Γ)]] → [[x ∉ Γ]] := (· <| VarIn.VarInDom_of (τ := ·) ·)
-
-end VarNotInDom
+end NotMem
 
 namespace WellFormedness
 
-theorem insert : [[⊢ Γ₀, Γ₁]] → [[x ∉ dom(Γ₀, Γ₁)]] → [[⊢ Γ₀, x : τ, Γ₁]] :=
-  fun Γ₀Γ₁wf xnindomΓ₀Γ₁ => by match Γ₁ with
-    | [[ε]] => exact Γ₀Γ₁wf.ext xnindomΓ₀Γ₁
-    | [[Γ₁', x' : τ']] =>
-      let .ext Γ₀Γ₁'wf x'nindomΓ₀Γ₁' := Γ₀Γ₁wf
-      let ⟨x'nindomΓ₀, x'nindomΓ₁'⟩ := VarNotInDom.append.mp x'nindomΓ₀Γ₁'
-      let ⟨_, xnindomΓ₁⟩  := VarNotInDom.append.mp xnindomΓ₀Γ₁
-      let x'nindom : [[x' ∉ dom(Γ₀, x : τ, Γ₁')]] := VarNotInDom.append.mpr
-        ⟨VarNotInDom.ext.mpr ⟨VarNotInDom.ext.mp xnindomΓ₁ |>.left.symm, x'nindomΓ₀⟩, x'nindomΓ₁'⟩
-      exact Γ₀Γ₁'wf.insert (VarNotInDom.ext.mp xnindomΓ₀Γ₁).right |>.ext x'nindom
+theorem insert (wf : [[⊢ Γ₀, Γ₁]]) (xnin : [[x ∉ Γ₀, Γ₁]]) : [[⊢ Γ₀, x : τ, Γ₁]] :=
+  match Γ₁ with
+  | [[ε]] => wf.ext xnin
+  | [[Γ₁', x' : τ']] =>
+    have .ext wf' x'nin := wf
+    have ⟨x'ninΓ₀, x'ninΓ₁'⟩ := NotMem.append.mp x'nin
+    have ⟨_, xninΓ₁⟩ := NotMem.append.mp xnin
+    ext (insert wf' (NotMem.ext.mp xnin).right) <|
+      NotMem.append.mpr ⟨NotMem.ext.mpr ⟨NotMem.ext.mp xninΓ₁ |>.left.symm, x'ninΓ₀⟩, x'ninΓ₁'⟩
 
-theorem drop : [[⊢ Γ₀, x : τ, Γ₁]] → [[⊢ Γ₀, Γ₁]] :=
-  fun Γ₀xΓ₁wf => match Γ₁ with
-    | .empty =>
-      let .ext Γ₀wf _ := Γ₀xΓ₁wf
-      Γ₀wf
-    | .ext .. =>
-      let .ext Γ₀xΓ₁'wf xnindomΓ₀xΓ₁' := Γ₀xΓ₁wf
-      Γ₀xΓ₁'wf.drop.ext xnindomΓ₀xΓ₁'.drop
-
-theorem exchange : [[⊢ Γ₀, x : τ, Γ₁, Γ₂]] → [[⊢ Γ₀, Γ₁, x : τ, Γ₂]] := fun Γ₀xΓ₁Γ₂wf =>
-  match Γ₂ with
-  | [[ε]] => by induction Γ₁ with
-    | empty => exact Γ₀xΓ₁Γ₂wf
-    | ext Γ₁' x' τ' ih =>
-      simp [append] at Γ₀xΓ₁Γ₂wf ih ⊢
-      let .ext Γ₀xΓ₁'wf x'nindomΓ₀xΓ₁' := Γ₀xΓ₁Γ₂wf
-      let .ext Γ₀Γ₁'wf xnindomΓ₀Γ₁ := ih Γ₀xΓ₁'wf
-      let ⟨x'nindomΓ₀x, _⟩ := VarNotInDom.append.mp x'nindomΓ₀xΓ₁'
-      let ⟨xnex', _⟩ := VarNotInDom.ext.mp x'nindomΓ₀x
-      exact Γ₀Γ₁'wf.ext x'nindomΓ₀xΓ₁'.drop |>.ext <| VarNotInDom.ext.mpr ⟨xnex'.symm, xnindomΓ₀Γ₁⟩
-  | [[Γ₂', x' : τ']] =>
-    let .ext Γ₀xΓ₁Γ₂'wf x'ninΓ₀xΓ₁Γ₂' := Γ₀xΓ₁Γ₂wf
-    Γ₀xΓ₁Γ₂'wf.exchange.ext x'ninΓ₀xΓ₁Γ₂'.exchange
+theorem drop : {Γ₁ : _} → [[⊢ Γ₀, x : τ, Γ₁]] → [[⊢ Γ₀, Γ₁]]
+  | .empty, ext wf' _ => wf'
+  | .ext .., ext wf' x'nin => ext (drop wf') x'nin.drop
 
 theorem append_elim : [[⊢ Γ₀, Γ₁]] → [[⊢ Γ₀]] ∧ [[⊢ Γ₁]] := fun Γ₀Γ₁wf =>
   match Γ₁ with
   | .empty => ⟨Γ₀Γ₁wf, .empty⟩
   | .ext .. =>
-    let .ext Γ₀Γ₁'wf xninΓ₀Γ₁' := Γ₀Γ₁wf
-    let ⟨Γ₀wf, Γ₁'wf⟩ := Γ₀Γ₁'wf.append_elim
-    ⟨Γ₀wf, .ext Γ₁'wf <| VarNotInDom.append.mp xninΓ₀Γ₁' |>.right⟩
+    have .ext Γ₀Γ₁'wf xninΓ₀Γ₁' := Γ₀Γ₁wf
+    have ⟨Γ₀wf, Γ₁'wf⟩ := Γ₀Γ₁'wf.append_elim
+    ⟨Γ₀wf, .ext Γ₁'wf <| NotMem.append.mp xninΓ₀Γ₁' |>.right⟩
+
+theorem exchange (wf : [[⊢ Γ₀, x : τ, Γ₁, Γ₂]]) : [[⊢ Γ₀, Γ₁, x : τ, Γ₂]] := by cases Γ₂ with
+  | empty => cases Γ₁ with
+    | empty => exact wf
+    | ext =>
+      have .ext wf' x'nin := wf
+      have ⟨x'nin', _⟩ := NotMem.append.mp x'nin
+      cases NotMem.ext.mp x'nin'
+      replace .ext wf' xnin := exchange wf' (Γ₂ := [[ε]])
+      cases NotMem.append.mp xnin
+      exact ext (ext wf' (NotMem.append.mpr ⟨‹_›, ‹_›⟩))
+        (NotMem.ext.mpr ⟨.symm ‹_›, NotMem.append.mpr ⟨‹_›, ‹_›⟩⟩)
+  | ext =>
+    have .ext wf' x'nin := wf
+    exact ext (exchange wf') x'nin.exchange
 
 end WellFormedness
 
-theorem VarIn.exchange
-  : [[x : τ ∈ Γ₀, x' : τ', Γ₁, Γ₂]] → [[⊢ Γ₀, x' : τ', Γ₁, Γ₂]] → [[x : τ ∈ Γ₀, Γ₁, x' : τ', Γ₂]] :=
-  fun xinΓ₀x'Γ₁Γ₂ Γ₀x'Γ₁Γ₂wf =>
-    match xinΓ₀x'Γ₁Γ₂.append_elim with
-    | .inl ⟨xinΓ₀x', xninΓ₁Γ₂⟩ =>
-      let ⟨xninΓ₁, xninΓ₂⟩ := VarNotIn.append.mp xninΓ₁Γ₂
-      match xinΓ₀x' with
-      | .head => VarIn.head.append_inl xninΓ₂ |>.append_inr
-      | .ext xinΓ₀ xnex' =>
-        xinΓ₀.append_inl <| VarNotIn.append.mpr ⟨VarNotIn.ext.mpr ⟨xnex', xninΓ₁⟩, xninΓ₂⟩
-    | .inr xinΓ₁Γ₂ => match xinΓ₁Γ₂.append_elim with
-      | .inl ⟨xinΓ₁, xninΓ₂⟩ =>
-        let f xeqx' := by
-          subst xeqx'
-          rw [Environment.append_assoc] at Γ₀x'Γ₁Γ₂wf
-          let .ext _ xninΓ₀Γ₁ := Γ₀x'Γ₁Γ₂wf.append_elim.left.exchange (Γ₂ := .empty)
-          let xninΓ₁ := VarNotInDom.append.mp xninΓ₀Γ₁ |>.right
-          nomatch xninΓ₁.not_VarIn _ xinΓ₁
-        Classical.byCases (p := x = x') f (xinΓ₁.ext · |>.append_inl xninΓ₂) |>.append_inr
-      | .inr xinΓ₂ => xinΓ₂.append_inr.append_inr
+theorem Mem.exchange (xin : [[x : τ ∈ Γ₀, x' : τ', Γ₁, Γ₂]]) (wf : [[⊢ Γ₀, x' : τ', Γ₁, Γ₂]]) :
+  [[x : τ ∈ Γ₀, Γ₁, x' : τ', Γ₂]] :=
+  match append_elim xin with
+  | .inl ⟨xin, xnin⟩ =>
+    have ⟨xninΓ₁, xninΓ₂⟩ := NotMem.append.mp xnin
+    match xin with
+    | head => append_inl head xninΓ₂ |>.append_inr
+    | ext xin xne => append_inl xin <| NotMem.append.mpr ⟨NotMem.ext.mpr ⟨xne, xninΓ₁⟩, xninΓ₂⟩
+  | .inr xin => match append_elim xin with
+    | .inl ⟨xinΓ₁, xninΓ₂⟩ => by
+      if h : x = x' then
+        subst x'
+        rw [Environment.append_assoc] at wf
+        have .ext _ xninΓ₀Γ₁ := wf.append_elim.left.exchange (Γ₂ := [[ε]])
+        nomatch (NotMem.append.mp xninΓ₀Γ₁).right ⟨_, xinΓ₁⟩
+      else
+        exact .append_inr <| .append_inl (.ext ‹_› ‹_›) ‹_›
+    | .inr xinΓ₂ => append_inr <| append_inr xinΓ₂
 
-theorem VarNotIn.of_VarIn_of_WellFormedness
-  : [[x : τ ∈ Γ₀]] → [[⊢ Γ₀, Γ₁]] → [[x ∉ Γ₁]] := fun xinΓ₀ Γ₀Γ₁wf => match Γ₁ with
-  | .empty => nofun
-  | .ext .. =>
-    let .ext Γ₀Γ₁'wf x'ninΓ₀Γ₁ := Γ₀Γ₁wf
+theorem NotMem.of_Mem_of_WellFormedness (xin : [[x : τ ∈ Γ₀]]) (wf : [[⊢ Γ₀, Γ₁]]) : [[x ∉ Γ₁]] :=
+  match Γ₁, wf with
+  | .empty, _ => nofun
+  | .ext .., .ext wf x'nin =>
     ext.mpr ⟨
-      fun | .refl .. => (VarNotInDom.append.mp x'ninΓ₀Γ₁).left <| VarInDom.of_VarIn xinΓ₀,
-      of_VarIn_of_WellFormedness xinΓ₀ Γ₀Γ₁'wf
+      fun | .refl .. => (append.mp x'nin).left ⟨_, xin⟩,
+      of_Mem_of_WellFormedness xin wf
     ⟩
 
 end Environment
+
+namespace Term
 
 namespace Typing
 
 theorem toVarLocallyClosed : [[Γ ⊢ e : τ]] → e.VarLocallyClosed
   | var .. => .var_free
   | lam e'ty (I := I) =>
-    let ⟨x, xnin⟩ := I.exists_fresh
-    let e'ty := e'ty x xnin
-    .lam <| e'ty.toVarLocallyClosed.weakening (Nat.le_succ 0) |>.Var_open_drop <| Nat.zero_lt_succ _
+    have ⟨x, xnin⟩ := I.exists_fresh
+    have e'ty := e'ty x xnin
+    .lam <| e'ty.toVarLocallyClosed.weakening (.step .refl) |>.Var_open_drop <| Nat.zero_lt_succ _
   | app e₀ty e₁ty => .app e₀ty.toVarLocallyClosed e₁ty.toVarLocallyClosed
   | nat => .nat
 
-theorem freeVars (ety : [[Γ ⊢ e : τ]]) : e.freeVars ⊆ Γ.domain := by
-  induction ety with
-  | var _ xinΓ =>
-    have := Environment.VarInDom.of_VarIn xinΓ
-    aesop (add simp [Term.freeVars])
-  | @lam _ _ e' _ I _ ih =>
-    let ⟨x, xnin⟩ := e'.freeVars ++ I |>.exists_fresh
-    let ⟨xnine', xninI⟩ := List.not_mem_append'.mp xnin
-    specialize ih x xninI
-    rw [Term.freeVars]
-    intro x' xine'
-    cases ih <| Term.InFreeVars.Var_open_intro xine' with
-    | head => nomatch xnine' xine'
-    | tail _ x'inΓ => exact x'inΓ
-  | _ => aesop (add simp [Term.freeVars])
-
-theorem toClosed (ety : [[ε ⊢ e : τ]]) : [[closed e]] := fun _ xine => nomatch ety.freeVars xine
-
 theorem exchange : [[Γ₀, x : τ, Γ₁, Γ₂ ⊢ e : τ']] → [[Γ₀, Γ₁, x : τ, Γ₂ ⊢ e : τ']]
-  | var Γ₀xΓ₁Γ₂wf x'inΓ₀xΓ₁Γ₂ => var Γ₀xΓ₁Γ₂wf.exchange <| x'inΓ₀xΓ₁Γ₂.exchange Γ₀xΓ₁Γ₂wf
-  | lam I e'ty => lam I fun x' x'nin => let e'ty := e'ty x' x'nin; e'ty.exchange (Γ₂ := Γ₂.ext x' _)
+  | var wf x'in => var wf.exchange <| x'in.exchange wf
+  | lam I e'ty => lam I (exchange (Γ₂ := .ext ..) <| e'ty · ·)
   | app e₀ty e₁ty => app e₀ty.exchange e₁ty.exchange
   | nat => nat
 
 theorem weakening : [[Γ₀ ⊢ e : τ]] → [[⊢ Γ₀, Γ₁]] → [[Γ₀, Γ₁ ⊢ e : τ]]
-  | var _ xinΓ₀, Γ₀Γ₁wf =>
-    var Γ₀Γ₁wf <| xinΓ₀.append_inl <| Environment.VarNotIn.of_VarIn_of_WellFormedness xinΓ₀ Γ₀Γ₁wf
-  | lam e'ty (I := I), Γ₀Γ₁wf =>
-    lam (I := (Γ₀.append Γ₁).domain ++ I) fun x xnin => by
-      let ⟨xnindomΓ₀Γ₁, xninI⟩ := List.not_mem_append'.mp xnin
-      let e'ty := e'ty x xninI
-      have := e'ty.weakening (Γ₀Γ₁wf.insert xnindomΓ₀Γ₁)
-      exact this.exchange (Γ₂ := .empty)
-  | app e₀ty e₁ty, Γ₀Γ₁wf => app (e₀ty.weakening Γ₀Γ₁wf) (e₁ty.weakening Γ₀Γ₁wf)
+  | var _ xin, wf =>
+    var wf <| xin.append_inl <| Environment.NotMem.of_Mem_of_WellFormedness xin wf
+  | lam I e'ty, wf =>
+    lam ([[Γ₀, Γ₁]].dom ++ I) fun x xnin =>
+      have ⟨xninΓ, xninI⟩ := List.not_mem_append'.mp xnin
+      exchange (Γ₂ := [[ε]]) <| weakening (e'ty x xninI) <| wf.insert (xninΓ ·.choose_spec.dom)
+  | app e₀ty e₁ty, wf => app (weakening e₀ty wf) (weakening e₁ty wf)
   | nat, _ => nat
 
-theorem opening
-  (e₁ty : Typing ((Γ₀.ext x τ₀).append Γ₁) (e₁.Var_open x n) τ₁) (e₀ty : [[Γ₀ ⊢ e₀ : τ₀]])
-  (xninΓ₁ : [[x ∉ Γ₁]]) (xninfve₁ : [[x ∉ fv(e₁)]])
-  : Typing (Γ₀.append Γ₁) (e₁.Term_open e₀ n) τ₁ := by
+theorem opening (e₁ty : Typing [[Γ₀, x : τ₀, Γ₁]] (Var_open e₁ x n) τ₁) (e₀ty : [[Γ₀ ⊢ e₀ : τ₀]])
+  (xninΓ : [[x ∉ Γ₁]]) (xnine₁ : x ∉ freeVars e₁) : Typing [[Γ₀, Γ₁]] (e₁.Term_open e₀ n) τ₁ := by
   match e₁ with
   | .var (.free x') =>
-    rw [Term.Var_open, if_neg nofun] at e₁ty
-    let .var Γ₀xΓ₁wf x'inΓ₀xΓ₁ := e₁ty
-    match x'inΓ₀xΓ₁.append_elim with
-    | .inl ⟨.head, x'ninΓ₁⟩ => nomatch List.not_mem_singleton.mp xninfve₁
-    | .inl ⟨.ext x'inΓ₀ _, x'ninΓ₁⟩ => exact .var Γ₀xΓ₁wf.drop <| x'inΓ₀.append_inl x'ninΓ₁
-    | .inr x'inΓ₁ => exact .var Γ₀xΓ₁wf.drop x'inΓ₁.append_inr
+    have .var Γwf x'in := e₁ty
+    match x'in.append_elim with
+    | .inl ⟨.head, x'nin⟩ => nomatch List.not_mem_singleton.mp xnine₁
+    | .inl ⟨.ext x'in _, x'nin⟩ => exact .var Γwf.drop <| x'in.append_inl x'nin
+    | .inr x'in => exact .var Γwf.drop x'in.append_inr
   | .var (.bound _) =>
     rw [Term.Var_open] at e₁ty
     split at e₁ty
-    · case isTrue h =>
-      cases h
-      rw [Term.Term_open, if_pos rfl]
-      let .var Γ₀xΓ₁wf xinΓ₀xΓ₁ := e₁ty
-      match xinΓ₀xΓ₁.append_elim with
-      | .inl ⟨.head, _⟩ => exact e₀ty.weakening Γ₀xΓ₁wf.drop
-      | .inr xinΓ₁ => exact xninΓ₁ _ xinΓ₁ |>.elim
-    · case isFalse h => nomatch e₁ty
+    case isFalse => nomatch e₁ty
+    case isTrue eq =>
+    cases eq
+    simp [Term.Term_open]
+    have .var Γwf xin := e₁ty
+    match xin.append_elim with
+    | .inl ⟨.head, _⟩ => exact weakening e₀ty Γwf.drop
+    | .inr xin => nomatch xninΓ ⟨_, xin⟩
   | [[λ x. e₁']] =>
-    rw [Term.Term_open]
-    let .lam e₁'ty (τ₀ := τ₀') (I := I) := e₁ty
-    exact .lam (I := x :: I) fun x' x'nin => by
-      let xnex' := List.ne_of_not_mem_cons x'nin
-      let e₁'ty := e₁'ty x' <| List.not_mem_of_not_mem_cons x'nin
-      have : ((Γ₀.ext x τ₀).append Γ₁).ext x' τ₀' = (Γ₀.ext x τ₀).append (Γ₁.ext x' τ₀') := rfl
-      rw [this, e₁'.Var_open_comm <| Nat.succ_ne_zero _] at e₁'ty
-      rw [e₀ty.toVarLocallyClosed.Var_open_Term_open_comm <| Nat.succ_ne_zero _]
-      let xninΓ₁x' : [[x ∉ Γ₁, x' : τ₀']] := Environment.VarNotIn.ext.mpr ⟨xnex'.symm, xninΓ₁⟩
-      exact e₁'ty.opening e₀ty xninΓ₁x' <| xninfve₁.lam.Var_open_intro xnex'.symm
+    have .lam I e₁'ty := e₁ty
+    apply lam <| x :: I
+    intro x' x'nin
+    have ⟨xne, x'ninI⟩ := List.not_mem_cons.mp x'nin
+    symm at xne
+    specialize e₁'ty x' x'ninI
+    rw [e₀ty.toVarLocallyClosed.Var_open_Term_open_comm <| Nat.succ_ne_zero _]
+    rw [e₁'.Var_open_comm <| Nat.succ_ne_zero _] at e₁'ty
+    exact e₁'ty.opening (Γ₁ := .ext ..) e₀ty (Environment.NotMem.ext.mpr ⟨xne, xninΓ⟩) <|
+      not_mem_freeVars_Var_open_intro xnine₁ xne
   | [[e₁₀ e₁₁]] =>
-    let .app e₁₀ty e₁₁ty := e₁ty
-    exact .app (e₁₀ty.opening e₀ty xninΓ₁ xninfve₁.app₀) (e₁₁ty.opening e₀ty xninΓ₁ xninfve₁.app₁)
+    have .app e₁₀ty e₁₁ty := e₁ty
+    cases List.not_mem_append'.mp xnine₁
+    apply app (opening e₁₀ty ..) (opening e₁₁ty ..) <;> assumption
   | [[n]] =>
-    let .nat := e₁ty
+    have .nat := e₁ty
     exact nat
 
 end Typing
 
 namespace Reduction
 
-theorem closed_preservation (c : [[closed e]]) (re : [[e → e']]) : [[closed e']] := by
-  induction re
-  case' lamApp => apply Term.Closed.Term_open
-  all_goals aesop (add simp [Term.Closed, Term.NotInFreeVars, Term.InFreeVars, Term.freeVars])
+theorem preservation : [[e → e']] → [[Γ ⊢ e : τ]] → [[Γ ⊢ e' : τ]]
+  | appl h, .app e₀ty e₁ty => .app (preservation h e₀ty) e₁ty
+  | appr h, .app e₀ty e₁ty => .app e₀ty <| preservation h e₁ty
+  | lamApp, .app (.lam I e₀'ty (e := e₀')) vty =>
+    have ⟨x, xnin⟩ := freeVars e₀' ++ I |>.exists_fresh
+    have ⟨xninfve₀', xninI⟩ := List.not_mem_append'.mp xnin
+    e₀'ty x xninI |>.opening (Γ₁ := [[ε]]) vty nofun xninfve₀'
 
-theorem not_of_Value : ¬[[v → e]] := by cases v; cases ‹Term.IsValue _› <;> nofun
-
-theorem preservation (ty : [[Γ ⊢ e : τ]]) (re : [[e → e']]) : [[Γ ⊢ e' : τ]] := match re, ty with
-  | appl e₀ree₀', .app e₀ty e₁ty => .app (e₀ree₀'.preservation e₀ty) e₁ty
-  | appr e₁ree₁', .app e₀ty e₁ty => .app e₀ty <| e₁ree₁'.preservation e₁ty
-  | lamApp, .app e₀ty vty =>
-    let .lam e₀'ty (e := e₀') (I := I) := e₀ty
-    let ⟨x, xnin⟩ := e₀'.freeVars ++ I |>.exists_fresh
-    let ⟨xninfve₀', xninI⟩ := List.not_mem_append'.mp xnin
-    e₀'ty x xninI |>.opening (Γ₁ := .empty) vty nofun xninfve₀'
-
-theorem progress (ty : [[ε ⊢ e : τ]]) : e.IsValue ∨ ∃ e', [[e → e']] := match e, ty with
+theorem progress : {e : Term} → [[ε ⊢ e : τ]] → IsValue e ∨ ∃ e', [[e → e']]
   | [[λ x. e₀]], _ => .inl .lam
   | [[e₀ e₁]], .app e₀ty e₁ty => match progress e₀ty with
-    | .inl e₀IsValue => match progress e₁ty with
-      | .inl e₁IsValue =>
-        let [[λ x. e₀']] := e₀
-        let v₁ : Value := ⟨e₁, e₁IsValue⟩
-        .inr <| .intro _ <| .lamApp (v := v₁)
-      | .inr ⟨_, e₁ree₁'⟩ => .inr <| .intro _ <| .appr e₁ree₁' (v := ⟨_, e₀IsValue⟩)
-    | .inr ⟨_, e₀ree₀'⟩ => .inr <| .intro _ <| .appl e₀ree₀'
+    | .inl .lam => match progress e₁ty with
+      | .inl e₁IsValue => .inr ⟨_, lamApp (v := ⟨_, e₁IsValue⟩)⟩
+      | .inr ⟨_, h⟩ => .inr ⟨_, appr h (v := ⟨_, .lam⟩)⟩
+    | .inr ⟨_, h⟩ => .inr ⟨_, appl h⟩
   | [[n]], .nat => .inl .nat
 
 end Reduction
 
-namespace Reduction?
-
-theorem closed_preservation (c : [[closed e]]) : [[e →? e']] → [[closed e']]
-  | .refl => c
-  | .step re => re.closed_preservation c
-
-theorem appl : [[e₀ →? e₀']] → [[e₀ e₁ →? e₀' e₁]]
-  | .refl => .refl
-  | .step e₀re => .step <| .appl e₀re
-
-theorem appr : [[e →? e']] → [[v e →? v e']]
-  | .refl => .refl
-  | .step ere => .step <| .appr ere
-
-theorem toMulti : [[e →? e']] → [[e →* e']]
-  | .refl => .refl
-  | .step ere => .step ere .refl
-
-end Reduction?
-
-theorem MultiReduction.trans (e₀mre : [[e₀ →* e₁]]) (e₁mre : [[e₁ →* e₂]]) : [[e₀ →* e₂]] := by
-  induction e₀mre with
-  | refl => exact e₁mre
-  | step e₀re _ ih => exact step e₀re <| ih e₁mre
+end Term
 
 end LottExamples.STLC

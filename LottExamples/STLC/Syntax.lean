@@ -21,6 +21,7 @@ nonterminal (tex pre := "\\mathcolor{STLC}{", post := "}") Environment, Γ :=
   | "ε"              : empty
   | Γ ", " x " : " τ : ext (id x)
   | Γ₀ ", " Γ₁       : append notex (expand := return .mkCApp `LottExamples.STLC.Environment.append #[Γ₀, Γ₁])
+  | "(" Γ ")"        : paren notex (expand := return Γ)
 
 nonterminal (parent := Term) (tex pre := "\\mathcolor{STLC}{", post := "}") Value, v :=
   | "λ " x ". " e : lam (bind x in e)
