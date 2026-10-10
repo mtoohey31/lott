@@ -7,8 +7,20 @@ nonterminal «Type», τ :=
   | τ₀ " → " τ₁ : arr
   | "ℕ"         : nat
 
+-- #print «Type»
+-- #check [[ℕ → ℕ → ℕ]]
+
+-- #check Type.arr_parser
+-- #check Type.arrImpl
+
+-- #check Type.arrTexElab
+-- #check Lott.TexElab
+
 locally_nameless
 metavar Var, x
+
+-- #print Var
+-- #eval return Lott.metaVarExt.getState (← Lean.getEnv)
 
 nonterminal Term, e :=
   | x             : var
@@ -16,6 +28,9 @@ nonterminal Term, e :=
   | e₀ e₁         : app
   | n             : nat
   | "(" e ")"     : paren notex (expand := return e)
+
+-- #check Term.Var_subst
+-- #check Term.VarLocallyClosed
 
 nonterminal Environment, Γ :=
   | "ε"              : empty

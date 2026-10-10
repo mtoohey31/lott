@@ -17,11 +17,13 @@ termonly def dom : Environment → List VarId
   | empty => []
   | ext Γ x _ => x :: dom Γ
 
+-- Compromise: Defining judgement syntax and implementation must be two separate commands.
+
 judgement_syntax LottExamples.STLC.x " : " LottExamples.STLC.τ " ∈ " Γ : Mem (id x)
 
 judgement Mem where
 
-──────────────── head {x τ}
+──────────────── head
 x : τ ∈ Γ, x : τ
 
 x : τ ∈ Γ

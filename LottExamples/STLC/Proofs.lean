@@ -106,7 +106,8 @@ theorem append_inr : [[x ∈ Γ₁]] → [[x ∈ Γ₀, Γ₁]] := .imp fun _ =>
 
 theorem append_inl : [[x ∈ Γ₀]] → [[x ∈ Γ₀, Γ₁]] := by
   if [[x ∈ Γ₁]] then
-    exact fun _ => append_inr ‹_›
+    intros
+    exact append_inr ‹_›
   else
     exact .imp fun _ => .append_inl (xnin := ‹_›)
 
@@ -258,7 +259,7 @@ theorem opening (e₁ty : Typing [[Γ₀, x : τ₀, Γ₁]] (Var_open e₁ x n)
     specialize e₁'ty x' x'ninI
     rw [e₀ty.toVarLocallyClosed.Var_open_Term_open_comm <| Nat.succ_ne_zero _]
     rw [e₁'.Var_open_comm <| Nat.succ_ne_zero _] at e₁'ty
-    exact e₁'ty.opening (Γ₁ := .ext ..) e₀ty (Environment.NotMem.ext.mpr ⟨xne, xninΓ⟩) <|
+    exact opening e₁'ty (Γ₁ := .ext ..) e₀ty (Environment.NotMem.ext.mpr ⟨xne, xninΓ⟩) <|
       not_mem_freeVars_Var_open_intro xnine₁ xne
   | [[e₁₀ e₁₁]] =>
     have .app e₁₀ty e₁₁ty := e₁ty
@@ -276,9 +277,9 @@ theorem preservation : [[e → e']] → [[Γ ⊢ e : τ]] → [[Γ ⊢ e' : τ]]
   | appl h, .app e₀ty e₁ty => .app (preservation h e₀ty) e₁ty
   | appr h, .app e₀ty e₁ty => .app e₀ty <| preservation h e₁ty
   | lamApp, .app (.lam I e₀'ty (e := e₀')) vty =>
-    have ⟨x, xnin⟩ := freeVars e₀' ++ I |>.exists_fresh
-    have ⟨xninfve₀', xninI⟩ := List.not_mem_append'.mp xnin
-    e₀'ty x xninI |>.opening (Γ₁ := [[ε]]) vty nofun xninfve₀'
+    have ⟨x, xnine₀', xninI⟩ := freeVars e₀' ++ I |>.exists_fresh.imp
+      fun _ => List.not_mem_append'.mp
+    e₀'ty x xninI |>.opening (Γ₁ := [[ε]]) vty nofun xnine₀'
 
 theorem progress : {e : Term} → [[ε ⊢ e : τ]] → IsValue e ∨ ∃ e', [[e → e']]
   | [[λ x. e₀]], _ => .inl .lam
