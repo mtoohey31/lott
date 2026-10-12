@@ -13,6 +13,7 @@ def args := if notex then
     #[s!"-Dweak.lott.tex.output.dir={get_config? texdir |>.getD (__dir__ |>.toString)}"]
 
 package lott where
+  leanOptions := #[⟨`pp.fieldNotation, false⟩]
   moreGlobalServerArgs := args
 
 require aesop from git "https://github.com/leanprover-community/aesop" @ "v4.33.0"

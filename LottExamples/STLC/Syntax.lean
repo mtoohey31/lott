@@ -8,13 +8,13 @@ nonterminal «Type», τ :=
   | "ℕ"         : nat
 
 -- #print «Type»
+
 -- #check [[ℕ → ℕ → ℕ]]
 
--- #check Type.arr_parser
--- #check Type.arrImpl
-
--- #check Type.arrTexElab
--- #check Lott.TexElab
+/- #eval do
+  let stx ← `(Lott.Symbol| ℕ → ℕ)
+  let s ← Lott.texElabSymbolOrJudgement (Lott.symbolPrefix ++ ``«Type») default default stx
+  Lean.logInfo s -/
 
 locally_nameless
 metavar Var, x
