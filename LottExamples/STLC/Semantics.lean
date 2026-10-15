@@ -17,8 +17,6 @@ termonly def dom : Environment → List VarId
   | empty => []
   | ext Γ x _ => x :: dom Γ
 
--- Compromise: Defining judgement syntax and implementation must be two separate commands.
-
 judgement_syntax LottExamples.STLC.x " : " LottExamples.STLC.τ " ∈ " Γ : Mem (id x)
 
 judgement Mem where
@@ -75,6 +73,8 @@ x : τ ∈ Γ
 
 ───────── nat
 Γ ⊢ n : ℕ
+
+-- #print Typing
 
 judgement_syntax e " → " e' : Reduction (tex := s!"{e} \\, \\lottsym\{\\longrightarrow} \\, {e'}")
 

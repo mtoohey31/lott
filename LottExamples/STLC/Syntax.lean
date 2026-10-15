@@ -20,7 +20,6 @@ locally_nameless
 metavar Var, x
 
 -- #print Var
--- #eval return Lott.metaVarExt.getState (← Lean.getEnv)
 
 nonterminal Term, e :=
   | x             : var
