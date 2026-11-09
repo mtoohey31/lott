@@ -24,7 +24,7 @@ elab_rules : command | `(judgement_syntax $[$ps]* : $name $[(id $ids?,*)]? $[(te
   setEnv <| ← Parser.registerParserCategory (← getEnv) parserAttrName catName .symbol
 
   -- Add to environment extension.
-  let ir ← ps.mapM IR.ofStx
+  let ir ← ps.mapM IR.ofProdArg
   let ids := ids?.getD (.mk #[]) |>.getElems |>.map TSyntax.getId
   let profiles := Std.HashSet.toArray <| Std.HashSet.ofArray <|
     texProfile?s.filterMap <| Option.map TSyntax.getId

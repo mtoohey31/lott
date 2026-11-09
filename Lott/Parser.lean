@@ -79,7 +79,7 @@ declare_syntax_cat Lott.InferenceRule
 declare_syntax_cat Lott.JudgementDeclRHS
 declare_syntax_cat Lott.JudgementDecl
 
-syntax "judgement_syntax" (ppSpace stx)+ " : " ident atomic(idConfig)? (texConfig)* : command
+syntax "judgement_syntax" (ppSpace prodArg)+ " : " ident atomic(idConfig)? (texConfig)* : command
 
 private
 def bracketedBinder := Term.bracketedBinder
